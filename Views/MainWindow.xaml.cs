@@ -25,6 +25,9 @@ public partial class MainWindow : Window {
 	private DateTime _transcribeStarted;
 	private double _etaSeconds;
 
+	// True once the initial Loaded positioning has been applied.
+	private bool _positionApplied;
+
 	/// <summary>
 	/// Per-model empirical ETA factors: transcription time ≈ recording length × factor.
 	/// Measured / estimated for Quadro T2000 (Turing, 4 GB VRAM) with CUDA 13.
@@ -96,13 +99,28 @@ public partial class MainWindow : Window {
 		style = (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW;
 		SetWindowLong(hwnd, GWL_EXSTYLE, style);
 		HwndSource.FromHwnd(hwnd)?.AddHook(WndProc);
-		SizeChanged += (_, _) => ClampWindowToScreen();
+		SizeChanged += (_, _) => OnWindowSizeChanged();
 	}
 
 	private IntPtr WndProc (IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) {
 		if (msg == WM_DISPLAYCHANGE)
 			Dispatcher.BeginInvoke(OnDisplayChange);
 		return IntPtr.Zero;
+	}
+
+	/// <summary>
+	/// Called on every SizeChanged event. Re-anchors the window to the stored centre
+	/// point so it expands symmetrically. Skipped before the initial Loaded positioning
+	/// has been applied (avoids SaveWindowPosition being called with ActualWidth == 0).
+	/// </summary>
+	private void OnWindowSizeChanged () {
+		if (!_positionApplied)
+			return;
+		var s = App.SettingsService.Settings;
+		if (s.WindowLeft >= 0 && s.WindowBottom >= 0)
+			ApplyStoredPosition();
+		else
+			ClampWindowToScreen();
 	}
 
 	/// <summary>
@@ -171,10 +189,10 @@ public partial class MainWindow : Window {
 				return newLeft < r && newLeft + ActualWidth  > l
 				    && newTop  < b && newTop  + ActualHeight > t;
 			});
-			if (!onAnyScreen) {
+		if (!onAnyScreen) {
 				var pw = primary.WorkingArea;
 				newLeft = pw.Left * scaleX + (pw.Width  * scaleX - ActualWidth)  / 2;
-				newTop  = pw.Bottom * scaleY - ActualHeight - 20;
+				newTop  = pw.Bottom * scaleY - ActualHeight / 2 - 20;
 			}
 		}
 
@@ -202,16 +220,17 @@ public partial class MainWindow : Window {
 		var s = App.SettingsService.Settings;
 
 		if (s.WindowLeft >= 0 && s.WindowBottom >= 0) {
-			// Reconstruct Top from WindowBottom after the window has a size.
-			// At construction time ActualHeight may be 0, so we also hook Loaded.
-			Loaded += (_, _) => ApplyStoredPosition();
+			// Reconstruct position after the window has a size.
+			Loaded += (_, _) => { ApplyStoredPosition(); _positionApplied = true; };
 		} else {
-			// Default: bottom-center of primary screen, 20 px above the taskbar.
-			Loaded += (_, _) => PlaceAtDefaultPosition();
+			// Default: bottom-centre of primary screen, 20 px above the taskbar.
+			Loaded += (_, _) => { PlaceAtDefaultPosition(); _positionApplied = true; };
 		}
 	}
 
-	/// <summary>Positions the window using the stored Left and WindowBottom values.</summary>
+	/// <summary>Positions the window using the stored Left and WindowBottom values.
+	/// WindowLeft/WindowBottom store the centre of the window, so the widget
+	/// expands symmetrically from that anchor point regardless of its size.</summary>
 	private void ApplyStoredPosition () {
 		var s = App.SettingsService.Settings;
 		var primary = Screen.PrimaryScreen;
@@ -222,8 +241,9 @@ public partial class MainWindow : Window {
 		double waLeft   = wa.Left   * scaleX;
 		double waBottom = wa.Bottom * scaleY;
 
-		Left = waLeft + s.WindowLeft;
-		Top  = waBottom - s.WindowBottom - ActualHeight;
+		// WindowLeft/WindowBottom are the centre of the window.
+		Left = waLeft + s.WindowLeft - ActualWidth  / 2;
+		Top  = waBottom - s.WindowBottom - ActualHeight / 2;
 
 		ClampWindowToScreen();
 	}
@@ -239,7 +259,9 @@ public partial class MainWindow : Window {
 		var (scaleX, scaleY) = GetPrimaryScreenScale();
 		var wa = primary.WorkingArea;
 		Left = wa.Left * scaleX + (wa.Width  * scaleX - ActualWidth)  / 2;
-		Top  = wa.Bottom * scaleY - ActualHeight - 20;
+		// Place 20 px + half window height above the taskbar so the centre anchor
+		// is at the same visual distance from the bottom as the window edge was.
+		Top  = wa.Bottom * scaleY - ActualHeight / 2 - 20;
 		SaveWindowPosition();
 	}
 
@@ -251,8 +273,9 @@ public partial class MainWindow : Window {
 
 	/// <summary>
 	/// Persists the current window position as (WindowLeft, WindowBottom) relative to
-	/// the primary screen's working area so that the widget stays at the same visual
-	/// position even when the screen resolution or DPI changes.
+	/// the primary screen's working area. Both values represent the <b>centre</b> of the
+	/// window so that the widget expands symmetrically from the anchor point when its
+	/// size changes (e.g. status text grows or shrinks).
 	/// </summary>
 	private void SaveWindowPosition () {
 		var primary = Screen.PrimaryScreen;
@@ -262,11 +285,12 @@ public partial class MainWindow : Window {
 			var wa = primary.WorkingArea;
 			double waLeft   = wa.Left   * scaleX;
 			double waBottom = wa.Bottom * scaleY;
-			s.WindowLeft   = Left - waLeft;
-			s.WindowBottom = waBottom - (Top + ActualHeight);
+			// Store the centre of the window.
+			s.WindowLeft   = Left + ActualWidth  / 2 - waLeft;
+			s.WindowBottom = waBottom - (Top  + ActualHeight / 2);
 		} else {
-		s.WindowLeft   = Left;
-			s.WindowBottom = SystemParameters.PrimaryScreenHeight - (Top + ActualHeight);
+			s.WindowLeft   = Left + ActualWidth  / 2;
+			s.WindowBottom = SystemParameters.PrimaryScreenHeight - (Top + ActualHeight / 2);
 		}
 		App.SettingsService.Save();
 	}
@@ -383,7 +407,7 @@ public partial class MainWindow : Window {
 					RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
 					break;
 				case TranscriptionState.Done:
-					SetStatus($"Ready [{backend}]");
+					SetStatus($"Ready ({backend})");
 					RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
 					break;
 				case TranscriptionState.Error:
@@ -391,7 +415,7 @@ public partial class MainWindow : Window {
 					RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentRecordingBrush"];
 					break;
 				default:
-					SetStatus($"Ready [{backend}]");
+					SetStatus($"Ready ({backend})");
 					RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
 					break;
 			}
@@ -404,6 +428,7 @@ public partial class MainWindow : Window {
 		if (recording) {
 			RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentRecordingBrush"];
 			pulse.Begin(this, true);
+			AmplitudeRow.Margin = new Thickness(0, 3, 0, 0);
 			AmplitudeRow.Visibility = Visibility.Visible;
 			SetStatus("Recording…");
 		} else {
@@ -411,6 +436,7 @@ public partial class MainWindow : Window {
 			RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
 			AmplitudeBar.Width = 0;
 			AmplitudeRow.Visibility = Visibility.Collapsed;
+			AmplitudeRow.Margin = new Thickness(0);
 			SetStatus("Processing…");
 		}
 	}

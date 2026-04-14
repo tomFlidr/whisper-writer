@@ -116,7 +116,7 @@ public class AppSettings
     public double WindowBottom    { get; set; } = -1;  // distance from bottom edge of primary working area (DIP); -1 = default
 }
 ```
-- `WindowBottom` stores the distance between the bottom of the widget and the bottom edge of the primary screen's working area (device-independent pixels). This keeps the widget visually "anchored to the bottom" regardless of resolution or DPI changes.
+- `WindowLeft` and `WindowBottom` store the **centre** of the widget relative to the primary screen's working area (device-independent pixels). This means the widget always expands symmetrically from the anchor point when its size changes (e.g. status text grows/shrinks). `WindowBottom` = distance from the widget's **centre** to the bottom of the working area.
 
 ### `Util/HotkeyModifiers.cs`
 - namespace `WhisperWriter.Util`
@@ -194,11 +194,11 @@ public class AppSettings
   - `DispatcherTimer` 100 ms counts down and displays `~Xs` next to "Transcribing…".
 - PTT flow: `SaveFocus` → `StartRecording` → (release) → `StopRecording` → `StartEtaCountdown` → `TranscribeAsync` → `StopEtaCountdown` → (if `CopyToClipboard`) `Clipboard.SetText` → `InjectText`.
 - **Window positioning architecture**:
-- Position is stored as `(WindowLeft, WindowBottom)` relative to the primary screen's working area (device-independent pixels). `WindowBottom` = distance between the widget's bottom edge and the bottom of the working area – this keeps the widget visually anchored to the bottom even after resolution/DPI changes.
+- Position is stored as `(WindowLeft, WindowBottom)` relative to the primary screen's working area (device-independent pixels). Both values represent the **centre** of the widget so that it expands symmetrically from the anchor point regardless of size changes.
 - `PositionWindow()` (called from constructor): registers a `Loaded` handler that calls either `ApplyStoredPosition()` or `PlaceAtDefaultPosition()` once `ActualHeight` is known.
-- `ApplyStoredPosition()`: reconstructs `Top = waBottom − WindowBottom − ActualHeight`, then calls `ClampWindowToScreen()`.
-- `PlaceAtDefaultPosition()`: centres the widget horizontally, places it 20 px above the taskbar on the primary screen.
-- `SaveWindowPosition()`: calculates and persists `WindowLeft` and `WindowBottom` relative to the primary working area.
+- `ApplyStoredPosition()`: reconstructs `Left = waLeft + WindowLeft − ActualWidth/2`, `Top = waBottom − WindowBottom − ActualHeight/2`, then calls `ClampWindowToScreen()`.
+- `PlaceAtDefaultPosition()`: centres the widget horizontally, places its centre 20 px above the taskbar on the primary screen.
+- `SaveWindowPosition()`: stores `WindowLeft = Left + ActualWidth/2 − waLeft` and `WindowBottom = waBottom − (Top + ActualHeight/2)`.
 - `GetPrimaryScreenScale()`: returns WPF DIP scale factors from `PresentationSource`; before the window is shown falls back to `SystemParameters / Screen.Bounds` ratio.
 - **Display change handling**: `OnSourceInitialized` registers a `WndProc` hook via `HwndSource.AddHook` and a `SizeChanged` handler. On `WM_DISPLAYCHANGE` (0x007E), `OnDisplayChange()` is called: it calls `ApplyStoredPosition()` (or `PlaceAtDefaultPosition()` if no position is stored) to re-anchor the widget to the new primary monitor, then calls `ClampWindowToScreen()` as a safety clamp. On every size change, `ClampWindowToScreen()` is called directly.
 - **`ClampWindowToScreen()`**: guards against `ActualWidth/Height == 0`. Finds the monitor with the maximum overlap with the window (using `Screen.AllScreens` + `Rectangle.Intersect`). Converts pixel coordinates to WPF DIP units. Clamps `Left`/`Top` to fit entirely within the working area of that monitor. If the result is still fully off every screen (e.g. monitor disconnected), falls back to bottom-centre of the primary screen. Persists the new position via `SaveWindowPosition()`.
@@ -308,6 +308,7 @@ Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe
 - **Wrong indentation of `case TranscriptionState.Error:` in MainWindow.xaml.cs**: one tab was missing. Fixed.
 - **`WM_DISPLAYCHANGE` handler and `ClampWindowToScreen()` missing**: the `OnSourceInitialized` handler only set the window style (toolwindow / no taskbar entry) but did not register a `WndProc` hook. Added `HwndSource.AddHook(WndProc)`, constant `WM_DISPLAYCHANGE = 0x007E`, method `WndProc` that triggers `Dispatcher.BeginInvoke(ClampWindowToScreen)`, and `ClampWindowToScreen()` that clamps the window to the nearest monitor's working area (with DPI-aware scaling), falls back to bottom-centre of the primary screen if the window ends up completely off-screen, and saves the new position to `settings.json`.
 - **`WindowTop` replaced by `WindowBottom`, visibility clamping improved**: `AppSettings.WindowTop` was removed entirely and replaced by `WindowBottom` (distance from the bottom of the widget to the bottom of the primary screen's working area). This ensures the widget stays visually anchored to the bottom after resolution/DPI/dock changes. `ClampWindowToScreen()` uses `Screen.AllScreens` with maximum-overlap selection, checks all screens for visibility, and is also triggered by `SizeChanged`. `SaveWindowPosition()` stores only `WindowLeft` and `WindowBottom`.
+- **Centre-based window anchor**: `WindowLeft`/`WindowBottom` now store the **centre** of the widget (not the bottom-left corner). `ApplyStoredPosition()`, `PlaceAtDefaultPosition()`, `SaveWindowPosition()` and the `ClampWindowToScreen()` fallback all updated accordingly. The widget now expands symmetrically from its anchor point when the status text changes length (e.g. "Ready [GPU]" ↔ "Transcribing…").
 
 ---
 

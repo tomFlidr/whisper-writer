@@ -11,7 +11,7 @@
 		ResizeMode="NoResize">
 
 	<Window.Resources>
-		<!-- Opacity: idle → 0.85, hover → 1.0 -->
+		<!-- Opacity: idle → 0.6, hover → 1.0 -->
 		<Storyboard x:Key="FadeToHover">
 			<DoubleAnimation Storyboard.TargetName="WidgetBorder"
 							 Storyboard.TargetProperty="Opacity"
@@ -79,7 +79,7 @@
 				</StackPanel>
 
 				<!-- Amplitude bar (visible only while recording) -->
-				<Grid x:Name="AmplitudeRow" Height="3" Margin="0,3,0,0" Visibility="Collapsed">
+				<Grid x:Name="AmplitudeRow" Height="3" Margin="0" Visibility="Collapsed">
 					<Rectangle Fill="#22FFFFFF" RadiusX="1" RadiusY="1"/>
 					<Rectangle x:Name="AmplitudeBar"
 								   Fill="{StaticResource AccentRecordingBrush}"
