@@ -13,6 +13,7 @@ public partial class App : System.Windows.Application {
 
 	private NotifyIcon? _trayIcon;
 	private MainWindow? _mainWindow;
+	private static Window? _secondaryWindow;
 
 	protected override async void OnStartup (StartupEventArgs e) {
 		base.OnStartup(e);
@@ -67,22 +68,37 @@ public partial class App : System.Windows.Application {
 		_ = WhisperService.InitializeAsync(modelPath);
 	}
 
+	private static void CloseSecondaryWindow () {
+		_secondaryWindow?.Close();
+		_secondaryWindow = null;
+	}
+
 	public static void ShowAbout () {
+		CloseSecondaryWindow();
 		var win = new AboutWindow();
+		_secondaryWindow = win;
+		win.Closed += (_, _) => { if (_secondaryWindow == win) _secondaryWindow = null; };
 		win.Show();
 	}
 
 	public static void ShowHistory () {
+		CloseSecondaryWindow();
 		var win = new HistoryWindow();
+		_secondaryWindow = win;
+		win.Closed += (_, _) => { if (_secondaryWindow == win) _secondaryWindow = null; };
 		win.Show();
 	}
 
 	public static void ShowSettings () {
+		CloseSecondaryWindow();
 		var win = new SettingsWindow();
+		_secondaryWindow = win;
+		win.Closed += (_, _) => { if (_secondaryWindow == win) _secondaryWindow = null; };
 		if (win.ShowDialog() == true) {
 			SettingsService.Save();
 			History.MaxSize = SettingsService.Settings.HistorySize;
 		}
+		_secondaryWindow = null;
 	}
 
 	private void ExitApp () {
