@@ -18,24 +18,17 @@
 		<!-- Authenticode signing via signtool in post-build -->
 		<PfxFile>$(MSBuildProjectDirectory)\WhisperWriter.pfx</PfxFile>
 		<PfxPassword>1234</PfxPassword>
-		<!-- Single-file publish: bundle all managed DLLs into WhisperWriter.exe -->
-		<!-- Native DLLs (runtimes\) and models\ must remain next to the exe -->
-		<PublishSingleFile>true</PublishSingleFile>
-		<SelfContained>false</SelfContained>
-		<IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
 	</PropertyGroup>
 
 	<!-- Copy models folder to output -->
 	<ItemGroup>
 		<Content Include="models\**\*">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
 		</Content>
 		<Content Remove="models\TranscriptionHistory.cs" />
 		<!-- Default settings – copied only if not already present in output -->
 		<Content Include="settings.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
 		</Content>
 	</ItemGroup>
 	<ItemGroup>
