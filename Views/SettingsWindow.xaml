@@ -70,14 +70,64 @@
 						  Background="#33FFFFFF" Foreground="{StaticResource TextPrimaryBrush}"
 						  BorderBrush="#44FFFFFF"
 						  FontFamily="Segoe UI" FontSize="13" Padding="6,4">
-					<ComboBoxItem Content="auto (detect)" Tag="auto"/>
-					<ComboBoxItem Content="cs – Czech" Tag="cs"/>
+					<ComboBoxItem Content="auto – Auto (detect)" Tag="auto"/>
+					<ComboBoxItem Content="af – Afrikaans" Tag="af"/>
+					<ComboBoxItem Content="ar – العربية" Tag="ar"/>
+					<ComboBoxItem Content="hy – Հայերեն" Tag="hy"/>
+					<ComboBoxItem Content="az – Azərbaycan" Tag="az"/>
+					<ComboBoxItem Content="be – Беларуская" Tag="be"/>
+					<ComboBoxItem Content="bs – Bosanski" Tag="bs"/>
+					<ComboBoxItem Content="bg – Български" Tag="bg"/>
+					<ComboBoxItem Content="ca – Català" Tag="ca"/>
+					<ComboBoxItem Content="zh – 中文" Tag="zh"/>
+					<ComboBoxItem Content="hr – Hrvatski" Tag="hr"/>
+					<ComboBoxItem Content="cs – Čeština" Tag="cs"/>
+					<ComboBoxItem Content="da – Dansk" Tag="da"/>
+					<ComboBoxItem Content="nl – Nederlands" Tag="nl"/>
 					<ComboBoxItem Content="en – English" Tag="en"/>
-					<ComboBoxItem Content="de – German" Tag="de"/>
-					<ComboBoxItem Content="fr – French" Tag="fr"/>
-					<ComboBoxItem Content="es – Spanish" Tag="es"/>
-					<ComboBoxItem Content="pl – Polish" Tag="pl"/>
-					<ComboBoxItem Content="sk – Slovak" Tag="sk"/>
+					<ComboBoxItem Content="et – Eesti" Tag="et"/>
+					<ComboBoxItem Content="fi – Suomi" Tag="fi"/>
+					<ComboBoxItem Content="fr – Français" Tag="fr"/>
+					<ComboBoxItem Content="gl – Galego" Tag="gl"/>
+					<ComboBoxItem Content="de – Deutsch" Tag="de"/>
+					<ComboBoxItem Content="el – Ελληνικά" Tag="el"/>
+					<ComboBoxItem Content="he – עברית" Tag="he"/>
+					<ComboBoxItem Content="hi – हिन्दी" Tag="hi"/>
+					<ComboBoxItem Content="hu – Magyar" Tag="hu"/>
+					<ComboBoxItem Content="is – Íslenska" Tag="is"/>
+					<ComboBoxItem Content="id – Bahasa Indonesia" Tag="id"/>
+					<ComboBoxItem Content="it – Italiano" Tag="it"/>
+					<ComboBoxItem Content="ja – 日本語" Tag="ja"/>
+					<ComboBoxItem Content="kn – ಕನ್ನಡ" Tag="kn"/>
+					<ComboBoxItem Content="kk – Қазақша" Tag="kk"/>
+					<ComboBoxItem Content="ko – 한국어" Tag="ko"/>
+					<ComboBoxItem Content="lv – Latviešu" Tag="lv"/>
+					<ComboBoxItem Content="lt – Lietuvių" Tag="lt"/>
+					<ComboBoxItem Content="mk – Македонски" Tag="mk"/>
+					<ComboBoxItem Content="ms – Bahasa Melayu" Tag="ms"/>
+					<ComboBoxItem Content="mi – Māori" Tag="mi"/>
+					<ComboBoxItem Content="mr – मराठी" Tag="mr"/>
+					<ComboBoxItem Content="ne – नेपाली" Tag="ne"/>
+					<ComboBoxItem Content="no – Norsk" Tag="no"/>
+					<ComboBoxItem Content="fa – فارسی" Tag="fa"/>
+					<ComboBoxItem Content="pl – Polski" Tag="pl"/>
+					<ComboBoxItem Content="pt – Português" Tag="pt"/>
+					<ComboBoxItem Content="ro – Română" Tag="ro"/>
+					<ComboBoxItem Content="ru – Русский" Tag="ru"/>
+					<ComboBoxItem Content="sr – Српски" Tag="sr"/>
+					<ComboBoxItem Content="sk – Slovenčina" Tag="sk"/>
+					<ComboBoxItem Content="sl – Slovenščina" Tag="sl"/>
+					<ComboBoxItem Content="es – Español" Tag="es"/>
+					<ComboBoxItem Content="sw – Kiswahili" Tag="sw"/>
+					<ComboBoxItem Content="sv – Svenska" Tag="sv"/>
+					<ComboBoxItem Content="tl – Filipino" Tag="tl"/>
+					<ComboBoxItem Content="ta – தமிழ்" Tag="ta"/>
+					<ComboBoxItem Content="th – ภาษาไทย" Tag="th"/>
+					<ComboBoxItem Content="tr – Türkçe" Tag="tr"/>
+					<ComboBoxItem Content="uk – Українська" Tag="uk"/>
+					<ComboBoxItem Content="ur – اردو" Tag="ur"/>
+					<ComboBoxItem Content="vi – Tiếng Việt" Tag="vi"/>
+					<ComboBoxItem Content="cy – Cymraeg" Tag="cy"/>
 				</ComboBox>
 			</StackPanel>
 
