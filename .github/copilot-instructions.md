@@ -168,6 +168,7 @@ public class AppSettings
 - Call order in `MainWindow.OnPttStopped`: `TextInjector.RestoreFocus()` on UI thread → `Task.Run(() => TextInjector.InjectText(text))` on background thread.
 
 ### `Services/WhisperService.cs`
+- `DetectCudaVersion()` – static method that probes CUDA runtime DLLs (`cudart64_N.dll` + `cublas64_N.dll`) for major versions **13, 12, 11** in order using `LoadLibraryEx`. Returns the first available major version as `int?`, or `null` if no CUDA runtime is found. Replaces the old `IsCudaAvailable()` bool method.
 - `InitializeAsync(modelPath)` – loads model from disk (`WhisperFactory.FromPath`). If the model is missing, downloads medium via `WhisperGgmlDownloader`.
 - `TranscribeAsync(byte[] wavBytes, string language, string prompt)`:
   - Always sets an explicit language (`"auto"` → fallback `"cs"`) to **prevent translation**.
@@ -183,9 +184,9 @@ public class AppSettings
 - **No buttons** – all navigation via tray menu.
 - Layout: `[dot] [StatusLabel] [EtaLabel]` + below `[AmplitudeRow]` (3 px bar, hidden outside recording).
 - Drag: `MouseLeftButtonDown` → `DragMove()`, position saved to settings.
-- Animations: `PulseAnim` (RecDot blinking during recording), `FadeIn` on show (fades to 0.85 opacity), `FadeToHover` (opacity → 1.0 in 0.12 s), `FadeToIdle` (opacity → 0.85 in 0.20 s).
-- **Opacity**: idle state is 0.85; hovering the mouse raises it to 1.0 with a smooth transition.
-- **Border**: `WidgetBorder` has `BorderBrush="#66FFFFFF"` (white, 40% opacity) and `BorderThickness="1"` to give a subtle inverted rim on the rounded pill.
+- Animations: `PulseAnim` (RecDot blinking during recording), `FadeIn` on show, `FadeToHover`/`FadeToIdle` (mouse enter/leave opacity).
+- **`AmplitudeRow`**: uses `Visibility="Collapsed"` (no `MinWidth`) – fully hidden outside recording so the window size adapts freely to the status text. Set to `Visibility.Visible` only during active recording, back to `Visibility.Collapsed` in `SetRecordingState(false)`.
+- **`WidgetBorder_MouseEnter` / `WidgetBorder_MouseLeave`**: event handlers that trigger the `FadeToHover` / `FadeToIdle` storyboards (opacity 0.6 ↔ 1.0). Defined in `MainWindow.xaml.cs`.
 
 ### `Views/MainWindow.xaml.cs`
 - **ETA countdown**: after releasing PTT calculates `estimatedSeconds = wavBytes.Length / 32000.0 * EtaFactor`.
@@ -299,7 +300,7 @@ Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe
 ### Resolved issues (for context)
 
 - **`Models/` folder renamed to `Util/`, classes split into separate files**: C# source files (`AppSettings.cs`, `HotkeyModifiers.cs`, `TranscriptionEntry.cs`, `TranscriptionHistory.cs`) moved from `Models\` to `Util\`. Each class is now in its own file. All namespaces updated from `WhisperWriter.Models` to `WhisperWriter.Util`. All `using WhisperWriter.Models` directives updated accordingly in `SettingsService.cs`, `HotkeyService.cs`, and `MainWindow.xaml.cs`. The `models\` directory (lowercase) remains as the data folder for Whisper `.bin` weight files only.
-- **Translation instead of transcription**: `WithTranslate()` must not be called. Without an explicit language, whisper.cpp may translate. Fixed: always use `WithLanguage(effectiveLanguage)`, `"auto"` → `"cs"`.
+- **`IsCudaAvailable()` replaced by `DetectCudaVersion()`**: the old boolean probe hardcoded CUDA 13. Replaced with `DetectCudaVersion()` (returns `int?`) that probes major versions 13, 12, 11 in order and returns the first that has both `cudart64_N.dll` and `cublas64_N.dll` loadable. `MainWindow.xaml.cs` updated at both call sites to use the new method (startup status message and `OnWhisperState` backend label).
 - **`WithGreedySamplingStrategy()` API**: this method returns a different interface (`IWhisperSamplingStrategyBuilder`) without `WithPrompt`/`Build`. Cannot be chained. Not used currently.
 - **Ambiguous reference `System.Windows` vs `System.Windows.Forms`**: resolved with alias `using WpfApp = System.Windows.Application`.
 - **Text injection and broken mouse after PTT**: `SendInput` was called while `VK_LWIN` and `VK_LCONTROL` were still physically held, causing characters to arrive as shortcuts and Win key hook to permanently break mouse buttons. Also, plain `SetForegroundWindow` silently failed under UIPI. Also, `InjectText` was called from the UI/Dispatcher thread where `Thread.Sleep` blocks the message pump. Also, the **`INPUT` struct had `[FieldOffset(4)]` for the `ki`/`mi` union field** – on 64-bit Windows the correct offset is `[FieldOffset(8)]` (40-byte struct); with the wrong offset `SendInput` silently processed 0 events. Fixed: correct `FieldOffset(8)`, `ReleaseModifierKeys()` with `KEYEVENTF_EXTENDEDKEY` for Win keys, `WaitForPhysicalRelease()` polling on background thread, `RestoreFocus()` on UI thread.

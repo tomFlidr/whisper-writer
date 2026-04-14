@@ -80,8 +80,10 @@ public partial class MainWindow : Window {
 		_hotkey.Start();
 
 		// Show GPU/CPU backend info in status during startup
-		bool cuda = WhisperService.IsCudaAvailable();
-		SetStatus(cuda ? "Loading model… (GPU)" : "Loading model… (CPU — CUDA 13 DLLs missing)");
+		var cudaVersion = WhisperService.DetectCudaVersion();
+		SetStatus(cudaVersion.HasValue
+			? $"Loading model… (GPU)"
+			: "Loading model… (CPU)");
 
 		// Fade in
 		var anim = (Storyboard)Resources["FadeIn"];
@@ -241,15 +243,6 @@ public partial class MainWindow : Window {
 		SaveWindowPosition();
 	}
 
-	// ── Hover opacity ─────────────────────────────────────────────────────────
-	private void WidgetBorder_MouseEnter (object sender, System.Windows.Input.MouseEventArgs e) {
-		((Storyboard)Resources["FadeToHover"]).Begin(this, true);
-	}
-
-	private void WidgetBorder_MouseLeave (object sender, System.Windows.Input.MouseEventArgs e) {
-		((Storyboard)Resources["FadeToIdle"]).Begin(this, true);
-	}
-
 	// ── Drag to reposition ───────────────────────────────────────────────────
 	private void Border_MouseLeftButtonDown (object sender, System.Windows.Input.MouseButtonEventArgs e) {
 		DragMove();
@@ -366,18 +359,20 @@ public partial class MainWindow : Window {
 	// ── Amplitude VU meter ───────────────────────────────────────────────────
 	private void OnAmplitude (float rms) {
 		Dispatcher.Invoke(() => {
+			if (AmplitudeRow.Visibility != Visibility.Visible)
+				return;
 			double maxWidth = AmplitudeRow.ActualWidth;
 			if (maxWidth <= 0)
-				maxWidth = 160;
-			double barWidth = Math.Min(rms * 4.0, 1.0) * maxWidth;
-			AmplitudeBar.Width = barWidth;
+				return;
+			AmplitudeBar.Width = Math.Min(rms * 4.0, 1.0) * maxWidth;
 		});
 	}
 
 	// ── Whisper state callback ────────────────────────────────────────────────
 	private void OnWhisperState (TranscriptionState state, string msg) {
 		Dispatcher.Invoke(() => {
-			var backend = WhisperService.IsCudaAvailable() ? "GPU" : "CPU";
+			var cudaVer = WhisperService.DetectCudaVersion();
+			var backend = cudaVer.HasValue ? $"GPU" : "CPU";
 			switch (state) {
 				case TranscriptionState.Loading:
 					SetStatus(msg);
@@ -414,6 +409,7 @@ public partial class MainWindow : Window {
 		} else {
 			pulse.Stop(this);
 			RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
+			AmplitudeBar.Width = 0;
 			AmplitudeRow.Visibility = Visibility.Collapsed;
 			SetStatus("Processing…");
 		}
@@ -424,6 +420,16 @@ public partial class MainWindow : Window {
 		StatusLabel.Foreground = isError
 			? (SolidColorBrush)WpfApp.Current.Resources["AccentRecordingBrush"]
 			: (SolidColorBrush)WpfApp.Current.Resources["TextSecondaryBrush"];
+	}
+
+	private void WidgetBorder_MouseEnter (object sender, System.Windows.Input.MouseEventArgs e) {
+		var anim = (Storyboard)Resources["FadeToHover"];
+		anim.Begin(this);
+	}
+
+	private void WidgetBorder_MouseLeave (object sender, System.Windows.Input.MouseEventArgs e) {
+		var anim = (Storyboard)Resources["FadeToIdle"];
+		anim.Begin(this);
 	}
 
 	// ── Window lifecycle ──────────────────────────────────────────────────────

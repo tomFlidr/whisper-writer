@@ -21,18 +21,24 @@ public sealed class WhisperService: IAsyncDisposable {
 
 	/// <summary>
 	/// Probes whether CUDA runtime DLLs required by ggml-cuda-whisper.dll are loadable.
-	/// Returns true = CUDA will be used; false = CPU fallback (DLLs missing).
+	/// Tries CUDA major versions 13, 12, 11 in order.
+	/// Returns the detected major version number, or null if no CUDA runtime was found.
 	/// </summary>
-	public static bool IsCudaAvailable () {
-		// ggml-cuda-whisper.dll (Whisper.net.Runtime.Cuda 1.9+) is built against CUDA 13.
-		// Both runtime DLLs must be resolvable by the OS loader.
-		foreach (var dll in new[] { "cudart64_13.dll", "cublas64_13.dll" }) {
-			var h = NativeMethods.LoadLibraryEx(dll, IntPtr.Zero, NativeMethods.LOAD_LIBRARY_AS_DATAFILE);
-			if (h == IntPtr.Zero)
-				return false;
-			NativeMethods.FreeLibrary(h);
+	public static int? DetectCudaVersion () {
+		foreach (var version in new[] { 13, 12, 11 }) {
+			var cudart = $"cudart64_{version}.dll";
+			var cublas = $"cublas64_{version}.dll";
+			var hCudart = NativeMethods.LoadLibraryEx(cudart, IntPtr.Zero, NativeMethods.LOAD_LIBRARY_AS_DATAFILE);
+			if (hCudart == IntPtr.Zero)
+				continue;
+			NativeMethods.FreeLibrary(hCudart);
+			var hCublas = NativeMethods.LoadLibraryEx(cublas, IntPtr.Zero, NativeMethods.LOAD_LIBRARY_AS_DATAFILE);
+			if (hCublas == IntPtr.Zero)
+				continue;
+			NativeMethods.FreeLibrary(hCublas);
+			return version;
 		}
-		return true;
+		return null;
 	}
 
 	private static class NativeMethods {
@@ -50,10 +56,10 @@ public sealed class WhisperService: IAsyncDisposable {
 	public async Task InitializeAsync (string modelPath) {
 		StateChanged?.Invoke(TranscriptionState.Loading, "Loading model…");
 
-		var cudaAvailable = IsCudaAvailable();
-		LogService.Info(cudaAvailable
-			? "CUDA probe: cudart64_13.dll + cublas64_13.dll found — GPU will be used"
-			: "CUDA probe: cudart64_13.dll or cublas64_13.dll NOT found — falling back to CPU");
+		var cudaVersion = DetectCudaVersion();
+		LogService.Info(cudaVersion.HasValue
+			? $"CUDA probe: cudart64_{cudaVersion}.dll + cublas64_{cudaVersion}.dll found — GPU will be used (CUDA {cudaVersion})"
+			: "CUDA probe: no CUDA runtime found (tried versions 13, 12, 11) — falling back to CPU");
 
 		try {
 			// Download model if missing
