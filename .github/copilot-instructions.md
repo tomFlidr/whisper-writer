@@ -170,8 +170,9 @@ public enum HotkeyModifiers { None=0, Alt=1, Control=2, Shift=4, Win=8 }
 - Footer: tlačítko „Copy to clipboard" (aktivní jen pokud je vybrán záznam).
 
 ### `Views/SettingsWindow.xaml`
-- Formulář: `ModelPath` (TextBox), `Language` (ComboBox: všechny jazyky whisper.cpp – 57 položek + `auto`), `Prompt` (TextBox multiline), hotkey info (readonly), `HistorySize` (Slider 5–100).
-- Každá položka ComboBoxu má `Tag` = ISO kód jazyka (např. `"cs"`) a `Content` = `"cs – Čeština"` (kód + nativní název).
+- Formulář: `ModelPath` (ComboBox: 2 modely – `large-v2` a `medium`), `Language` (ComboBox: 57 jazyků + `auto`), `Prompt` (TextBox multiline), hotkey info (readonly), `HistorySize` (Slider 5–100).
+- `CmbModelPath`: každá položka má `Tag` = cesta k souboru, `Content` = dvouřádkový `StackPanel` (název tučně + HW požadavky a velikost menším písmem).
+- `CmbLanguage`: každá položka má `Tag` = ISO kód jazyka (např. `"cs"`) a `Content` = `"cs – Čeština"` (kód + nativní název).
 - `ShowDialog()` vrátí `true` při Save, `false` při Cancel/X.
 
 ### `Views/AboutWindow.xaml`

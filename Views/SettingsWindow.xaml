@@ -51,15 +51,31 @@
 						Click="BtnCancel_Click"/>
 			</Grid>
 
-			<!-- Model path -->
+			<!-- Model -->
 			<StackPanel Grid.Row="2">
-				<TextBlock Text="Model path" Foreground="{StaticResource TextSecondaryBrush}"
+				<TextBlock Text="Model" Foreground="{StaticResource TextSecondaryBrush}"
 						   FontSize="11" FontFamily="Segoe UI" Margin="0,0,0,4"/>
-				<TextBox x:Name="TxtModelPath"
-						 Background="#33FFFFFF" Foreground="{StaticResource TextPrimaryBrush}"
-						 BorderBrush="#44FFFFFF" BorderThickness="1"
-						 FontFamily="Consolas" FontSize="12"
-						 Padding="8,5" CaretBrush="White"/>
+				<ComboBox x:Name="CmbModelPath"
+						  Background="#33FFFFFF" Foreground="{StaticResource TextPrimaryBrush}"
+						  BorderBrush="#44FFFFFF"
+						  FontFamily="Segoe UI" FontSize="13" Padding="6,4">
+					<ComboBoxItem Tag="models/ggml-large-v2.bin">
+						<StackPanel>
+							<TextBlock Text="large-v2  (nejpřesnější, doporučený)"
+									   FontWeight="SemiBold"/>
+							<TextBlock Text="3 GB VRAM · 3 GB disk · CUDA GPU silně doporučena"
+									   FontSize="11" Opacity="0.65"/>
+						</StackPanel>
+					</ComboBoxItem>
+					<ComboBoxItem Tag="models/ggml-medium.bin">
+						<StackPanel>
+							<TextBlock Text="medium  (rychlejší, méně přesný)"
+									   FontWeight="SemiBold"/>
+							<TextBlock Text="1.5 GB VRAM · 1.5 GB disk · běží i na CPU"
+										 FontSize="11" Opacity="0.65"/>
+						</StackPanel>
+					</ComboBoxItem>
+				</ComboBox>
 			</StackPanel>
 
 			<!-- Language -->

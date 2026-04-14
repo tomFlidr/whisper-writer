@@ -15,7 +15,16 @@ public partial class SettingsWindow : Window
 	private void LoadSettings()
 	{
 		var s = App.SettingsService.Settings;
-		TxtModelPath.Text = s.ModelPath;
+		foreach (ComboBoxItem item in CmbModelPath.Items)
+		{
+			if (item.Tag as string == s.ModelPath)
+			{
+				CmbModelPath.SelectedItem = item;
+				break;
+			}
+		}
+		if (CmbModelPath.SelectedItem == null)
+			CmbModelPath.SelectedIndex = 0;
 		TxtPrompt.Text = s.Prompt;
 		SliderHistory.Value = s.HistorySize;
 
@@ -47,7 +56,8 @@ public partial class SettingsWindow : Window
 	private void BtnSave_Click(object sender, RoutedEventArgs e)
 	{
 		var s = App.SettingsService.Settings;
-		s.ModelPath = TxtModelPath.Text.Trim();
+		if (CmbModelPath.SelectedItem is ComboBoxItem selectedModel)
+			s.ModelPath = selectedModel.Tag as string ?? "models/ggml-large-v2.bin";
 		s.Prompt = TxtPrompt.Text;
 		s.HistorySize = (int)SliderHistory.Value;
 
