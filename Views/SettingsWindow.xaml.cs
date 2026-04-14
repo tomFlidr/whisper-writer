@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -26,7 +27,7 @@ public partial class SettingsWindow : Window
 		if (CmbModelPath.SelectedItem == null)
 			CmbModelPath.SelectedIndex = 0;
 		TxtPrompt.Text = s.Prompt;
-		SliderHistory.Value = s.HistorySize;
+		TxtHistorySize.Text = s.HistorySize.ToString();
 
 		// Select matching language item
 		foreach (ComboBoxItem item in CmbLanguage.Items)
@@ -41,10 +42,10 @@ public partial class SettingsWindow : Window
 			CmbLanguage.SelectedIndex = 0;
 	}
 
-	private void SliderHistory_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+	private void TxtHistorySize_PreviewTextInput(object sender, TextCompositionEventArgs e)
 	{
-		if (HistorySizeLabel != null)
-			HistorySizeLabel.Text = ((int)e.NewValue).ToString();
+		// Allow digits only
+		e.Handled = !Regex.IsMatch(e.Text, @"^\d+$");
 	}
 
 	private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -59,7 +60,9 @@ public partial class SettingsWindow : Window
 		if (CmbModelPath.SelectedItem is ComboBoxItem selectedModel)
 			s.ModelPath = selectedModel.Tag as string ?? "models/ggml-large-v2.bin";
 		s.Prompt = TxtPrompt.Text;
-		s.HistorySize = (int)SliderHistory.Value;
+		s.HistorySize = int.TryParse(TxtHistorySize.Text, out int historySize) && historySize >= 1
+			? historySize
+			: 1;
 
 		if (CmbLanguage.SelectedItem is ComboBoxItem selected)
 			s.Language = selected.Tag as string ?? "auto";
