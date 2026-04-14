@@ -1,14 +1,14 @@
+using System.IO;
+#if DEBUG
 using Serilog;
 using Serilog.Core;
-using Serilog.Events;
-using System.IO;
+#endif
 
 namespace WhisperWriter.Services;
 
 /// <summary>
 /// Application-wide logging facade backed by Serilog.
-/// Writes daily rolling log files to the "logs" folder next to the exe.
-/// Call LogService.Initialize() once at startup before using Log methods.
+/// All logging is active in DEBUG builds only; Release builds are no-ops.
 /// </summary>
 public static class LogService {
 	/// <summary>Directory where log files are written.</summary>
@@ -19,6 +19,7 @@ public static class LogService {
 #endif
 
 	public static void Initialize () {
+#if DEBUG
 		Directory.CreateDirectory(LogDirectory);
 
 		Log.Logger = new LoggerConfiguration()
@@ -32,7 +33,6 @@ public static class LogService {
 
 		Log.Information("WhisperWriter starting up");
 
-#if DEBUG
 		_transcriptionLog = new LoggerConfiguration()
 			.MinimumLevel.Information()
 			.WriteTo.File(
@@ -43,17 +43,24 @@ public static class LogService {
 #endif
 	}
 
-	public static void Info (string message) =>
+	public static void Info (string message) {
+#if DEBUG
 		Log.Information(message);
+#endif
+	}
 
 	public static void Warning (string message, Exception? ex = null) {
+#if DEBUG
 		if (ex is null) Log.Warning(message);
 		else Log.Warning(ex, message);
+#endif
 	}
 
 	public static void Error (string message, Exception? ex = null) {
+#if DEBUG
 		if (ex is null) Log.Error(message);
 		else Log.Error(ex, message);
+#endif
 	}
 
 	/// <summary>
@@ -67,8 +74,8 @@ public static class LogService {
 	}
 
 	public static void CloseAndFlush () {
-		Log.CloseAndFlush();
 #if DEBUG
+		Log.CloseAndFlush();
 		_transcriptionLog?.Dispose();
 #endif
 	}

@@ -128,10 +128,12 @@ public class AppSettings
 
 ### `Services/LogService.cs`
 - Static facade over `Serilog.Log`.
-- `Initialize()` – configures rolling file sink to `logs/whisperwriter-YYYYMMDD.log` next to exe, 14-day retention.
-- Methods: `Info(string)`, `Warning(string, Exception?)`, `Error(string, Exception?)`.
-- `CloseAndFlush()` – called from `App.OnExit`.
-- `LogDirectory` – public property with path to the log folder.
+- **All logging is active in DEBUG builds only** – in Release all methods are no-ops and Serilog is never initialized.
+- `Initialize()` – configures rolling file sink to `logs/whisperwriter-YYYYMMDD.log` next to exe, 14-day retention. No-op in Release.
+- Methods: `Info(string)`, `Warning(string, Exception?)`, `Error(string, Exception?)`, `Transcription(string, TimeSpan)` – all wrapped in `#if DEBUG`.
+- `CloseAndFlush()` – called from `App.OnExit`. No-op in Release.
+- `LogDirectory` – public property with path to the log folder (available in both configurations).
+- `using Serilog` / `using Serilog.Core` are inside `#if DEBUG` so Serilog is not loaded at all in Release.
 - Logged in all `catch` blocks in the app + global `DispatcherUnhandledException` and `AppDomain.UnhandledException`.
 
 ### `Services/SettingsService.cs`
