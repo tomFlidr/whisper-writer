@@ -222,6 +222,8 @@ Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe
 - **`WithGreedySamplingStrategy()` API**: tato metoda vrací jiný interface (`IWhisperSamplingStrategyBuilder`) bez `WithPrompt`/`Build`. Nelze řetězit. Aktuálně se nepoužívá.
 - **Ambiguous reference `System.Windows` vs `System.Windows.Forms`**: řešeno aliasem `using WpfApp = System.Windows.Application`.
 - **Chyba "Failed to load the whisper model" při puštění PTT**: `InitializeAsync` neobsahoval try/catch, výjimka z `WhisperFactory.FromPath` se tichce ztratila, `_initialized` zůstal `false`. Opraveno: celý `InitializeAsync` zabalen do try/catch, chyba se zobrazí přes `StateChanged(Error, "Model load failed: …")`. Zároveň `RecDot` se správně zčervená při chybovém stavu.
+- **CRLF v C# souborech**: `LogService.cs`, `WhisperService.cs` a `AssemblyInfo.cs` měly konce řádků `\r\n`. Opraveno na `\n` přes Node.js. `.editorconfig` doplněn o kompletní C# Allman style pravidla (`csharp_new_line_before_open_brace = all` atd.) – VS Ctrl+K+D teď bude formátovat konzistentně.
+- **Špatné odsazení `case TranscriptionState.Error:` v MainWindow.xaml.cs**: chyběl jeden tab. Opraveno.
 
 ---
 
@@ -248,6 +250,26 @@ charset = utf-8
 end_of_line = lf
 insert_final_newline = false
 trim_trailing_whitespace = false
+
+[*.cs]
+# Allman brace style - opening brace on its own line (same as VS Ctrl+K+D default)
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+
+# Indentation
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+
+# Spacing
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true
+...
 ```
 
 Klíčové body:
@@ -256,6 +278,7 @@ Klíčové body:
 - Konce řádků: **LF** (`\n`), ne CRLF.
 - Žádný prázdný řádek na konci souboru (`insert_final_newline = false`).
 - Trailing whitespace se neořezává (`trim_trailing_whitespace = false`).
+- C# styl: **Allman** – otevírací `{` vždy na vlastním řádku (odpovídá VS Ctrl+K+D).
 
 ---
 
@@ -265,9 +288,10 @@ Pokud musíš použít PowerShell pro čtení nebo vyhledávání v souborech, v
 
 ### Úpravy souborů
 Při úpravách souborů **vždy** používej nástroj `replace_string_in_file` nebo `multi_replace_string_in_file`.
-Nikdy nepoužívej terminálové skripty (PowerShell, Node.js) pro **zápis nebo úpravu** souborů — vždy se zaseknou a nezpracují se vůbec.
+Nikdy nepoužívej terminálové skripty (PowerShell, Node.js) pro **zápis nebo úpravu** C# souborů — preferuj file-editing tools.
+Výjimka: soubory mimo projekt (`.editorconfig`, `.md`) lze zapsat přes `node -e` s jednořádkovým příkazem používajícím `fs.writeFileSync`.
 Pokud potřebuješ PowerShell pouze pro **čtení nebo vyhledávání**, použij ho, ale přidej `-Encoding UTF8` a příkaz spusť jako jednořádkový, ne jako blokový skript.
-Konce řádků v souborech **neopravuj ani neřeš** — nech je tak jak jsou. Nástroj `replace_string_in_file` si s tím poradí sám.
+Konce řádků v C# souborech jsou **LF** – neopravuj je ručně, `replace_string_in_file` je zachová.
 
 ### Aktualizace instrukčního souboru po dokončení tasku
 **Po každém úspěšně provedeném tasku, kdy `run_build` vrátí úspěšný build, MUSÍŠ aktualizovat tento soubor (`.github/copilot-instructions.md`) tak, aby odrážel aktuální stav aplikace.**
