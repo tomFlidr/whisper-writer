@@ -40,6 +40,7 @@ WhisperWriter je minimalistická WPF aplikace pro Windows – **lokální hlasov
 D:\llms\whisper-writer\
 ├── .github\
 │   └── copilot-instructions.md       ← tento soubor
+├── README.md                          ← uživatelská dokumentace (EN)
 ├── WhisperWriter.csproj
 ├── WhisperWriter.pfx                  ← Authenticode certifikát (self-signed, heslo 1234, v .gitignore)
 ├── WhisperWriter.snk                  ← Strong Name klíč (v .gitignore)
@@ -294,6 +295,8 @@ Konkrétně vždy zkontroluj a případně aktualizuj:
 - Jakékoli jiné sekce jejichž obsah se změnou tasku přestal být aktuální.
 
 Tento soubor je primární zdroj kontextu pro budoucí AI session – udržuj ho přesný a aktuální.
+
+Současně zkontroluj, zda změny ovlivňují uživatelsky viditelné chování (instalace, nastavení, seznam modelů, klávesové zkratky, navigace přes tray, apod.). Pokud ano, aktualizuj také **`README.md`** tak, aby odpovídal aktuálnímu stavu aplikace.
 
 ---
 
