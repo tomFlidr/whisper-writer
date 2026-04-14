@@ -4,7 +4,7 @@
 			 ShutdownMode="OnExplicitShutdown">
 	<Application.Resources>
 		<!-- Color palette -->
-		<Color x:Key="BgColor">#F01C1C1E</Color>
+		<Color x:Key="BgColor">#CC1C1C1E</Color>
 		<Color x:Key="AccentColor">#8B8BFF</Color>
 		<Color x:Key="AccentRecording">#FF3B30</Color>
 		<Color x:Key="TextPrimary">#FFFFFFFF</Color>
@@ -80,7 +80,7 @@
 									  MinWidth="{TemplateBinding ActualWidth}"
 									  MaxHeight="{TemplateBinding MaxDropDownHeight}">
 									<Border x:Name="DropDownBorder"
-											Background="#F01C1C1E"
+											Background="#E61C1C1E"
 											BorderBrush="#44FFFFFF"
 											BorderThickness="1"
 											CornerRadius="6">
