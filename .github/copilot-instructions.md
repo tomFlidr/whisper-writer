@@ -2,6 +2,8 @@
 
 This file describes the current state of the **WhisperWriter** project and serves as context for GitHub Copilot / AI chat to seamlessly continue previous work.
 
+> **Language rule**: Always respond and reason in **English**, regardless of the language the user writes in. This applies to all explanations, plans, code comments, commit messages, and file edits.
+
 ---
 
 ## 1. What the app does
