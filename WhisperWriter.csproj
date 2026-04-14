@@ -10,6 +10,13 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<AssemblyName>WhisperWriter</AssemblyName>
 		<RootNamespace>WhisperWriter</RootNamespace>
+		<!-- Strong name signing via .snk (no password required) -->
+		<SignAssembly>true</SignAssembly>
+		<AssemblyOriginatorKeyFile>WhisperWriter.snk</AssemblyOriginatorKeyFile>
+		<DelaySign>false</DelaySign>
+		<!-- Authenticode signing via signtool in post-build -->
+		<PfxFile>$(MSBuildProjectDirectory)\WhisperWriter.pfx</PfxFile>
+		<PfxPassword>1234</PfxPassword>
 	</PropertyGroup>
 
 	<!-- Copy models folder to output -->
@@ -22,6 +29,19 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
 	</ItemGroup>
+	<ItemGroup>
+	  <None Include="WhisperWriter.sln" />
+	  <None Include="WhisperWriter.pfx" />
+	  <None Include="WhisperWriter.snk" />
+	</ItemGroup>
+
+	<Target Name="AuthenticodeSigning" AfterTargets="Build">
+		<PropertyGroup>
+			<SignTool>C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe</SignTool>
+			<OutputExe>$(OutputPath)$(AssemblyName).exe</OutputExe>
+		</PropertyGroup>
+		<Exec Command="&quot;$(SignTool)&quot; sign /f &quot;$(PfxFile)&quot; /p &quot;$(PfxPassword)&quot; /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com &quot;$(OutputExe)&quot;" ContinueOnError="true" />
+	</Target>
 
 	<ItemGroup>
 		<!-- Whisper inference via whisper.cpp bindings -->

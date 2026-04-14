@@ -22,7 +22,7 @@ WhisperWriter je minimalistická WPF aplikace pro Windows – **lokální hlasov
 | Položka | Hodnota |
 |---|---|
 | Platforma | Windows 10/11, .NET 8, WPF + WinForms (NotifyIcon) |
-| Projekt | `./whisper-writer/WhisperWriter.csproj` |
+| Projekt | `D:\llms\whisper-writer\WhisperWriter.csproj` |
 | GPU | NVIDIA Quadro T2000, 4 GB VRAM, CUDA 13.2, driver 595.71 |
 | Whisper.net | 1.7.2 (+ Runtime + Runtime.Cuda) |
 | NAudio | 2.2.1 |
@@ -36,10 +36,12 @@ WhisperWriter je minimalistická WPF aplikace pro Windows – **lokální hlasov
 ## 3. Struktura projektu
 
 ```
-.\whisper-writer\
+D:\llms\whisper-writer\
 ├── .github\
 │   └── copilot-instructions.md       ← tento soubor
 ├── WhisperWriter.csproj
+├── WhisperWriter.pfx                  ← Authenticode certifikát (self-signed, heslo 1234, v .gitignore)
+├── WhisperWriter.snk                  ← Strong Name klíč (v .gitignore)
 ├── App.xaml                           ← globální WPF resources, styly
 ├── App.xaml.cs                        ← startup, tray ikona, statické služby
 ├── AssemblyInfo.cs
@@ -163,16 +165,25 @@ public enum HotkeyModifiers { None=0, Alt=1, Control=2, Shift=4, Win=8 }
 - Informační okno, `ScrollViewer` s `TextBlock` (inline `Run` elementy).
 - Přetahovatelné, zavíracím tlačítkem nebo „Close" v patičce.
 
+### `WhisperWriter.csproj` – podepisování
+- **Strong name**: `<SignAssembly>true</SignAssembly>` + `WhisperWriter.snk` (RSA klíčový pár, bez hesla).
+- **Authenticode**: post-build target `AuthenticodeSigning` volá `signtool.exe` z Windows SDK `10.0.26100.0`.
+  - Podepisuje `$(OutputPath)WhisperWriter.exe` pomocí `WhisperWriter.pfx` (heslo `1234`).
+  - Timestamp server: `http://timestamp.digicert.com`, algoritmus SHA256.
+  - `ContinueOnError="true"` – build neselže pokud signtool není dostupný.
+- **Certifikát** (`WhisperWriter.pfx`): self-signed, CN=Tomáš Flídr, platný 10 let (do 2036), uložen v `Cert:\CurrentUser\My`.
+- Oba soubory (`.pfx`, `.snk`) jsou v `.gitignore` – nesmí se commitovat.
+
 ---
 
 ## 5. Build a spuštění
 
 ```powershell
 # Build (bez restore, modely jsou velké)
-dotnet build ".\whisper-writer\WhisperWriter.csproj" -c Debug --no-restore
+dotnet build "D:\llms\whisper-writer\WhisperWriter.csproj" -c Debug --no-restore
 
 # Spuštění
-Start-Process ".\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe"
+Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe"
 ```
 
 > **Důležité**: Při buildu musí být aplikace ukončena – exe soubor je zamčen běžící instancí.

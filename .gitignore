@@ -55,3 +55,7 @@ nunit-*.xml
 
 .vs/
 Models/ggml-*
+
+# Code signing keys (contain private keys)
+*.pfx
+*.snk
