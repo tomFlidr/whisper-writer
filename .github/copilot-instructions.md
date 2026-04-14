@@ -189,6 +189,8 @@ public class AppSettings
 - `EtaFactor = 0.90` (empirical coefficient for large-v2 + Quadro T2000 CUDA) – **may need calibration**.
   - `DispatcherTimer` 100 ms counts down and displays `~Xs` next to "Transcribing…".
 - PTT flow: `SaveFocus` → `StartRecording` → (release) → `StopRecording` → `StartEtaCountdown` → `TranscribeAsync` → `StopEtaCountdown` → (if `CopyToClipboard`) `Clipboard.SetText` → `InjectText`.
+- **Display change handling**: `OnSourceInitialized` registers a `WndProc` hook via `HwndSource.AddHook`. On `WM_DISPLAYCHANGE` (0x007E – fired when resolution/monitor layout changes, e.g. docking/undocking), `ClampWindowToScreen()` is called via `Dispatcher.BeginInvoke`.
+- **`ClampWindowToScreen()`**: uses `System.Windows.Forms.Screen` to find the monitor containing the current window position. Converts its working area to WPF device-independent units using `PresentationSource.TransformFromDevice`. Clamps `Left`/`Top` so the window fits entirely within the working area. Falls back to bottom-centre of the primary screen if the clamped position is still outside any screen (e.g. the monitor it was on no longer exists). Saves the new position to `settings.json`.
 
 ### `Views/HistoryWindow.xaml`
 - `ListView` with `ObservableCollection` binding to `App.History.Entries`.
@@ -293,6 +295,7 @@ Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe
 - **Text injection and broken mouse after PTT**: `SendInput` was called while `VK_LWIN` and `VK_LCONTROL` were still physically held, causing characters to arrive as shortcuts and Win key hook to permanently break mouse buttons. Also, plain `SetForegroundWindow` silently failed under UIPI. Also, `InjectText` was called from the UI/Dispatcher thread where `Thread.Sleep` blocks the message pump. Also, the **`INPUT` struct had `[FieldOffset(4)]` for the `ki`/`mi` union field** – on 64-bit Windows the correct offset is `[FieldOffset(8)]` (40-byte struct); with the wrong offset `SendInput` silently processed 0 events. Fixed: correct `FieldOffset(8)`, `ReleaseModifierKeys()` with `KEYEVENTF_EXTENDEDKEY` for Win keys, `WaitForPhysicalRelease()` polling on background thread, `RestoreFocus()` on UI thread.
 - **CRLF in C# files**: `LogService.cs`, `WhisperService.cs` and `AssemblyInfo.cs` had `\r\n` line endings. Fixed to `\n` via Node.js. `.editorconfig` extended with full C# K&R style rules (`csharp_new_line_before_open_brace = none` etc.). All project code reformatted to K&R style (opening `{` at end of line).
 - **Wrong indentation of `case TranscriptionState.Error:` in MainWindow.xaml.cs**: one tab was missing. Fixed.
+- **`WM_DISPLAYCHANGE` handler and `ClampWindowToScreen()` missing**: the `OnSourceInitialized` handler only set the window style (toolwindow / no taskbar entry) but did not register a `WndProc` hook. Added `HwndSource.AddHook(WndProc)`, constant `WM_DISPLAYCHANGE = 0x007E`, method `WndProc` that triggers `Dispatcher.BeginInvoke(ClampWindowToScreen)`, and `ClampWindowToScreen()` that clamps the window to the nearest monitor's working area (with DPI-aware scaling), falls back to bottom-centre of the primary screen if the window ends up completely off-screen, and saves the new position to `settings.json`.
 
 ---
 

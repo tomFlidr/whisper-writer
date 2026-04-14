@@ -1,12 +1,12 @@
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Forms;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using WhisperWriter.Util;
 using WhisperWriter.Services;
-using WhisperWriter.Util;
 
 
 // Alias to avoid ambiguity with System.Windows.Forms.Application
@@ -54,6 +54,7 @@ public partial class MainWindow : Window {
 	private const int GWL_EXSTYLE = -20;
 	private const int WS_EX_TOOLWINDOW = 0x00000080;
 	private const int WS_EX_APPWINDOW = 0x00040000;
+	private const int WM_DISPLAYCHANGE = 0x007E;
 
 	[DllImport("user32.dll")]
 	private static extern int GetWindowLong (IntPtr hwnd, int index);
@@ -92,6 +93,65 @@ public partial class MainWindow : Window {
 		int style = GetWindowLong(hwnd, GWL_EXSTYLE);
 		style = (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW;
 		SetWindowLong(hwnd, GWL_EXSTYLE, style);
+		HwndSource.FromHwnd(hwnd)?.AddHook(WndProc);
+	}
+
+	private IntPtr WndProc (IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) {
+		if (msg == WM_DISPLAYCHANGE)
+			Dispatcher.BeginInvoke(ClampWindowToScreen);
+		return IntPtr.Zero;
+	}
+
+	/// <summary>
+	/// Ensures the window stays within the bounds of the nearest screen after a display
+	/// configuration change (e.g. docking / undocking). The saved position is preserved
+	/// when possible; if the window would be entirely off-screen it falls back to the
+	/// bottom-centre of the primary screen.
+	/// </summary>
+	private void ClampWindowToScreen () {
+		// Use WinForms Screen helper – it reflects the updated monitor layout immediately.
+		var screen = Screen.FromPoint(new System.Drawing.Point((int)Left, (int)Top));
+		var wa = screen.WorkingArea;
+
+		// Convert working-area pixels to WPF device-independent units.
+		var source = PresentationSource.FromVisual(this);
+		double scaleX = source?.CompositionTarget?.TransformFromDevice.M11 ?? 1.0;
+		double scaleY = source?.CompositionTarget?.TransformFromDevice.M22 ?? 1.0;
+
+		double waLeft   = wa.Left   * scaleX;
+		double waTop    = wa.Top    * scaleY;
+		double waRight  = wa.Right  * scaleX;
+		double waBottom = wa.Bottom * scaleY;
+
+		// Clamp so the full window is visible inside the working area.
+		double newLeft = Math.Max(waLeft,  Math.Min(Left, waRight  - ActualWidth));
+		double newTop  = Math.Max(waTop,   Math.Min(Top,  waBottom - ActualHeight));
+
+		// If the saved position puts the window completely outside every screen
+		// (e.g. undocked from a monitor that no longer exists), fall back to
+		// bottom-centre of the primary screen.
+		var primary = Screen.PrimaryScreen;
+		if (primary != null) {
+			var pw = primary.WorkingArea;
+			double pwLeft   = pw.Left   * scaleX;
+			double pwTop    = pw.Top    * scaleY;
+			double pwRight  = pw.Right  * scaleX;
+			double pwBottom = pw.Bottom * scaleY;
+
+			bool onScreen = newLeft < pwRight  && newLeft + ActualWidth  > pwLeft
+			             && newTop  < pwBottom && newTop  + ActualHeight > pwTop;
+			if (!onScreen) {
+				newLeft = pwLeft + (pwRight  - pwLeft  - ActualWidth)  / 2;
+				newTop  = pwBottom - ActualHeight - 20;
+			}
+		}
+
+		Left = newLeft;
+		Top  = newTop;
+
+		App.SettingsService.Settings.WindowLeft = Left;
+		App.SettingsService.Settings.WindowTop  = Top;
+		App.SettingsService.Save();
 	}
 
 	private void PositionWindow () {
