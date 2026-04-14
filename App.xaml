@@ -4,7 +4,7 @@
 			 ShutdownMode="OnExplicitShutdown">
 	<Application.Resources>
 		<!-- Color palette -->
-		<Color x:Key="BgColor">#CC1C1C1E</Color>
+		<Color x:Key="BgColor">#F01C1C1E</Color>
 		<Color x:Key="AccentColor">#8B8BFF</Color>
 		<Color x:Key="AccentRecording">#FF3B30</Color>
 		<Color x:Key="TextPrimary">#FFFFFFFF</Color>
@@ -15,6 +15,117 @@
 		<SolidColorBrush x:Key="AccentRecordingBrush" Color="{StaticResource AccentRecording}"/>
 		<SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}"/>
 		<SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}"/>
+
+		<!-- ComboBox style: dark background, white text, consistent with app palette -->
+		<Style TargetType="ComboBox">
+			<Setter Property="Background" Value="#33FFFFFF"/>
+			<Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+			<Setter Property="BorderBrush" Value="#44FFFFFF"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="Padding" Value="6,4"/>
+			<Setter Property="FontFamily" Value="Segoe UI"/>
+			<Setter Property="FontSize" Value="13"/>
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="ComboBox">
+						<Grid>
+							<ToggleButton x:Name="ToggleButton"
+										  Focusable="False"
+										  IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+										  ClickMode="Press"
+										  Background="{TemplateBinding Background}"
+										  BorderBrush="{TemplateBinding BorderBrush}"
+										  BorderThickness="{TemplateBinding BorderThickness}">
+								<ToggleButton.Template>
+									<ControlTemplate TargetType="ToggleButton">
+										<Border Background="{TemplateBinding Background}"
+												BorderBrush="{TemplateBinding BorderBrush}"
+												BorderThickness="{TemplateBinding BorderThickness}"
+												CornerRadius="6">
+											<Grid>
+												<Grid.ColumnDefinitions>
+													<ColumnDefinition Width="*"/>
+													<ColumnDefinition Width="20"/>
+												</Grid.ColumnDefinitions>
+												<ContentPresenter Grid.Column="0"
+																  Margin="{Binding Padding, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+																  HorizontalAlignment="Left"
+																  VerticalAlignment="Center"/>
+												<Path Grid.Column="1"
+													  Data="M 0 0 L 4 4 L 8 0 Z"
+													  Fill="{StaticResource TextSecondaryBrush}"
+													  HorizontalAlignment="Center"
+													  VerticalAlignment="Center"/>
+											</Grid>
+										</Border>
+									</ControlTemplate>
+								</ToggleButton.Template>
+							</ToggleButton>
+							<ContentPresenter x:Name="ContentSite"
+											  IsHitTestVisible="False"
+											  Content="{TemplateBinding SelectionBoxItem}"
+											  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+											  ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+											  Margin="{TemplateBinding Padding}"
+											  VerticalAlignment="Center"
+											  HorizontalAlignment="Left"/>
+							<Popup x:Name="Popup"
+								   Placement="Bottom"
+								   IsOpen="{TemplateBinding IsDropDownOpen}"
+								   AllowsTransparency="True"
+								   Focusable="False"
+								   PopupAnimation="Slide">
+								<Grid x:Name="DropDown"
+									  SnapsToDevicePixels="True"
+									  MinWidth="{TemplateBinding ActualWidth}"
+									  MaxHeight="{TemplateBinding MaxDropDownHeight}">
+									<Border x:Name="DropDownBorder"
+											Background="#F01C1C1E"
+											BorderBrush="#44FFFFFF"
+											BorderThickness="1"
+											CornerRadius="6">
+										<Border.Effect>
+											<DropShadowEffect Color="Black" BlurRadius="16" ShadowDepth="4" Opacity="0.5"/>
+										</Border.Effect>
+									</Border>
+									<ScrollViewer Margin="2" SnapsToDevicePixels="True">
+										<StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained"/>
+									</ScrollViewer>
+								</Grid>
+							</Popup>
+						</Grid>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
+		<!-- ComboBoxItem style -->
+		<Style TargetType="ComboBoxItem">
+			<Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="Padding" Value="8,5"/>
+			<Setter Property="FontFamily" Value="Segoe UI"/>
+			<Setter Property="FontSize" Value="13"/>
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="ComboBoxItem">
+						<Border x:Name="Bd"
+								Background="{TemplateBinding Background}"
+								Padding="{TemplateBinding Padding}">
+							<ContentPresenter/>
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsHighlighted" Value="True">
+								<Setter TargetName="Bd" Property="Background" Value="#44FFFFFF"/>
+							</Trigger>
+							<Trigger Property="IsSelected" Value="True">
+								<Setter TargetName="Bd" Property="Background" Value="#33FFFFFF"/>
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
 
 		<!-- Shared icon button style -->
 		<Style x:Key="IconButton" TargetType="Button">

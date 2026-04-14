@@ -1,4 +1,4 @@
-﻿<Window x:Class="WhisperWriter.Views.SettingsWindow"
+<Window x:Class="WhisperWriter.Views.SettingsWindow"
 		xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 		Title="Settings"
@@ -55,10 +55,7 @@
 			<StackPanel Grid.Row="2">
 				<TextBlock Text="Model" Foreground="{StaticResource TextSecondaryBrush}"
 						   FontSize="11" FontFamily="Segoe UI" Margin="0,0,0,4"/>
-				<ComboBox x:Name="CmbModelPath"
-						  Background="#33FFFFFF" Foreground="{StaticResource TextPrimaryBrush}"
-						  BorderBrush="#44FFFFFF"
-						  FontFamily="Segoe UI" FontSize="13" Padding="6,4">
+				<ComboBox x:Name="CmbModelPath">
 					<ComboBoxItem Tag="models/ggml-large-v3-turbo.bin">
 						<StackPanel>
 							<TextBlock Text="large-v3-turbo  (best speed/accuracy tradeoff)"
@@ -162,10 +159,7 @@
 			<StackPanel Grid.Row="4">
 				<TextBlock Text="Language" Foreground="{StaticResource TextSecondaryBrush}"
 						   FontSize="11" FontFamily="Segoe UI" Margin="0,0,0,4"/>
-				<ComboBox x:Name="CmbLanguage"
-						  Background="#33FFFFFF" Foreground="{StaticResource TextPrimaryBrush}"
-						  BorderBrush="#44FFFFFF"
-						  FontFamily="Segoe UI" FontSize="13" Padding="6,4">
+				<ComboBox x:Name="CmbLanguage">
 					<ComboBoxItem Content="auto – Auto (detect)" Tag="auto"/>
 					<ComboBoxItem Content="af – Afrikaans" Tag="af"/>
 					<ComboBoxItem Content="ar – العربية" Tag="ar"/>
