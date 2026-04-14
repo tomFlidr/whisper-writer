@@ -16,6 +16,9 @@ public class AppSettings {
 	// How many transcriptions to keep in history
 	public int HistorySize { get; set; } = 30;
 
+	// If true, every transcription result is also copied to the clipboard
+	public bool CopyToClipboard { get; set; } = true;
+
 	// Widget position on screen (negative = use default bottom-center)
 	public double WindowLeft { get; set; } = -1;
 	public double WindowTop { get; set; } = -1;

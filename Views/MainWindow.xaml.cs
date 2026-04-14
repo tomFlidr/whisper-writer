@@ -122,13 +122,22 @@ public partial class MainWindow : Window {
 
 				StopEtaCountdown();
 
-				if (!string.IsNullOrWhiteSpace(text)) {
+			if (!string.IsNullOrWhiteSpace(text)) {
 					App.History.Add(new TranscriptionEntry {
 						Text = text,
 						Duration = sw.Elapsed,
 					});
 					LogService.Transcription(text, sw.Elapsed);
-					TextInjector.InjectText(text);
+					if (settings.CopyToClipboard)
+						System.Windows.Clipboard.SetText(text);
+					// RestoreFocus must be called on the UI thread (owns message pump).
+					// InjectText (WaitForPhysicalRelease + SendInput) runs on a background
+					// thread so Thread.Sleep does not block the UI.
+					TextInjector.RestoreFocus();
+					_ = Task.Run(() => TextInjector.InjectText(text)).ContinueWith(t => {
+						if (t.IsFaulted)
+							LogService.Error("InjectText failed", t.Exception?.InnerException);
+					});
 				}
 			} catch (Exception ex) {
 				StopEtaCountdown();

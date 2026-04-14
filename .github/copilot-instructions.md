@@ -80,7 +80,7 @@ D:\llms\whisper-writer\
 
 ### `App.xaml`
 - Defines global `ResourceDictionary`: colors (`BgBrush`, `AccentBrush`, `AccentRecordingBrush`, `TextPrimaryBrush`, `TextSecondaryBrush`) and `IconButton` style.
-- Color palette: dark semi-transparent background `#CC1C1C1E`, accent `#8B8BFF`, red for recording `#FF3B30`.
+- Color palette: dark nearly-opaque background `#F71C1C1E` (97% opacity), accent `#8B8BFF`, red for recording `#FF3B30`.
 - `ShutdownMode="OnExplicitShutdown"` – the app does not close when the window is closed.
 
 ### `App.xaml.cs`
@@ -108,6 +108,7 @@ public class AppSettings
     public string Prompt    { get; set; } = "";
     public int    HotkeyModifiers { get; set; } = 0x0002 | 0x0008; // Ctrl + Win
     public int    HistorySize     { get; set; } = 30;
+    public bool   CopyToClipboard { get; set; } = true;  // copy result to clipboard after each transcription
     public double WindowLeft      { get; set; } = -1;  // -1 = default bottom-center
     public double WindowTop       { get; set; } = -1;
 }
@@ -151,7 +152,14 @@ public class AppSettings
 
 ### `Services/TextInjector.cs`
 - `SaveFocus()` – saves the `GetForegroundWindow()` handle before PTT steals focus.
-- `InjectText(string)` – `SetForegroundWindow` + 100 ms sleep + `SendInput` Unicode (each char as keydown+keyup with `KEYEVENTF_UNICODE`).
+- `RestoreFocus()` – must be called from the **UI thread** (owns message pump). Uses `AttachThreadInput` + `SetForegroundWindow` + `BringWindowToTop`. `AttachThreadInput` requires a thread with a message queue – it fails silently on threadpool threads.
+- `InjectText(string)` – must be called from a **background thread** (via `Task.Run`), NOT from the UI/Dispatcher thread, so that `Thread.Sleep` in `WaitForPhysicalRelease` does not block the message pump:
+  1. `WaitForPhysicalRelease()` – polls `GetAsyncKeyState` up to 2 s until `VK_LWIN`, `VK_RWIN`, `VK_LCONTROL`, `VK_RCONTROL` are all physically released. **This is the critical step** – sending a synthetic keyup while the key is still physically held is silently ignored by Windows, leaving the Win shell hook active and permanently breaking mouse input.
+  2. `ReleaseModifierKeys()` – sends synthetic `KEYEVENTF_KEYUP` for all 8 modifier VKs (LWin, RWin, LCtrl, RCtrl, LAlt, RAlt, LShift, RShift). This is **critical**: without it, the physically-held Win+Ctrl keys interfere with `SendInput` (text arrives as shortcuts) and Win key permanently breaks mouse buttons until reboot. **Win keys (`VK_LWIN`, `VK_RWIN`) additionally require `KEYEVENTF_EXTENDEDKEY` flag** – without it the keyup event is silently ignored by Windows and the Win shell hook stays active.
+  3. `Thread.Sleep(80)` – gives the target window time to process the focus change from `RestoreFocus()`.
+  4. `SendInput` Unicode (each char as keydown+keyup with `KEYEVENTF_UNICODE`, `wVk=0`).
+- **`INPUT` struct layout**: On 64-bit Windows `sizeof(INPUT)` = 40 bytes. The union field (`ki`/`mi`) must be at **`[FieldOffset(8)]`**, NOT `[FieldOffset(4)]`. With `FieldOffset(4)`, `SendInput` receives misaligned data and silently processes 0 events – text is never injected and modifier keyups are never sent, permanently breaking mouse input. `SaveFocus()` logs an error at startup if the struct size does not match the expected 40 bytes.
+- Call order in `MainWindow.OnPttStopped`: `TextInjector.RestoreFocus()` on UI thread → `Task.Run(() => TextInjector.InjectText(text))` on background thread.
 
 ### `Services/WhisperService.cs`
 - `InitializeAsync(modelPath)` – loads model from disk (`WhisperFactory.FromPath`). If the model is missing, downloads medium via `WhisperGgmlDownloader`.
@@ -175,7 +183,7 @@ public class AppSettings
 - **ETA countdown**: after releasing PTT calculates `estimatedSeconds = wavBytes.Length / 32000.0 * EtaFactor`.
   - `EtaFactor = 0.35` (empirical coefficient for large-v2 + Quadro T2000 CUDA) – **may need calibration**.
   - `DispatcherTimer` 100 ms counts down and displays `~Xs` next to "Transcribing…".
-- PTT flow: `SaveFocus` → `StartRecording` → (release) → `StopRecording` → `StartEtaCountdown` → `TranscribeAsync` → `StopEtaCountdown` → `InjectText`.
+- PTT flow: `SaveFocus` → `StartRecording` → (release) → `StopRecording` → `StartEtaCountdown` → `TranscribeAsync` → `StopEtaCountdown` → (if `CopyToClipboard`) `Clipboard.SetText` → `InjectText`.
 
 ### `Views/HistoryWindow.xaml`
 - `ListView` with `ObservableCollection` binding to `App.History.Entries`.
@@ -183,11 +191,12 @@ public class AppSettings
 - Footer: "Copy to clipboard" button (active only when an entry is selected).
 
 ### `Views/SettingsWindow.xaml`
-- Form: `ModelPath` (ComboBox: 12 models), `Language` (ComboBox: 57 languages + `auto`), `Prompt` (multiline TextBox), hotkey info (read-only), `HistorySize` (numeric TextBox, min 1, max Int32.MaxValue).
+- Form: `ModelPath` (ComboBox: 12 models), `Language` (ComboBox: 57 languages + `auto`), `Prompt` (multiline TextBox), hotkey info (read-only), `HistorySize` (numeric TextBox, min 1, max Int32.MaxValue), `CopyToClipboard` (CheckBox, default checked).
 - `CmbModelPath`: each item has `Tag` = file path, `Content` = two-line `StackPanel` (name bold + HW requirements and size in smaller text).
 - Available models (largest to smallest): `large-v3-turbo`, `large-v3`, `large-v2`, `large-v1`, `medium`, `medium.en`, `small`, `small.en`, `base`, `base.en`, `tiny`, `tiny.en`.
 - `CmbLanguage`: each item has `Tag` = ISO language code (e.g. `"cs"`) and `Content` = `"cs – Čeština"` (code + native name).
 - `TxtHistorySize`: numeric TextBox, `PreviewTextInput` handler blocks non-numeric characters, fallback to `1` on save if value is invalid or < 1.
+- `ChkCopyToClipboard`: CheckBox bound to `AppSettings.CopyToClipboard`.
 - `ShowDialog()` returns `true` on Save, `false` on Cancel/X.
 
 ### `Views/AboutWindow.xaml`
@@ -254,7 +263,7 @@ Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe
 - **Translation instead of transcription**: `WithTranslate()` must not be called. Without an explicit language, whisper.cpp may translate. Fixed: always use `WithLanguage(effectiveLanguage)`, `"auto"` → `"cs"`.
 - **`WithGreedySamplingStrategy()` API**: this method returns a different interface (`IWhisperSamplingStrategyBuilder`) without `WithPrompt`/`Build`. Cannot be chained. Not used currently.
 - **Ambiguous reference `System.Windows` vs `System.Windows.Forms`**: resolved with alias `using WpfApp = System.Windows.Application`.
-- **"Failed to load the whisper model" error on PTT press**: `InitializeAsync` lacked try/catch, the exception from `WhisperFactory.FromPath` was silently lost, `_initialized` stayed `false`. Fixed: entire `InitializeAsync` wrapped in try/catch, error surfaced via `StateChanged(Error, "Model load failed: …")`. `RecDot` also correctly turns red on error state.
+- **Text injection and broken mouse after PTT**: `SendInput` was called while `VK_LWIN` and `VK_LCONTROL` were still physically held, causing characters to arrive as shortcuts and Win key hook to permanently break mouse buttons. Also, plain `SetForegroundWindow` silently failed under UIPI. Also, `InjectText` was called from the UI/Dispatcher thread where `Thread.Sleep` blocks the message pump. Also, the **`INPUT` struct had `[FieldOffset(4)]` for the `ki`/`mi` union field** – on 64-bit Windows the correct offset is `[FieldOffset(8)]` (40-byte struct); with the wrong offset `SendInput` silently processed 0 events. Fixed: correct `FieldOffset(8)`, `ReleaseModifierKeys()` with `KEYEVENTF_EXTENDEDKEY` for Win keys, `WaitForPhysicalRelease()` polling on background thread, `RestoreFocus()` on UI thread.
 - **CRLF in C# files**: `LogService.cs`, `WhisperService.cs` and `AssemblyInfo.cs` had `\r\n` line endings. Fixed to `\n` via Node.js. `.editorconfig` extended with full C# K&R style rules (`csharp_new_line_before_open_brace = none` etc.). All project code reformatted to K&R style (opening `{` at end of line).
 - **Wrong indentation of `case TranscriptionState.Error:` in MainWindow.xaml.cs**: one tab was missing. Fixed.
 

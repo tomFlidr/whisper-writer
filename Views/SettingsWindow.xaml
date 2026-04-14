@@ -35,6 +35,9 @@
 				<RowDefinition Height="12"/>
 				<RowDefinition Height="Auto"/>
 				<!-- history size -->
+				<RowDefinition Height="12"/>
+				<RowDefinition Height="Auto"/>
+				<!-- clipboard -->
 				<RowDefinition Height="*"/>
 				<RowDefinition Height="Auto"/>
 				<!-- buttons -->
@@ -267,8 +270,15 @@
 				         PreviewTextInput="TxtHistorySize_PreviewTextInput"/>
 			</StackPanel>
 
+			<!-- Copy to clipboard -->
+			<CheckBox x:Name="ChkCopyToClipboard"
+					  Grid.Row="12"
+					  Foreground="{StaticResource TextPrimaryBrush}"
+					  FontFamily="Segoe UI" FontSize="13"
+					  Content="Copy every transcription to clipboard"/>
+
 			<!-- Action buttons -->
-			<StackPanel Grid.Row="12" Orientation="Horizontal" HorizontalAlignment="Right">
+			<StackPanel Grid.Row="14" Orientation="Horizontal" HorizontalAlignment="Right">
 				<Button Style="{StaticResource IconButton}"
 						Content="Cancel"
 						Margin="0,0,8,0"

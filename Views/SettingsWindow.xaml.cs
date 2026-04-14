@@ -23,6 +23,7 @@ public partial class SettingsWindow : Window {
 			CmbModelPath.SelectedIndex = 0;
 		TxtPrompt.Text = s.Prompt;
 		TxtHistorySize.Text = s.HistorySize.ToString();
+		ChkCopyToClipboard.IsChecked = s.CopyToClipboard;
 
 		// Select matching language item
 		foreach (ComboBoxItem item in CmbLanguage.Items) {
@@ -53,6 +54,7 @@ public partial class SettingsWindow : Window {
 		s.HistorySize = int.TryParse(TxtHistorySize.Text, out int historySize) && historySize >= 1
 			? historySize
 			: 1;
+		s.CopyToClipboard = ChkCopyToClipboard.IsChecked == true;
 
 		if (CmbLanguage.SelectedItem is ComboBoxItem selected)
 			s.Language = selected.Tag as string ?? "auto";
