@@ -26,7 +26,7 @@ No data leaves the computer. CUDA GPU acceleration is automatic.
 | Platform | Windows 10/11, .NET 8, WPF + WinForms (NotifyIcon) |
 | Project | `D:\llms\whisper-writer\WhisperWriter.csproj` |
 | GPU | NVIDIA Quadro T2000, 4 GB VRAM, CUDA 13.2, driver 595.71 |
-| Whisper.net | 1.7.2 (+ Runtime + Runtime.Cuda) |
+| Whisper.net | 1.9.0 (+ Runtime + Runtime.Cuda) |
 | NAudio | 2.2.1 |
 | System.Text.Json | 8.0.5 |
 | Serilog | 4.3.0 (+ Serilog.Sinks.File 6.0.0) |
@@ -46,6 +46,8 @@ D:\llms\whisper-writer\
 ├── WhisperWriter.csproj
 ├── WhisperWriter.pfx                  ← Authenticode certificate (self-signed, password 1234, in .gitignore)
 ├── WhisperWriter.snk                  ← Strong Name key (in .gitignore)
+├── setup-dev.ps1                      ← one-time developer setup: checks .NET SDK + CUDA, restores NuGet, copies CUDA DLLs, optional model download
+├── setup-dev.bat                      ← launcher for setup-dev.ps1, bypasses execution policy
 ├── download-models.ps1                ← interactive PowerShell script: download GGML models to models\
 ├── download-models.bat                ← launcher for download-models.ps1, bypasses execution policy
 ├── App.xaml                           ← global WPF resources, styles
@@ -205,6 +207,12 @@ public class AppSettings
 - Info window, `ScrollViewer` with `TextBlock` (inline `Run` elements).
 - Draggable, closeable via the close button or "Close" in the footer.
 
+### `WhisperWriter.csproj` – CUDA target
+- `CopyCudaRuntimeDlls` MSBuild target copies `cublas64_N.dll`, `cublasLt64_N.dll`, `cudart64_N.dll` to `$(OutputPath)runtimes\cuda\win-x64` after each build.
+- `<CudaBinDir>` holds the full path to the CUDA bin folder (e.g. `C:\...\CUDA\v13.2\bin\x64`). Updated automatically by `setup-dev.ps1`.
+- `<CudaVersion>` is extracted at build time from the path suffix via MSBuild `Regex` property function (e.g. `v13.2` → `13`). DLL names are assembled as `cublas64_$(CudaVersion).dll` – no hardcoded version number. Supports CUDA 11, 12, 13 and any future major version without further changes.
+- `ContinueOnError="true"` – build does not fail if CUDA is not installed.
+
 ### `WhisperWriter.csproj` – signing
 - **Strong name**: `<SignAssembly>true</SignAssembly>` + `WhisperWriter.snk` (RSA key pair, no password).
 - **Authenticode**: post-build target `AuthenticodeSigning` calls `signtool.exe` from Windows SDK `10.0.26100.0`.
@@ -213,6 +221,23 @@ public class AppSettings
   - `ContinueOnError="true"` – build does not fail if signtool is unavailable.
 - **Certificate** (`WhisperWriter.pfx`): self-signed, CN=Tomáš Flídr, valid 10 years (until 2036), stored in `Cert:\CurrentUser\My`.
 - Both files (`.pfx`, `.snk`) are in `.gitignore` – must not be committed.
+
+### `setup-dev.ps1`
+- One-time developer environment setup script. Run once after cloning the repository.
+- **Steps performed**:
+  1. Checks for a compatible .NET SDK (>= 8). Aborts with a download link if not found.
+  2. Detects NVIDIA CUDA Toolkit (major versions 13, 12, 11) via env vars, standard install paths, and `nvcc` in PATH. Extracts version from `cudart64_NN.dll` filename.
+  3. Runs `dotnet restore WhisperWriter.csproj --verbosity quiet`.
+  4. Copies `cudart64_NN.dll`, `cublas64_NN.dll`, `cublasLt64_NN.dll` from CUDA bin to `bin\Debug\net8.0-windows\runtimes\cuda\win-x64` (skips Release if not built yet). If CUDA was not found, step is skipped.
+  5. Compares the `<CudaBinDir>` value in `.csproj` with the detected path and offers to update it interactively.
+  6. Checks whether the default Whisper model (`ggml-large-v2.bin`) exists in `models\`. If no model is present, offers to launch `download-models.ps1`.
+- If CUDA is absent, the app still works via CPU inference – the script warns about it but does not abort.
+- No external dependencies – built-in Windows PowerShell 5.1+ compatible.
+
+### `setup-dev.bat`
+- One-line `.bat` launcher: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup-dev.ps1"`.
+- Uses `%~dp0` so it works from any working directory.
+- Ends with `pause` so the console window stays open after the script finishes.
 
 ### `download-models.ps1`
 - Interactive PowerShell script (no external dependencies, runs on built-in Windows PowerShell 5.1+).

@@ -49,16 +49,19 @@
 		<Exec Command="&quot;$(SignTool)&quot; sign /f &quot;$(PfxFile)&quot; /p &quot;$(PfxPassword)&quot; /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com &quot;$(OutputExe)&quot;" ContinueOnError="true" />
 	</Target>
 
-	<!-- Copy CUDA 13 runtime DLLs next to ggml-cuda-whisper.dll so the OS loader finds them. -->
+	<!-- Copy CUDA runtime DLLs next to ggml-cuda-whisper.dll so the OS loader finds them. -->
+	<!-- CudaBinDir is updated automatically by setup-dev.ps1 to match the locally installed CUDA version. -->
 	<Target Name="CopyCudaRuntimeDlls" AfterTargets="Build">
 		<PropertyGroup>
 			<CudaBinDir>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\x64</CudaBinDir>
 			<CudaTargetDir>$(OutputPath)runtimes\cuda\win-x64</CudaTargetDir>
+			<!-- Extract major version number from the last path segment, e.g. v13.2\bin\x64 -> 13 -->
+			<CudaVersion>$([System.Text.RegularExpressions.Regex]::Match($(CudaBinDir), 'v(\d+)\.').Groups[1].Value)</CudaVersion>
 		</PropertyGroup>
 		<ItemGroup>
-			<CudaDll Include="$(CudaBinDir)\cublas64_13.dll" />
-			<CudaDll Include="$(CudaBinDir)\cublasLt64_13.dll" />
-			<CudaDll Include="$(CudaBinDir)\cudart64_13.dll" />
+			<CudaDll Include="$(CudaBinDir)\cublas64_$(CudaVersion).dll" />
+			<CudaDll Include="$(CudaBinDir)\cublasLt64_$(CudaVersion).dll" />
+			<CudaDll Include="$(CudaBinDir)\cudart64_$(CudaVersion).dll" />
 		</ItemGroup>
 		<Copy SourceFiles="@(CudaDll)" DestinationFolder="$(CudaTargetDir)" SkipUnchangedFiles="true" ContinueOnError="true" />
 	</Target>

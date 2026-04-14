@@ -260,40 +260,56 @@ If the app behaves unexpectedly, check the latest log file for details.
 
 ### Prerequisites
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
+- [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) (or any newer .NET SDK — 9, 10, … all work)
 - Windows 10/11
 - Visual Studio 2022 (optional, for IDE support)
-- CUDA Toolkit (optional, for GPU acceleration at runtime — not needed for build)
+- CUDA Toolkit 11, 12 or 13 (optional, for GPU acceleration — not needed to compile)
 
-### Steps
+### Quick setup (recommended)
+
+After cloning, simply double-click **`setup-dev.bat`** in the repository root.
+
+The script performs all first-time setup steps automatically:
+
+1. Verifies a compatible .NET SDK (>= 8) is installed.
+2. Detects the locally installed CUDA Toolkit (versions 11, 12, 13) and extracts the runtime version.
+3. Runs `dotnet restore`.
+4. Copies the CUDA runtime DLLs (`cudart64_N.dll`, `cublas64_N.dll`, `cublasLt64_N.dll`) to `bin\Debug\runtimes\cuda\win-x64`.
+5. If the detected CUDA path differs from the one stored in `WhisperWriter.csproj`, offers to update it.
+6. Checks for a Whisper model in `models\` and offers to launch `download-models.ps1` if none is found.
+
+If CUDA is not installed the script skips steps 4–5 and continues — the app will run on CPU.
+
+### Manual steps
 
 ```powershell
 # Clone the repository
 git clone https://github.com/tomFlidr/whisper-writer.git
 cd whisper-writer
 
-# Download a Whisper model — double-click download-models.bat, or run:
-# .\download-models.ps1  (if execution policy allows it)
-
-# Restore NuGet packages
-dotnet restore
+# One-time setup (NuGet restore, CUDA DLL copy, model download prompt)
+.\setup-dev.bat
 
 # Build
-dotnet build WhisperWriter.csproj -c Release
+dotnet build WhisperWriter.csproj -c Debug
 
 # Run
-.\bin\Release\net8.0-windows\WhisperWriter.exe
+.\bin\Debug\net8.0-windows\WhisperWriter.exe
 ```
 
 > Before building, make sure `WhisperWriter.exe` is not running — the output file will be locked by the running process.
+
+### CUDA DLL version detection
+
+The MSBuild target `CopyCudaRuntimeDlls` in `WhisperWriter.csproj` automatically derives the CUDA major version from the `CudaBinDir` path (e.g. `…\CUDA\v13.2\bin\x64` → version `13`). The correct DLL names are assembled at build time — no manual version editing is needed. `setup-dev.ps1` updates `CudaBinDir` in the project file to match whatever CUDA version is installed on the machine.
 
 ### Key dependencies
 
 | Package | Version | Purpose |
 |---|---|---|
-| Whisper.net | 1.7.2 | Whisper model inference |
-| Whisper.net.Runtime | 1.7.2 | Native whisper.cpp runtime |
-| Whisper.net.Runtime.Cuda | 1.7.2 | CUDA GPU acceleration |
+| Whisper.net | 1.9.0 | Whisper model inference |
+| Whisper.net.Runtime | 1.9.0 | Native whisper.cpp runtime |
+| Whisper.net.Runtime.Cuda | 1.9.0 | CUDA GPU acceleration |
 | NAudio | 2.2.1 | Microphone capture |
 | Serilog | 4.3.0 | Logging |
 | System.Text.Json | 8.0.5 | Settings serialization |
