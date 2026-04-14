@@ -99,8 +99,23 @@ public partial class MainWindow : Window {
 
 	private IntPtr WndProc (IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) {
 		if (msg == WM_DISPLAYCHANGE)
-			Dispatcher.BeginInvoke(ClampWindowToScreen);
+			Dispatcher.BeginInvoke(OnDisplayChange);
 		return IntPtr.Zero;
+	}
+
+	/// <summary>
+	/// Called when the display configuration changes (docking/undocking, resolution change).
+	/// Resets the widget to the stored position relative to the new primary screen so it
+	/// always appears on the primary monitor after docking.
+	/// </summary>
+	private void OnDisplayChange () {
+		var s = App.SettingsService.Settings;
+		if (s.WindowLeft >= 0 && s.WindowBottom >= 0)
+			ApplyStoredPosition();
+		else
+			PlaceAtDefaultPosition();
+		// Clamp in case the restored position is still outside all screens.
+		ClampWindowToScreen();
 	}
 
 	/// <summary>

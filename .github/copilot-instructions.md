@@ -197,7 +197,7 @@ public class AppSettings
 - `PlaceAtDefaultPosition()`: centres the widget horizontally, places it 20 px above the taskbar on the primary screen.
 - `SaveWindowPosition()`: calculates and persists `WindowLeft` and `WindowBottom` relative to the primary working area.
 - `GetPrimaryScreenScale()`: returns WPF DIP scale factors from `PresentationSource`; before the window is shown falls back to `SystemParameters / Screen.Bounds` ratio.
-- **Display change handling**: `OnSourceInitialized` registers a `WndProc` hook via `HwndSource.AddHook` and a `SizeChanged` handler. On `WM_DISPLAYCHANGE` (0x007E) and on every size change, `ClampWindowToScreen()` is called.
+- **Display change handling**: `OnSourceInitialized` registers a `WndProc` hook via `HwndSource.AddHook` and a `SizeChanged` handler. On `WM_DISPLAYCHANGE` (0x007E), `OnDisplayChange()` is called: it calls `ApplyStoredPosition()` (or `PlaceAtDefaultPosition()` if no position is stored) to re-anchor the widget to the new primary monitor, then calls `ClampWindowToScreen()` as a safety clamp. On every size change, `ClampWindowToScreen()` is called directly.
 - **`ClampWindowToScreen()`**: guards against `ActualWidth/Height == 0`. Finds the monitor with the maximum overlap with the window (using `Screen.AllScreens` + `Rectangle.Intersect`). Converts pixel coordinates to WPF DIP units. Clamps `Left`/`Top` to fit entirely within the working area of that monitor. If the result is still fully off every screen (e.g. monitor disconnected), falls back to bottom-centre of the primary screen. Persists the new position via `SaveWindowPosition()`.
 
 ### `Views/HistoryWindow.xaml`
