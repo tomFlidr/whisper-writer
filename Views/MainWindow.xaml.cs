@@ -1,4 +1,6 @@
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
@@ -29,9 +31,20 @@ public partial class MainWindow : Window {
 	/// </summary>
 	private const double EtaFactor = 0.35;
 
+	private const int GWL_EXSTYLE = -20;
+	private const int WS_EX_TOOLWINDOW = 0x00000080;
+	private const int WS_EX_APPWINDOW = 0x00040000;
+
+	[DllImport("user32.dll")]
+	private static extern int GetWindowLong (IntPtr hwnd, int index);
+
+	[DllImport("user32.dll")]
+	private static extern int SetWindowLong (IntPtr hwnd, int index, int newStyle);
+
 	public MainWindow () {
 		InitializeComponent();
 		PositionWindow();
+		SourceInitialized += OnSourceInitialized;
 
 		var settings = App.SettingsService.Settings;
 		_hotkey = new HotkeyService((HotkeyModifiers)settings.HotkeyModifiers);
@@ -48,6 +61,13 @@ public partial class MainWindow : Window {
 		// Fade in
 		var anim = (Storyboard)Resources["FadeIn"];
 		anim.Begin(this);
+	}
+
+	private void OnSourceInitialized (object? sender, EventArgs e) {
+		var hwnd = new WindowInteropHelper(this).Handle;
+		int style = GetWindowLong(hwnd, GWL_EXSTYLE);
+		style = (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW;
+		SetWindowLong(hwnd, GWL_EXSTYLE, style);
 	}
 
 	private void PositionWindow () {
@@ -107,6 +127,7 @@ public partial class MainWindow : Window {
 						Text = text,
 						Duration = sw.Elapsed,
 					});
+					LogService.Transcription(text, sw.Elapsed);
 					TextInjector.InjectText(text);
 				}
 			} catch (Exception ex) {

@@ -1,4 +1,5 @@
 using Serilog;
+using Serilog.Core;
 using Serilog.Events;
 using System.IO;
 
@@ -13,6 +14,10 @@ public static class LogService {
 	/// <summary>Directory where log files are written.</summary>
 	public static string LogDirectory { get; } = Path.Combine(AppContext.BaseDirectory, "logs");
 
+#if DEBUG
+	private static Logger? _transcriptionLog;
+#endif
+
 	public static void Initialize () {
 		Directory.CreateDirectory(LogDirectory);
 
@@ -26,6 +31,16 @@ public static class LogService {
 			.CreateLogger();
 
 		Log.Information("WhisperWriter starting up");
+
+#if DEBUG
+		_transcriptionLog = new LoggerConfiguration()
+			.MinimumLevel.Information()
+			.WriteTo.File(
+				path: Path.Combine(LogDirectory, "transcriptions.log"),
+				rollingInterval: RollingInterval.Infinite,
+				outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Duration}] {Message:lj}{NewLine}")
+			.CreateLogger();
+#endif
 	}
 
 	public static void Info (string message) =>
@@ -41,6 +56,20 @@ public static class LogService {
 		else Log.Error(ex, message);
 	}
 
-	public static void CloseAndFlush () =>
+	/// <summary>
+	/// Logs a completed transcription entry (DEBUG builds only).
+	/// Writes timestamp, transcription duration and the transcribed text to transcriptions.log.
+	/// </summary>
+	public static void Transcription (string text, TimeSpan duration) {
+#if DEBUG
+		_transcriptionLog?.Information("[{Duration:hh\\:mm\\:ss\\.fff}] {Text}", duration, text);
+#endif
+	}
+
+	public static void CloseAndFlush () {
 		Log.CloseAndFlush();
+#if DEBUG
+		_transcriptionLog?.Dispose();
+#endif
+	}
 }
