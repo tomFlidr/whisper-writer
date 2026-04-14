@@ -183,7 +183,9 @@ public class AppSettings
 - **No buttons** – all navigation via tray menu.
 - Layout: `[dot] [StatusLabel] [EtaLabel]` + below `[AmplitudeRow]` (3 px bar, hidden outside recording).
 - Drag: `MouseLeftButtonDown` → `DragMove()`, position saved to settings.
-- Animations: `PulseAnim` (RecDot blinking during recording), `FadeIn` on show.
+- Animations: `PulseAnim` (RecDot blinking during recording), `FadeIn` on show (fades to 0.85 opacity), `FadeToHover` (opacity → 1.0 in 0.12 s), `FadeToIdle` (opacity → 0.85 in 0.20 s).
+- **Opacity**: idle state is 0.85; hovering the mouse raises it to 1.0 with a smooth transition.
+- **Border**: `WidgetBorder` has `BorderBrush="#66FFFFFF"` (white, 40% opacity) and `BorderThickness="1"` to give a subtle inverted rim on the rounded pill.
 
 ### `Views/MainWindow.xaml.cs`
 - **ETA countdown**: after releasing PTT calculates `estimatedSeconds = wavBytes.Length / 32000.0 * EtaFactor`.

@@ -5,7 +5,7 @@
 	<Application.Resources>
 		<!-- Color palette -->
 		<Color x:Key="BgColor">#F71C1C1E</Color>
-		<Color x:Key="AccentColor">#8B8BFF</Color>
+		<Color x:Key="AccentColor">#8BbbFF</Color>
 		<Color x:Key="AccentRecording">#FF3B30</Color>
 		<Color x:Key="TextPrimary">#FFFFFFFF</Color>
 		<Color x:Key="TextSecondary">#99FFFFFF</Color>

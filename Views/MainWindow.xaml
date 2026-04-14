@@ -11,6 +11,17 @@
 		ResizeMode="NoResize">
 
 	<Window.Resources>
+		<!-- Opacity: idle → 0.85, hover → 1.0 -->
+		<Storyboard x:Key="FadeToHover">
+			<DoubleAnimation Storyboard.TargetName="WidgetBorder"
+							 Storyboard.TargetProperty="Opacity"
+							 To="1.0" Duration="0:0:0.12"/>
+		</Storyboard>
+		<Storyboard x:Key="FadeToIdle">
+			<DoubleAnimation Storyboard.TargetName="WidgetBorder"
+							 Storyboard.TargetProperty="Opacity"
+							 To="0.6" Duration="0:0:0.20"/>
+		</Storyboard>
 		<!-- Pulse animation for the recording dot -->
 		<Storyboard x:Key="PulseAnim" RepeatBehavior="Forever">
 			<DoubleAnimation Storyboard.TargetName="RecDot"
@@ -22,35 +33,37 @@
 		<Storyboard x:Key="FadeIn">
 			<DoubleAnimation Storyboard.TargetName="WidgetBorder"
 							 Storyboard.TargetProperty="Opacity"
-							 From="0" To="1" Duration="0:0:0.15"/>
+							 From="0" To="0.6" Duration="0:0:0.15"/>
 		</Storyboard>
 	</Window.Resources>
 
 	<!-- Compact pill: minimal padding -->
 	<Border x:Name="WidgetBorder"
 			Background="{StaticResource BgBrush}"
-			CornerRadius="16"
+			CornerRadius="10"
 			Padding="10,5"
+			Opacity="0.85"
+			BorderBrush="#66FFFFFF"
+			BorderThickness="1"
 			MouseLeftButtonDown="Border_MouseLeftButtonDown"
+			MouseEnter="WidgetBorder_MouseEnter"
+			MouseLeave="WidgetBorder_MouseLeave"
 			Cursor="SizeAll">
-		<Border.Effect>
-			<DropShadowEffect Color="Black" BlurRadius="14" ShadowDepth="3" Opacity="0.5"/>
-		</Border.Effect>
 
 		<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
 
 			<!-- Recording indicator dot -->
 			<Ellipse x:Name="RecDot"
-					 Width="8" Height="8"
+					 Width="10" Height="10"
 					 Margin="0,0,8,0"
 					 Fill="{StaticResource AccentBrush}"
 					 VerticalAlignment="Center"/>
 
 			<!-- Status text + ETA on one line -->
-			<StackPanel VerticalAlignment="Center" Margin="0,4">
+			<StackPanel VerticalAlignment="Center" Margin="0,0">
 				<StackPanel Orientation="Horizontal">
 					<TextBlock x:Name="StatusLabel"
-							   Text="Ready  —  hold Ctrl+Win"
+							   Text="Ready"
 							   Foreground="{StaticResource TextSecondaryBrush}"
 							   FontSize="12"
 							   FontFamily="Segoe UI"

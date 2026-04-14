@@ -241,6 +241,15 @@ public partial class MainWindow : Window {
 		SaveWindowPosition();
 	}
 
+	// ── Hover opacity ─────────────────────────────────────────────────────────
+	private void WidgetBorder_MouseEnter (object sender, System.Windows.Input.MouseEventArgs e) {
+		((Storyboard)Resources["FadeToHover"]).Begin(this, true);
+	}
+
+	private void WidgetBorder_MouseLeave (object sender, System.Windows.Input.MouseEventArgs e) {
+		((Storyboard)Resources["FadeToIdle"]).Begin(this, true);
+	}
+
 	// ── Drag to reposition ───────────────────────────────────────────────────
 	private void Border_MouseLeftButtonDown (object sender, System.Windows.Input.MouseButtonEventArgs e) {
 		DragMove();
@@ -368,6 +377,7 @@ public partial class MainWindow : Window {
 	// ── Whisper state callback ────────────────────────────────────────────────
 	private void OnWhisperState (TranscriptionState state, string msg) {
 		Dispatcher.Invoke(() => {
+			var backend = WhisperService.IsCudaAvailable() ? "GPU" : "CPU";
 			switch (state) {
 				case TranscriptionState.Loading:
 					SetStatus(msg);
@@ -378,7 +388,7 @@ public partial class MainWindow : Window {
 					RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
 					break;
 				case TranscriptionState.Done:
-					SetStatus("Ready  —  hold Ctrl+Win");
+					SetStatus($"Ready [{backend}]");
 					RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
 					break;
 				case TranscriptionState.Error:
@@ -386,8 +396,7 @@ public partial class MainWindow : Window {
 					RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentRecordingBrush"];
 					break;
 				default:
-					var backend = WhisperService.IsCudaAvailable() ? "GPU" : "CPU";
-					SetStatus($"Ready  —  hold Ctrl+Win  [{backend}]");
+					SetStatus($"Ready [{backend}]");
 					RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
 					break;
 			}
