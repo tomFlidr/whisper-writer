@@ -19,6 +19,9 @@ public class AppSettings {
 	// If true, every transcription result is also copied to the clipboard
 	public bool CopyToClipboard { get; set; } = true;
 
+	// If true, the app is registered to start with Windows (HKCU Run key)
+	public bool RunAtStartup { get; set; } = false;
+
 	// Widget position on screen (negative = use default bottom-center)
 	public double WindowLeft { get; set; } = -1;
 	public double WindowTop { get; set; } = -1;

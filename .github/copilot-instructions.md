@@ -111,6 +111,7 @@ public class AppSettings
     public int    HotkeyModifiers { get; set; } = 0x0002 | 0x0008; // Ctrl + Win
     public int    HistorySize     { get; set; } = 30;
     public bool   CopyToClipboard { get; set; } = true;  // copy result to clipboard after each transcription
+    public bool   RunAtStartup     { get; set; } = false; // register/unregister HKCU Run key
     public double WindowLeft      { get; set; } = -1;  // -1 = default bottom-center
     public double WindowTop       { get; set; } = -1;
 }
@@ -195,7 +196,7 @@ public class AppSettings
 - Footer: "Copy to clipboard" button (active only when an entry is selected).
 
 ### `Views/SettingsWindow.xaml`
-- Form: `ModelPath` (ComboBox: 12 models), `Language` (ComboBox: 57 languages + `auto`), `Prompt` (multiline TextBox), hotkey info (read-only), `HistorySize` (numeric TextBox, min 1, max Int32.MaxValue), `CopyToClipboard` (CheckBox, default checked).
+- Form: `ModelPath` (ComboBox: 12 models), `Language` (ComboBox: 57 languages + `auto`), `Prompt` (multiline TextBox), hotkey info (read-only), `HistorySize` (numeric TextBox, min 1, max Int32.MaxValue), `CopyToClipboard` (CheckBox, default checked), `RunAtStartup` (CheckBox – reads/writes `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`, value name `WhisperWriter`, default unchecked).
 - `CmbModelPath`: each item has `Tag` = file path, `Content` = two-line `StackPanel` (name bold + HW requirements and size in smaller text).
 - Available models (largest to smallest): `large-v3-turbo`, `large-v3`, `large-v2`, `large-v1`, `medium`, `medium.en`, `small`, `small.en`, `base`, `base.en`, `tiny`, `tiny.en`.
 - `CmbLanguage`: each item has `Tag` = ISO language code (e.g. `"cs"`) and `Content` = `"cs – Čeština"` (code + native name).
