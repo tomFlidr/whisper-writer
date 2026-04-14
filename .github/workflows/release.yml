@@ -47,10 +47,12 @@ jobs:
         uses: actions/checkout@v4
 
       # ── 2. .NET SDK ──────────────────────────────────────────────────────────
+      # windows-latest ships with .NET 8, 9 and 10 pre-installed.
+      # We pin to .NET 8 to match the TargetFramework (net8.0-windows).
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "8.x"
 
       # ── 3. Patch .csproj – disable signing (no keys in CI) ───────────────────
       # Strong-name (.snk) and Authenticode (.pfx) files are in .gitignore.
