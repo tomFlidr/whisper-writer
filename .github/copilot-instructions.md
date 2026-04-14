@@ -22,7 +22,7 @@ WhisperWriter je minimalistická WPF aplikace pro Windows – **lokální hlasov
 | Položka | Hodnota |
 |---|---|
 | Platforma | Windows 10/11, .NET 8, WPF + WinForms (NotifyIcon) |
-| Projekt | `D:\llms\whisper-writer\WhisperWriter\WhisperWriter.csproj` |
+| Projekt | `./whisper-writer/WhisperWriter.csproj` |
 | GPU | NVIDIA Quadro T2000, 4 GB VRAM, CUDA 13.2, driver 595.71 |
 | Whisper.net | 1.7.2 (+ Runtime + Runtime.Cuda) |
 | NAudio | 2.2.1 |
@@ -36,32 +36,31 @@ WhisperWriter je minimalistická WPF aplikace pro Windows – **lokální hlasov
 ## 3. Struktura projektu
 
 ```
-D:\llms\whisper-writer\
+.\whisper-writer\
 ├── .github\
 │   └── copilot-instructions.md       ← tento soubor
-└── WhisperWriter\
-    ├── WhisperWriter.csproj
-    ├── App.xaml                       ← globální WPF resources, styly
-    ├── App.xaml.cs                    ← startup, tray ikona, statické služby
-    ├── AssemblyInfo.cs
-    ├── settings.json                  ← výchozí konfigurace (kopíruje se do bin)
-    ├── Models\
-    │   ├── AppSettings.cs             ← POCO konfigurace (serializováno do settings.json)
-    │   └── TranscriptionHistory.cs    ← ObservableCollection<TranscriptionEntry>
-    ├── Services\
-    │   ├── AudioRecorder.cs           ← NAudio, 16 kHz mono WAV, RMS amplitude event
-    │   ├── HotkeyService.cs           ← polling GetAsyncKeyState, 20ms interval
-    │   ├── SettingsService.cs         ← JSON load/save do BaseDirectory/settings.json
-    │   ├── TextInjector.cs            ← SaveFocus() + SendInput Unicode
-    │   └── WhisperService.cs          ← WhisperFactory, TranscribeAsync, CUDA
-    ├── Views\
-    │   ├── MainWindow.xaml/.cs        ← plovoucí widget (pill), PTT logika, VU meter, ETA
-    │   ├── HistoryWindow.xaml/.cs     ← seznam přepisů, copy to clipboard
-    │   ├── SettingsWindow.xaml/.cs    ← formulář nastavení
-    │   └── AboutWindow.xaml/.cs       ← informační okno o aplikaci
-    └── models\
-        ├── ggml-large-v2.bin          ← 2.95 GB, výchozí model
-        └── ggml-medium.bin            ← 1.46 GB, záložní model
+├── WhisperWriter.csproj
+├── App.xaml                           ← globální WPF resources, styly
+├── App.xaml.cs                        ← startup, tray ikona, statické služby
+├── AssemblyInfo.cs
+├── settings.json                      ← výchozí konfigurace (kopíruje se do bin)
+├── Models\
+│   ├── AppSettings.cs                 ← POCO konfigurace (serializováno do settings.json)
+│   └── TranscriptionHistory.cs        ← ObservableCollection<TranscriptionEntry>
+├── Services\
+│   ├── AudioRecorder.cs               ← NAudio, 16 kHz mono WAV, RMS amplitude event
+│   ├── HotkeyService.cs               ← polling GetAsyncKeyState, 20ms interval
+│   ├── SettingsService.cs             ← JSON load/save do BaseDirectory/settings.json
+│   ├── TextInjector.cs                ← SaveFocus() + SendInput Unicode
+│   └── WhisperService.cs              ← WhisperFactory, TranscribeAsync, CUDA
+├── Views\
+│   ├── MainWindow.xaml/.cs            ← plovoucí widget (pill), PTT logika, VU meter, ETA
+│   ├── HistoryWindow.xaml/.cs         ← seznam přepisů, copy to clipboard
+│   ├── SettingsWindow.xaml/.cs        ← formulář nastavení
+│   └── AboutWindow.xaml/.cs           ← informační okno o aplikaci
+└── models\
+    ├── ggml-large-v2.bin              ← 2.95 GB, výchozí model
+    └── ggml-medium.bin                ← 1.46 GB, záložní model
 ```
 
 ---
@@ -170,10 +169,10 @@ public enum HotkeyModifiers { None=0, Alt=1, Control=2, Shift=4, Win=8 }
 
 ```powershell
 # Build (bez restore, modely jsou velké)
-dotnet build "D:\llms\whisper-writer\WhisperWriter\WhisperWriter.csproj" -c Debug --no-restore
+dotnet build ".\whisper-writer\WhisperWriter.csproj" -c Debug --no-restore
 
 # Spuštění
-Start-Process "D:\llms\whisper-writer\WhisperWriter\bin\Debug\net8.0-windows\WhisperWriter.exe"
+Start-Process ".\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe"
 ```
 
 > **Důležité**: Při buildu musí být aplikace ukončena – exe soubor je zamčen běžící instancí.
@@ -208,6 +207,52 @@ Start-Process "D:\llms\whisper-writer\WhisperWriter\bin\Debug\net8.0-windows\Whi
 - Win32 P/Invoke interop soustředěn do příslušné třídy (`TextInjector`, `HotkeyService`).
 - WPF: `Dispatcher.Invoke` pro cross-thread UI update.
 - Žádné MVVM framework – přímý code-behind, aplikace je malá.
+
+### `.editorconfig`
+Soubor `.editorconfig` je v rootu projektu (`D:\llms\whisper-writer\.editorconfig`) a definuje závazná pravidla formátování:
+
+```ini
+root = true
+
+[*]
+indent_style = tab
+tab_width = 4
+charset = utf-8
+end_of_line = lf
+insert_final_newline = false
+trim_trailing_whitespace = false
+```
+
+Klíčové body:
+- Odsazení: **TAB**, šířka 4.
+- Kódování: **UTF-8** (bez BOM – `charset = utf-8` bez `-bom`).
+- Konce řádků: **LF** (`\n`), ne CRLF.
+- Žádný prázdný řádek na konci souboru (`insert_final_newline = false`).
+- Trailing whitespace se neořezává (`trim_trailing_whitespace = false`).
+
+---
+
+### Kódování souborů
+Všechny soubory v tomto projektu jsou v kódování **UTF-8 bez BOM**.
+Pokud musíš použít PowerShell pro čtení nebo vyhledávání v souborech, vždy přidej `-Encoding UTF8`.
+
+### Úpravy souborů
+Při úpravách souborů **vždy** používej nástroj `replace_string_in_file` nebo `multi_replace_string_in_file`.
+Nikdy nepoužívej terminálové skripty (PowerShell, Node.js) pro **zápis nebo úpravu** souborů — vždy se zaseknou a nezpracují se vůbec.
+Pokud potřebuješ PowerShell pouze pro **čtení nebo vyhledávání**, použij ho, ale přidej `-Encoding UTF8` a příkaz spusť jako jednořádkový, ne jako blokový skript.
+Konce řádků v souborech **neopravuj ani neřeš** — nech je tak jak jsou. Nástroj `replace_string_in_file` si s tím poradí sám.
+
+### Aktualizace instrukčního souboru po dokončení tasku
+**Po každém úspěšně provedeném tasku, kdy `run_build` vrátí úspěšný build, MUSÍŠ aktualizovat tento soubor (`.github/copilot-instructions.md`) tak, aby odrážel aktuální stav aplikace.**
+
+Konkrétně vždy zkontroluj a případně aktualizuj:
+- Sekci **3. Struktura projektu** – přidej/odeber soubory podle skutečnosti.
+- Sekci **4. Klíčové soubory** – uprav popisy změněných souborů, přidej popis nových souborů.
+- Sekci **6. Známé problémy / TODO** – přesuň vyřešené položky do „Vyřešené problémy", odeber nebo uprav položky které se změnily, přidej nové otevřené úkoly pokud vznikly.
+- Sekci **8. Náměty na budoucí rozvoj** – odeber náměty které byly implementovány.
+- Jakékoli jiné sekce jejichž obsah se změnou tasku přestal být aktuální.
+
+Tento soubor je primární zdroj kontextu pro budoucí AI session – udržuj ho přesný a aktuální.
 
 ---
 
