@@ -170,8 +170,9 @@ public enum HotkeyModifiers { None=0, Alt=1, Control=2, Shift=4, Win=8 }
 - Footer: tlačítko „Copy to clipboard" (aktivní jen pokud je vybrán záznam).
 
 ### `Views/SettingsWindow.xaml`
-- Formulář: `ModelPath` (ComboBox: 2 modely – `large-v2` a `medium`), `Language` (ComboBox: 57 jazyků + `auto`), `Prompt` (TextBox multiline), hotkey info (readonly), `HistorySize` (TextBox číselný vstup, min 1, max Int32.MaxValue).
+- Formulář: `ModelPath` (ComboBox: 12 modelů), `Language` (ComboBox: 57 jazyků + `auto`), `Prompt` (TextBox multiline), hotkey info (readonly), `HistorySize` (TextBox číselný vstup, min 1, max Int32.MaxValue).
 - `CmbModelPath`: každá položka má `Tag` = cesta k souboru, `Content` = dvouřádkový `StackPanel` (název tučně + HW požadavky a velikost menším písmem).
+- Dostupné modely (od největšího po nejmenší): `large-v3-turbo`, `large-v3`, `large-v2`, `large-v1`, `medium`, `medium.en`, `small`, `small.en`, `base`, `base.en`, `tiny`, `tiny.en`.
 - `CmbLanguage`: každá položka má `Tag` = ISO kód jazyka (např. `"cs"`) a `Content` = `"cs – Čeština"` (kód + nativní název).
 - `TxtHistorySize`: číselný TextBox, `PreviewTextInput` handler blokuje nečíselné znaky, při uložení fallback na `1` pokud je hodnota neplatná nebo < 1.
 - `ShowDialog()` vrátí `true` při Save, `false` při Cancel/X.

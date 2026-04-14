@@ -59,20 +59,100 @@
 						  Background="#33FFFFFF" Foreground="{StaticResource TextPrimaryBrush}"
 						  BorderBrush="#44FFFFFF"
 						  FontFamily="Segoe UI" FontSize="13" Padding="6,4">
+					<ComboBoxItem Tag="models/ggml-large-v3-turbo.bin">
+						<StackPanel>
+							<TextBlock Text="large-v3-turbo  (best speed/accuracy tradeoff)"
+									   FontWeight="SemiBold"/>
+							<TextBlock Text="~3 GB VRAM · 1.6 GB disk · CUDA GPU recommended"
+									   FontSize="11" Opacity="0.65"/>
+						</StackPanel>
+					</ComboBoxItem>
+					<ComboBoxItem Tag="models/ggml-large-v3.bin">
+						<StackPanel>
+							<TextBlock Text="large-v3  (most accurate, latest)"
+									   FontWeight="SemiBold"/>
+							<TextBlock Text="~10 GB VRAM · 3 GB disk · CUDA GPU strongly recommended"
+									   FontSize="11" Opacity="0.65"/>
+						</StackPanel>
+					</ComboBoxItem>
 					<ComboBoxItem Tag="models/ggml-large-v2.bin">
 						<StackPanel>
 							<TextBlock Text="large-v2  (most accurate, recommended)"
 									   FontWeight="SemiBold"/>
-							<TextBlock Text="3 GB VRAM · 3 GB disk · CUDA GPU strongly recommended"
+							<TextBlock Text="~10 GB VRAM · 3 GB disk · CUDA GPU strongly recommended"
+									   FontSize="11" Opacity="0.65"/>
+						</StackPanel>
+					</ComboBoxItem>
+					<ComboBoxItem Tag="models/ggml-large-v1.bin">
+						<StackPanel>
+							<TextBlock Text="large-v1  (accurate, older generation)"
+									   FontWeight="SemiBold"/>
+							<TextBlock Text="~10 GB VRAM · 3 GB disk · CUDA GPU strongly recommended"
 									   FontSize="11" Opacity="0.65"/>
 						</StackPanel>
 					</ComboBoxItem>
 					<ComboBoxItem Tag="models/ggml-medium.bin">
 						<StackPanel>
-							<TextBlock Text="medium  (faster, less accurate)"
+							<TextBlock Text="medium  (good balance, multilingual)"
 									   FontWeight="SemiBold"/>
-							<TextBlock Text="1.5 GB VRAM · 1.5 GB disk · running on CPU"
-										 FontSize="11" Opacity="0.65"/>
+							<TextBlock Text="~5 GB VRAM · 1.5 GB disk · runs on CPU"
+									   FontSize="11" Opacity="0.65"/>
+						</StackPanel>
+					</ComboBoxItem>
+					<ComboBoxItem Tag="models/ggml-medium.en.bin">
+						<StackPanel>
+							<TextBlock Text="medium.en  (good balance, English only)"
+									   FontWeight="SemiBold"/>
+							<TextBlock Text="~5 GB VRAM · 1.5 GB disk · runs on CPU"
+									   FontSize="11" Opacity="0.65"/>
+						</StackPanel>
+					</ComboBoxItem>
+					<ComboBoxItem Tag="models/ggml-small.bin">
+						<StackPanel>
+							<TextBlock Text="small  (fast, multilingual)"
+									   FontWeight="SemiBold"/>
+							<TextBlock Text="~2 GB VRAM · 488 MB disk · runs on CPU"
+									   FontSize="11" Opacity="0.65"/>
+						</StackPanel>
+					</ComboBoxItem>
+					<ComboBoxItem Tag="models/ggml-small.en.bin">
+						<StackPanel>
+							<TextBlock Text="small.en  (fast, English only)"
+									   FontWeight="SemiBold"/>
+							<TextBlock Text="~2 GB VRAM · 488 MB disk · runs on CPU"
+									   FontSize="11" Opacity="0.65"/>
+						</StackPanel>
+					</ComboBoxItem>
+					<ComboBoxItem Tag="models/ggml-base.bin">
+						<StackPanel>
+							<TextBlock Text="base  (very fast, multilingual)"
+									   FontWeight="SemiBold"/>
+							<TextBlock Text="~1 GB VRAM · 148 MB disk · runs on CPU"
+									   FontSize="11" Opacity="0.65"/>
+						</StackPanel>
+					</ComboBoxItem>
+					<ComboBoxItem Tag="models/ggml-base.en.bin">
+						<StackPanel>
+							<TextBlock Text="base.en  (very fast, English only)"
+									   FontWeight="SemiBold"/>
+							<TextBlock Text="~1 GB VRAM · 148 MB disk · runs on CPU"
+									   FontSize="11" Opacity="0.65"/>
+						</StackPanel>
+					</ComboBoxItem>
+					<ComboBoxItem Tag="models/ggml-tiny.bin">
+						<StackPanel>
+							<TextBlock Text="tiny  (fastest, multilingual, least accurate)"
+									   FontWeight="SemiBold"/>
+							<TextBlock Text="~390 MB VRAM · 78 MB disk · runs on CPU"
+									   FontSize="11" Opacity="0.65"/>
+						</StackPanel>
+					</ComboBoxItem>
+					<ComboBoxItem Tag="models/ggml-tiny.en.bin">
+						<StackPanel>
+							<TextBlock Text="tiny.en  (fastest, English only, least accurate)"
+									   FontWeight="SemiBold"/>
+							<TextBlock Text="~390 MB VRAM · 78 MB disk · runs on CPU"
+									   FontSize="11" Opacity="0.65"/>
 						</StackPanel>
 					</ComboBoxItem>
 				</ComboBox>
