@@ -53,7 +53,7 @@
 	<ItemGroup>
 	  <Resource Include="app.ico" />
 	  <Content Include="app.ico">
-	    <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	  <None Include=".github\workflows\release.yml" />
 	  <None Include="WhisperWriter.sln" />
