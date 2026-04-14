@@ -49,8 +49,12 @@ public partial class App : System.Windows.Application {
 		_mainWindow.Show();
 
 		// Tray icon – right-click menu only
+		var icoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "app.ico");
+		var trayIcon = System.IO.File.Exists(icoPath)
+			? new System.Drawing.Icon(icoPath)
+			: SystemIcons.Application;
 		_trayIcon = new NotifyIcon {
-			Icon = SystemIcons.Application,
+			Icon = trayIcon,
 			Text = "WhisperWriter",
 			Visible = true,
 		};

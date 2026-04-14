@@ -10,6 +10,7 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<AssemblyName>WhisperWriter</AssemblyName>
 		<RootNamespace>WhisperWriter</RootNamespace>
+		<ApplicationIcon>app.ico</ApplicationIcon>
 		<!-- Strong name signing via .snk (no password required) -->
 		<SignAssembly>true</SignAssembly>
 		<AssemblyOriginatorKeyFile>WhisperWriter.snk</AssemblyOriginatorKeyFile>
@@ -31,6 +32,10 @@
 		</Content>
 	</ItemGroup>
 	<ItemGroup>
+	  <Resource Include="app.ico" />
+	  <Content Include="app.ico">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
 	  <None Include="WhisperWriter.sln" />
 	  <None Include="WhisperWriter.pfx" />
 	  <None Include="WhisperWriter.snk" />
