@@ -1,7 +1,7 @@
 {
   "ModelPath": "models/ggml-medium.bin",
   "Language": "auto",
-  "Prompt": "",
+  "Prompt": "Přepis mluvené češtiny, neformální styl, vulgarismy ponechej beze změny. IT termíny piš v angličtině (např. commit, pull request, merge, deploy, backend, frontend, API, Docker, branch, debug, framework, server, build, release, pipeline, dotnet). Nepřekládej, pouze přepisuj.",
   "HotkeyModifiers": 10,
   "HistorySize": 30,
   "WindowLeft": -1,
