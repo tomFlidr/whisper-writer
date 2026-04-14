@@ -47,6 +47,7 @@ D:\llms\whisper-writer\
 ├── WhisperWriter.pfx                  ← Authenticode certificate (self-signed, password 1234, in .gitignore)
 ├── WhisperWriter.snk                  ← Strong Name key (in .gitignore)
 ├── download-models.ps1                ← interactive PowerShell script: download GGML models to models\
+├── download-models.bat                ← launcher for download-models.ps1, bypasses execution policy
 ├── App.xaml                           ← global WPF resources, styles
 ├── App.xaml.cs                        ← startup, tray icon, static services
 ├── AssemblyInfo.cs
@@ -213,6 +214,12 @@ public class AppSettings
   5. The `models\` folder is created automatically if it does not exist.
 - **Source URL base**: `https://huggingface.co/ggerganov/whisper.cpp/resolve/main`
 - **Execution policy**: if blocked, user must run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+
+### `download-models.bat`
+- One-line `.bat` launcher that runs `download-models.ps1` via `powershell.exe -NoProfile -ExecutionPolicy Bypass`.
+- Solves the execution policy error users get when running `.ps1` directly in PowerShell ISE or a restricted environment.
+- Uses `%~dp0` so it works from any working directory (always resolves to the folder where the `.bat` lives).
+- Ends with `pause` so the window stays open after the script finishes.
 
 ---
 

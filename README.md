@@ -11,6 +11,7 @@ Hold a keyboard shortcut, speak, release — the transcribed text is instantly t
 - [Features](#features)
 - [Requirements](#requirements)
 - [Installation](#installation)
+- [Downloading Models](#downloading-models)
 - [First Run](#first-run)
 - [How to Use](#how-to-use)
 - [Settings](#settings)
@@ -56,10 +57,53 @@ Hold a keyboard shortcut, speak, release — the transcribed text is instantly t
 
 1. **Download** the latest release from the [Releases](https://github.com/tomFlidr/whisper-writer/releases) page.
 2. **Extract** the ZIP archive to a folder of your choice (e.g. `C:\Apps\WhisperWriter`).
-3. **Download a Whisper model** (see [Whisper Models](#whisper-models)) and place it in the `models\` subfolder next to `WhisperWriter.exe`.
+3. **Download a Whisper model** using the included script (see [Downloading Models](#downloading-models)) or manually (see [Whisper Models](#whisper-models)).
 4. **Run** `WhisperWriter.exe`.
 
 > If Windows shows a SmartScreen warning, click **More info → Run anyway**. The executable is signed with a self-signed certificate.
+
+---
+
+## Downloading Models
+
+The easiest way to get Whisper models is the included download script.
+
+### Option A – double-click (recommended)
+
+Simply double-click **`download-models.bat`** in the WhisperWriter folder. No setup required — it launches PowerShell automatically with the correct settings.
+
+### Option B – run from PowerShell directly
+
+```powershell
+# Run from the WhisperWriter folder
+.\download-models.ps1
+```
+
+> **If you get an "execution policy" error** in PowerShell or PowerShell ISE, use Option A (the `.bat` file) instead — it bypasses the policy automatically. Alternatively, run this once to allow local scripts permanently:
+> ```powershell
+> Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+> ```
+
+### What the script does
+
+1. Shows a numbered list of all available models with disk size, VRAM requirements and a short description.
+2. Already-downloaded models are marked **[downloaded]** in green.
+3. You type the numbers of the models you want (comma-separated, spaces, or ranges like `1-3,7`).
+4. After confirming, missing models are downloaded one by one with a live progress indicator.
+5. Files are saved directly into the `models\` folder next to the script.
+
+**Example session:**
+
+```
+  #    Model                Disk       VRAM       Notes
+  ---  -------------------  --------   --------   -----
+  1    large-v3-turbo       1.6 GB     ~3 GB      Best speed/accuracy tradeoff
+  2    large-v3             3.1 GB     ~10 GB     Most accurate, latest generation
+  ...
+  5    medium               1.5 GB     ~5 GB      Good balance, multilingual [downloaded]
+
+  Your selection: 1,5
+```
 
 ---
 
@@ -130,6 +174,12 @@ Models must be placed in the `models\` folder next to `WhisperWriter.exe`. File 
 | tiny.en | `ggml-tiny.en.bin` | 78 MB | ~390 MB | Fastest, English only, least accurate |
 
 ### Where to download models
+
+**Option A – download script (recommended):**
+
+Use the included `download-models.ps1` script — see [Downloading Models](#downloading-models).
+
+**Option B – manual download:**
 
 Download GGML model files from the official Whisper.net / whisper.cpp model repository:
 
@@ -221,6 +271,9 @@ If the app behaves unexpectedly, check the latest log file for details.
 # Clone the repository
 git clone https://github.com/tomFlidr/whisper-writer.git
 cd whisper-writer
+
+# Download a Whisper model — double-click download-models.bat, or run:
+# .\download-models.ps1  (if execution policy allows it)
 
 # Restore NuGet packages
 dotnet restore
