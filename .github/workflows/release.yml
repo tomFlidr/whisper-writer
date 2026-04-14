@@ -1,0 +1,173 @@
+# WhisperWriter – GitHub Actions release workflow
+#
+# Triggered when a version tag is pushed:  git tag v1.2.3 && git push origin v1.2.3
+#
+# Produces two ZIP artefacts attached to the GitHub Release:
+#   WhisperWriter-v1.2.3-win-x64.zip  – 64-bit, CUDA-capable
+#   WhisperWriter-v1.2.3-win-x86.zip  – 32-bit, CPU only (no CUDA)
+#
+# Requirements:
+#   - No secrets needed for a public repository.
+#   - Whisper model files are NOT included in the release ZIP (they are too large).
+#     Users download them with the bundled download-models.bat script.
+#   - Authenticode signing is skipped in CI (no .pfx available).
+#   - Strong-name signing is skipped in CI (no .snk available).
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"   # v1.0.0, v2.3.14, …
+
+permissions:
+  contents: write   # needed to create a GitHub Release and upload assets
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Build matrix: one job per target platform
+  # ─────────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build ${{ matrix.rid }}
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        include:
+          - rid: win-x64
+            arch: x64
+            cuda: true
+          - rid: win-x86
+            arch: x86
+            cuda: false
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. .NET SDK ──────────────────────────────────────────────────────────
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # ── 3. Patch .csproj – disable signing (no keys in CI) ───────────────────
+      # Strong-name (.snk) and Authenticode (.pfx) files are in .gitignore.
+      # We patch the project file in-place so the build does not fail.
+      - name: Disable assembly signing
+        shell: pwsh
+        run: |
+          $csproj = "WhisperWriter.csproj"
+          $content = Get-Content $csproj -Raw -Encoding UTF8
+          # Disable strong-name signing
+          $content = $content -replace '<SignAssembly>true</SignAssembly>', '<SignAssembly>false</SignAssembly>'
+          # Remove the AuthenticodeSigning post-build target entirely
+          $content = $content -replace '(?s)<Target Name="AuthenticodeSigning".*?</Target>', ''
+          [System.IO.File]::WriteAllText($csproj, $content, [System.Text.Encoding]::UTF8)
+          Write-Host "Signing disabled."
+
+      # ── 4. Patch .csproj – disable CUDA copy target for x86 ─────────────────
+      # Whisper.net.Runtime.Cuda has no x86 package; skip the copy target to
+      # avoid a build warning / error on the x86 matrix leg.
+      - name: Disable CUDA copy target (x86 only)
+        if: matrix.cuda == false
+        shell: pwsh
+        run: |
+          $csproj = "WhisperWriter.csproj"
+          $content = Get-Content $csproj -Raw -Encoding UTF8
+          $content = $content -replace '(?s)<Target Name="CopyCudaRuntimeDlls".*?</Target>', ''
+          [System.IO.File]::WriteAllText($csproj, $content, [System.Text.Encoding]::UTF8)
+          Write-Host "CUDA copy target removed for x86."
+
+      # ── 5. Restore ───────────────────────────────────────────────────────────
+      - name: Restore NuGet packages
+        run: dotnet restore WhisperWriter.csproj
+
+      # ── 6. Publish ───────────────────────────────────────────────────────────
+      # PublishSingleFile=true is already set in the .csproj.
+      # We override RuntimeIdentifier on the command line.
+      - name: Publish (${{ matrix.rid }})
+        run: >
+          dotnet publish WhisperWriter.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          --no-restore
+          --self-contained false
+          -o publish/${{ matrix.rid }}
+
+      # ── 7. Create models\ placeholder ────────────────────────────────────────
+      # download-models.ps1 and download-models.bat are already copied by the
+      # .csproj Content items (CopyToOutputDirectory=PreserveNewest).
+      # We only need to ensure the models\ folder exists with a README.
+      # The ZIP must contain an empty models\ folder so the download script
+      # knows where to put the files, and so WhisperWriter.exe can find them.
+      - name: Create models folder placeholder
+        shell: pwsh
+        run: |
+          $modelsDir = "publish/${{ matrix.rid }}/models"
+          New-Item -ItemType Directory -Path $modelsDir -Force | Out-Null
+          # Drop a README so the folder is not ignored by git-archive / zip tools
+          Set-Content "$modelsDir/README.txt" @"
+          Place your Whisper GGML model files here.
+          Run download-models.bat (or download-models.ps1) to download them automatically.
+          See https://github.com/tomFlidr/whisper-writer for details.
+          "@
+          Write-Host "models\ placeholder created."
+
+      # ── 8. Strip debug symbols and unneeded files ─────────────────────────────
+      - name: Clean publish output
+        shell: pwsh
+        run: |
+          $dst = "publish/${{ matrix.rid }}"
+          # Remove PDB files (debug symbols – not needed in release)
+          Get-ChildItem $dst -Recurse -Filter "*.pdb" | Remove-Item -Force
+          Write-Host "Cleaned."
+
+      # ── 9. Pack ZIP ───────────────────────────────────────────────────────────
+      - name: Create ZIP
+        shell: pwsh
+        run: |
+          $tag     = "${{ github.ref_name }}"          # e.g. v1.2.3
+          $zipName = "WhisperWriter-${tag}-${{ matrix.rid }}.zip"
+          Compress-Archive -Path "publish/${{ matrix.rid }}/*" -DestinationPath $zipName -Force
+          Write-Host "Created: $zipName  ($('{0:N1}' -f ((Get-Item $zipName).Length / 1MB)) MB)"
+          echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+
+      # ── 10. Upload artefact (for the release job below) ──────────────────────
+      - name: Upload artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ZIP_NAME }}
+          path: ${{ env.ZIP_NAME }}
+          retention-days: 1
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Create GitHub Release and attach all ZIPs
+  # ─────────────────────────────────────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Download all ZIPs produced by the build matrix ────────────────────
+      - name: Download all artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: zips
+          merge-multiple: true
+
+      - name: List downloaded files
+        run: ls -lh zips/
+
+      # ── 2. Create Release + upload assets ────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "WhisperWriter ${{ github.ref_name }}"
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}   # v1.0.0-beta → pre-release
+          generate_release_notes: true
+          files: zips/*.zip

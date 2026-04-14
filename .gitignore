@@ -59,3 +59,6 @@ Models/ggml-*
 # Code signing keys (contain private keys)
 *.pfx
 *.snk
+
+# Local publish output (created by VS Publish or dotnet publish)
+publish/

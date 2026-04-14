@@ -11,6 +11,9 @@
 		<AssemblyName>WhisperWriter</AssemblyName>
 		<RootNamespace>WhisperWriter</RootNamespace>
 		<ApplicationIcon>app.ico</ApplicationIcon>
+		<Version>1.0.0</Version>
+		<AssemblyVersion>1.0.0.0</AssemblyVersion>
+		<FileVersion>1.0.0.0</FileVersion>
 		<!-- Strong name signing via .snk (no password required) -->
 		<SignAssembly>true</SignAssembly>
 		<AssemblyOriginatorKeyFile>WhisperWriter.snk</AssemblyOriginatorKeyFile>
@@ -37,12 +40,22 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
 		</Content>
+		<!-- Model download helper scripts – copied next to the exe on build and publish -->
+		<Content Include="download-models.ps1">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+		</Content>
+		<Content Include="download-models.bat">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+		</Content>
 	</ItemGroup>
 	<ItemGroup>
 	  <Resource Include="app.ico" />
 	  <Content Include="app.ico">
 	    <CopyToOutputDirectory>Never</CopyToOutputDirectory>
 	  </Content>
+	  <None Include=".github\workflows\release.yml" />
 	  <None Include="WhisperWriter.sln" />
 	  <None Include="WhisperWriter.pfx" />
 	  <None Include="WhisperWriter.snk" />
@@ -58,10 +71,13 @@
 
 	<!-- Copy CUDA runtime DLLs next to ggml-cuda-whisper.dll so the OS loader finds them. -->
 	<!-- CudaBinDir is updated automatically by setup-dev.ps1 to match the locally installed CUDA version. -->
-	<Target Name="CopyCudaRuntimeDlls" AfterTargets="Build">
+	<Target Name="CopyCudaRuntimeDlls" AfterTargets="Build;Publish">
 		<PropertyGroup>
 			<CudaBinDir>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\x64</CudaBinDir>
-			<CudaTargetDir>$(OutputPath)runtimes\cuda\win-x64</CudaTargetDir>
+			<!-- During publish $(PublishDir) is set; during regular build it is empty – fall back to $(OutputPath) -->
+			<CudaEffectiveOutputDir Condition="'$(PublishDir)' != ''">$(PublishDir)</CudaEffectiveOutputDir>
+			<CudaEffectiveOutputDir Condition="'$(PublishDir)' == ''">$(OutputPath)</CudaEffectiveOutputDir>
+			<CudaTargetDir>$(CudaEffectiveOutputDir)runtimes\cuda\win-x64</CudaTargetDir>
 			<!-- Extract major version number from the last path segment, e.g. v13.2\bin\x64 -> 13 -->
 			<CudaVersion>$([System.Text.RegularExpressions.Regex]::Match($(CudaBinDir), 'v(\d+)\.').Groups[1].Value)</CudaVersion>
 		</PropertyGroup>

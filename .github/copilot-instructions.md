@@ -41,7 +41,9 @@ No data leaves the computer. CUDA GPU acceleration is automatic.
 ```
 D:\llms\whisper-writer\
 ├── .github\
-│   └── copilot-instructions.md       ← this file
+│   ├── copilot-instructions.md       ← this file
+│   └── workflows\
+│       └── release.yml               ← GitHub Actions: build & publish release ZIPs on tag push
 ├── README.md                          ← user-facing documentation (EN)
 ├── WhisperWriter.csproj
 ├── WhisperWriter.pfx                  ← Authenticode certificate (self-signed, password 1234, in .gitignore)
@@ -234,6 +236,22 @@ public class AppSettings
   - `ContinueOnError="true"` – build does not fail if signtool is unavailable.
 - **Certificate** (`WhisperWriter.pfx`): self-signed, CN=Tomáš Flídr, valid 10 years (until 2036), stored in `Cert:\CurrentUser\My`.
 - Both files (`.pfx`, `.snk`) are in `.gitignore` – must not be committed.
+
+### `.github/workflows/release.yml`
+- Triggered on any tag matching `v[0-9]+.[0-9]+.[0-9]+` (e.g. `v1.2.3`).
+- **Build matrix**: two legs — `win-x64` (CUDA-capable) and `win-x86` (CPU only, no CUDA).
+- Each leg:
+  1. Patches the `.csproj` in-place to disable `SignAssembly` (no `.snk` in CI) and remove the `AuthenticodeSigning` target (no `.pfx` in CI).
+  2. For the `win-x86` leg also removes the `CopyCudaRuntimeDlls` target (CUDA has no x86 package).
+  3. Runs `dotnet publish -c Release -r <rid> --self-contained false`.
+  4. Copies `download-models.ps1` + `download-models.bat` into the publish folder.
+  5. Creates an empty `models\` folder with a `README.txt` placeholder.
+  6. Strips `.pdb` files.
+  7. Packs everything into `WhisperWriter-v1.x.x-<rid>.zip`.
+- A separate `release` job downloads all ZIPs and creates a GitHub Release via `softprops/action-gh-release@v2`.
+  - Pre-release flag is set automatically when the tag name contains `-` (e.g. `v1.0.0-beta`).
+  - Release notes are auto-generated from commit messages (`generate_release_notes: true`).
+- Whisper model `.bin` files are **not** included in the ZIP (too large); users download them with the bundled scripts.
 
 ### `setup-dev.ps1`
 - One-time developer environment setup script. Run once after cloning the repository.

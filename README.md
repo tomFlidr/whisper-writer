@@ -316,6 +316,34 @@ The MSBuild target `CopyCudaRuntimeDlls` in `WhisperWriter.csproj` automatically
 
 ---
 
+## Creating a Release
+
+Releases are built and published automatically via GitHub Actions. No manual steps are needed.
+
+### How to publish a new release
+
+```powershell
+# Tag the current commit and push the tag
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+GitHub Actions will automatically:
+1. Build the project for **Windows x64** (with CUDA support) and **Windows x86** (CPU only).
+2. Pack each build into a ZIP archive.
+3. Create a **GitHub Release** with auto-generated release notes and attach both ZIPs.
+
+| Archive | Runtime | GPU |
+|---|---|---|
+| `WhisperWriter-v1.x.x-win-x64.zip` | Windows 64-bit | CUDA (NVIDIA) + CPU fallback |
+| `WhisperWriter-v1.x.x-win-x86.zip` | Windows 32-bit | CPU only |
+
+> **Pre-releases**: if the tag name contains a hyphen (e.g. `v1.0.0-beta`), the GitHub Release is automatically marked as a pre-release.
+
+> **Signing**: Authenticode signing and strong-name signing are skipped in CI (`.pfx` / `.snk` are not committed to the repository). Release builds are unsigned; local Debug builds are signed if the key files are present.
+
+---
+
 ## For Contributors & AI Assistants
 
 > **After every successful build that changes user-facing behavior, update this README** if the changes affect installation steps, settings, model list, hotkeys, UI navigation or any other section described here.
