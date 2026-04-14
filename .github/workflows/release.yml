@@ -84,7 +84,7 @@ jobs:
 
       # ── 5. Restore ───────────────────────────────────────────────────────────
       - name: Restore NuGet packages
-        run: dotnet restore WhisperWriter.csproj
+        run: dotnet restore WhisperWriter.csproj -r ${{ matrix.rid }}
 
       # ── 6. Publish ───────────────────────────────────────────────────────────
       # PublishSingleFile=true is already set in the .csproj.
