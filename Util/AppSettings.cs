@@ -22,7 +22,9 @@ public class AppSettings {
 	// If true, the app is registered to start with Windows (HKCU Run key)
 	public bool RunAtStartup { get; set; } = false;
 
-	// Widget position on screen (negative = use default bottom-center)
+	// Widget position on screen.
+	// WindowLeft:   distance from the left edge of the primary screen's working area (DIP). Negative = use default.
+	// WindowBottom: distance from the bottom edge of the primary screen's working area (DIP). Negative = use default.
 	public double WindowLeft { get; set; } = -1;
-	public double WindowTop { get; set; } = -1;
+	public double WindowBottom { get; set; } = -1;
 }

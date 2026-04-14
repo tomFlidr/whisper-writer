@@ -112,10 +112,11 @@ public class AppSettings
     public int    HistorySize     { get; set; } = 30;
     public bool   CopyToClipboard { get; set; } = true;  // copy result to clipboard after each transcription
     public bool   RunAtStartup     { get; set; } = false; // register/unregister HKCU Run key
-    public double WindowLeft      { get; set; } = -1;  // -1 = default bottom-center
-    public double WindowTop       { get; set; } = -1;
+    public double WindowLeft      { get; set; } = -1;  // distance from left edge of primary working area (DIP); -1 = default
+    public double WindowBottom    { get; set; } = -1;  // distance from bottom edge of primary working area (DIP); -1 = default
 }
 ```
+- `WindowBottom` stores the distance between the bottom of the widget and the bottom edge of the primary screen's working area (device-independent pixels). This keeps the widget visually "anchored to the bottom" regardless of resolution or DPI changes.
 
 ### `Util/HotkeyModifiers.cs`
 - namespace `WhisperWriter.Util`
@@ -189,8 +190,15 @@ public class AppSettings
 - `EtaFactor = 0.90` (empirical coefficient for large-v2 + Quadro T2000 CUDA) – **may need calibration**.
   - `DispatcherTimer` 100 ms counts down and displays `~Xs` next to "Transcribing…".
 - PTT flow: `SaveFocus` → `StartRecording` → (release) → `StopRecording` → `StartEtaCountdown` → `TranscribeAsync` → `StopEtaCountdown` → (if `CopyToClipboard`) `Clipboard.SetText` → `InjectText`.
-- **Display change handling**: `OnSourceInitialized` registers a `WndProc` hook via `HwndSource.AddHook`. On `WM_DISPLAYCHANGE` (0x007E – fired when resolution/monitor layout changes, e.g. docking/undocking), `ClampWindowToScreen()` is called via `Dispatcher.BeginInvoke`.
-- **`ClampWindowToScreen()`**: uses `System.Windows.Forms.Screen` to find the monitor containing the current window position. Converts its working area to WPF device-independent units using `PresentationSource.TransformFromDevice`. Clamps `Left`/`Top` so the window fits entirely within the working area. Falls back to bottom-centre of the primary screen if the clamped position is still outside any screen (e.g. the monitor it was on no longer exists). Saves the new position to `settings.json`.
+- **Window positioning architecture**:
+- Position is stored as `(WindowLeft, WindowBottom)` relative to the primary screen's working area (device-independent pixels). `WindowBottom` = distance between the widget's bottom edge and the bottom of the working area – this keeps the widget visually anchored to the bottom even after resolution/DPI changes.
+- `PositionWindow()` (called from constructor): registers a `Loaded` handler that calls either `ApplyStoredPosition()` or `PlaceAtDefaultPosition()` once `ActualHeight` is known.
+- `ApplyStoredPosition()`: reconstructs `Top = waBottom − WindowBottom − ActualHeight`, then calls `ClampWindowToScreen()`.
+- `PlaceAtDefaultPosition()`: centres the widget horizontally, places it 20 px above the taskbar on the primary screen.
+- `SaveWindowPosition()`: calculates and persists `WindowLeft` and `WindowBottom` relative to the primary working area.
+- `GetPrimaryScreenScale()`: returns WPF DIP scale factors from `PresentationSource`; before the window is shown falls back to `SystemParameters / Screen.Bounds` ratio.
+- **Display change handling**: `OnSourceInitialized` registers a `WndProc` hook via `HwndSource.AddHook` and a `SizeChanged` handler. On `WM_DISPLAYCHANGE` (0x007E) and on every size change, `ClampWindowToScreen()` is called.
+- **`ClampWindowToScreen()`**: guards against `ActualWidth/Height == 0`. Finds the monitor with the maximum overlap with the window (using `Screen.AllScreens` + `Rectangle.Intersect`). Converts pixel coordinates to WPF DIP units. Clamps `Left`/`Top` to fit entirely within the working area of that monitor. If the result is still fully off every screen (e.g. monitor disconnected), falls back to bottom-centre of the primary screen. Persists the new position via `SaveWindowPosition()`.
 
 ### `Views/HistoryWindow.xaml`
 - `ListView` with `ObservableCollection` binding to `App.History.Entries`.
@@ -296,6 +304,7 @@ Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe
 - **CRLF in C# files**: `LogService.cs`, `WhisperService.cs` and `AssemblyInfo.cs` had `\r\n` line endings. Fixed to `\n` via Node.js. `.editorconfig` extended with full C# K&R style rules (`csharp_new_line_before_open_brace = none` etc.). All project code reformatted to K&R style (opening `{` at end of line).
 - **Wrong indentation of `case TranscriptionState.Error:` in MainWindow.xaml.cs**: one tab was missing. Fixed.
 - **`WM_DISPLAYCHANGE` handler and `ClampWindowToScreen()` missing**: the `OnSourceInitialized` handler only set the window style (toolwindow / no taskbar entry) but did not register a `WndProc` hook. Added `HwndSource.AddHook(WndProc)`, constant `WM_DISPLAYCHANGE = 0x007E`, method `WndProc` that triggers `Dispatcher.BeginInvoke(ClampWindowToScreen)`, and `ClampWindowToScreen()` that clamps the window to the nearest monitor's working area (with DPI-aware scaling), falls back to bottom-centre of the primary screen if the window ends up completely off-screen, and saves the new position to `settings.json`.
+- **`WindowTop` replaced by `WindowBottom`, visibility clamping improved**: `AppSettings.WindowTop` was removed entirely and replaced by `WindowBottom` (distance from the bottom of the widget to the bottom of the primary screen's working area). This ensures the widget stays visually anchored to the bottom after resolution/DPI/dock changes. `ClampWindowToScreen()` uses `Screen.AllScreens` with maximum-overlap selection, checks all screens for visibility, and is also triggered by `SizeChanged`. `SaveWindowPosition()` stores only `WindowLeft` and `WindowBottom`.
 
 ---
 

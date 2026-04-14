@@ -94,6 +94,7 @@ public partial class MainWindow : Window {
 		style = (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW;
 		SetWindowLong(hwnd, GWL_EXSTYLE, style);
 		HwndSource.FromHwnd(hwnd)?.AddHook(WndProc);
+		SizeChanged += (_, _) => ClampWindowToScreen();
 	}
 
 	private IntPtr WndProc (IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) {
@@ -103,74 +104,153 @@ public partial class MainWindow : Window {
 	}
 
 	/// <summary>
-	/// Ensures the window stays within the bounds of the nearest screen after a display
-	/// configuration change (e.g. docking / undocking). The saved position is preserved
-	/// when possible; if the window would be entirely off-screen it falls back to the
-	/// bottom-centre of the primary screen.
+	/// Ensures the window is fully visible on some monitor after a display-configuration
+	/// change (docking / undocking / resolution change) or after a resize.
+	/// Strategy:
+	///   1. Try to keep the window on the monitor it currently overlaps most.
+	///   2. Clamp so every pixel of the window is within that monitor's working area.
+	///   3. If the window is entirely off every monitor, fall back to bottom-centre of
+	///      the primary screen.
+	/// The new position is persisted as (WindowLeft, WindowBottom) relative to the
+	/// primary screen's working area.
 	/// </summary>
 	private void ClampWindowToScreen () {
-		// Use WinForms Screen helper – it reflects the updated monitor layout immediately.
-		var screen = Screen.FromPoint(new System.Drawing.Point((int)Left, (int)Top));
-		var wa = screen.WorkingArea;
+		if (ActualWidth == 0 || ActualHeight == 0)
+			return;
 
-		// Convert working-area pixels to WPF device-independent units.
 		var source = PresentationSource.FromVisual(this);
 		double scaleX = source?.CompositionTarget?.TransformFromDevice.M11 ?? 1.0;
 		double scaleY = source?.CompositionTarget?.TransformFromDevice.M22 ?? 1.0;
+
+		// Find the screen whose working area overlaps the window the most.
+		var winRectPx = new System.Drawing.Rectangle(
+			(int)(Left   / scaleX), (int)(Top    / scaleY),
+			(int)(ActualWidth / scaleX), (int)(ActualHeight / scaleY));
+		var screen = Screen.AllScreens
+			.OrderByDescending(s => {
+				var inter = System.Drawing.Rectangle.Intersect(s.WorkingArea, winRectPx);
+				return inter.Width * inter.Height;
+			})
+			.First();
+		var wa = screen.WorkingArea;
 
 		double waLeft   = wa.Left   * scaleX;
 		double waTop    = wa.Top    * scaleY;
 		double waRight  = wa.Right  * scaleX;
 		double waBottom = wa.Bottom * scaleY;
 
-		// Clamp so the full window is visible inside the working area.
+		// Clamp so the full window fits inside the working area of that screen.
 		double newLeft = Math.Max(waLeft,  Math.Min(Left, waRight  - ActualWidth));
 		double newTop  = Math.Max(waTop,   Math.Min(Top,  waBottom - ActualHeight));
 
-		// If the saved position puts the window completely outside every screen
-		// (e.g. undocked from a monitor that no longer exists), fall back to
-		// bottom-centre of the primary screen.
+		// Safety check: if the result is still fully outside every screen's working
+		// area (e.g. the monitor is gone), fall back to bottom-centre of primary.
 		var primary = Screen.PrimaryScreen;
 		if (primary != null) {
-			var pw = primary.WorkingArea;
-			double pwLeft   = pw.Left   * scaleX;
-			double pwTop    = pw.Top    * scaleY;
-			double pwRight  = pw.Right  * scaleX;
-			double pwBottom = pw.Bottom * scaleY;
-
-			bool onScreen = newLeft < pwRight  && newLeft + ActualWidth  > pwLeft
-			             && newTop  < pwBottom && newTop  + ActualHeight > pwTop;
-			if (!onScreen) {
-				newLeft = pwLeft + (pwRight  - pwLeft  - ActualWidth)  / 2;
-				newTop  = pwBottom - ActualHeight - 20;
+			bool onAnyScreen = Screen.AllScreens.Any(s => {
+				var pw = s.WorkingArea;
+				double l = pw.Left * scaleX, t = pw.Top * scaleY;
+				double r = pw.Right * scaleX, b = pw.Bottom * scaleY;
+				return newLeft < r && newLeft + ActualWidth  > l
+				    && newTop  < b && newTop  + ActualHeight > t;
+			});
+			if (!onAnyScreen) {
+				var pw = primary.WorkingArea;
+				newLeft = pw.Left * scaleX + (pw.Width  * scaleX - ActualWidth)  / 2;
+				newTop  = pw.Bottom * scaleY - ActualHeight - 20;
 			}
 		}
 
 		Left = newLeft;
 		Top  = newTop;
+		SaveWindowPosition();
+	}
 
-		App.SettingsService.Settings.WindowLeft = Left;
-		App.SettingsService.Settings.WindowTop  = Top;
-		App.SettingsService.Save();
+	/// <summary>
+	/// Returns the WPF device-independent scale factors for the primary screen.
+	/// Falls back to 1.0 before the window has a presentation source (e.g. during construction).
+	/// </summary>
+	private (double scaleX, double scaleY) GetPrimaryScreenScale () {
+		var source = PresentationSource.FromVisual(this);
+		if (source?.CompositionTarget != null)
+			return (source.CompositionTarget.TransformFromDevice.M11,
+			        source.CompositionTarget.TransformFromDevice.M22);
+		// Before the window is shown we approximate with WPF's built-in DPI awareness.
+		double dpiScale = SystemParameters.PrimaryScreenWidth
+		                / Screen.PrimaryScreen!.Bounds.Width;
+		return (dpiScale, dpiScale);
 	}
 
 	private void PositionWindow () {
 		var s = App.SettingsService.Settings;
-		if (s.WindowLeft >= 0 && s.WindowTop >= 0) {
-			Left = s.WindowLeft;
-			Top = s.WindowTop;
+
+		if (s.WindowLeft >= 0 && s.WindowBottom >= 0) {
+			// Reconstruct Top from WindowBottom after the window has a size.
+			// At construction time ActualHeight may be 0, so we also hook Loaded.
+			Loaded += (_, _) => ApplyStoredPosition();
 		} else {
-			// Default: bottom-center of primary screen
-			Left = (SystemParameters.PrimaryScreenWidth - 280) / 2;
-			Top = SystemParameters.PrimaryScreenHeight - 80;
+			// Default: bottom-center of primary screen, 20 px above the taskbar.
+			Loaded += (_, _) => PlaceAtDefaultPosition();
 		}
+	}
+
+	/// <summary>Positions the window using the stored Left and WindowBottom values.</summary>
+	private void ApplyStoredPosition () {
+		var s = App.SettingsService.Settings;
+		var primary = Screen.PrimaryScreen;
+		if (primary == null) { PlaceAtDefaultPosition(); return; }
+
+		var (scaleX, scaleY) = GetPrimaryScreenScale();
+		var wa = primary.WorkingArea;
+		double waLeft   = wa.Left   * scaleX;
+		double waBottom = wa.Bottom * scaleY;
+
+		Left = waLeft + s.WindowLeft;
+		Top  = waBottom - s.WindowBottom - ActualHeight;
+
+		ClampWindowToScreen();
+	}
+
+	/// <summary>Places the window at the default bottom-centre position of the primary screen.</summary>
+	private void PlaceAtDefaultPosition () {
+		var primary = Screen.PrimaryScreen;
+		if (primary == null) {
+			Left = (SystemParameters.PrimaryScreenWidth  - ActualWidth)  / 2;
+			Top  =  SystemParameters.PrimaryScreenHeight - ActualHeight - 20;
+			return;
+		}
+		var (scaleX, scaleY) = GetPrimaryScreenScale();
+		var wa = primary.WorkingArea;
+		Left = wa.Left * scaleX + (wa.Width  * scaleX - ActualWidth)  / 2;
+		Top  = wa.Bottom * scaleY - ActualHeight - 20;
+		SaveWindowPosition();
 	}
 
 	// ── Drag to reposition ───────────────────────────────────────────────────
 	private void Border_MouseLeftButtonDown (object sender, System.Windows.Input.MouseButtonEventArgs e) {
 		DragMove();
-		App.SettingsService.Settings.WindowLeft = Left;
-		App.SettingsService.Settings.WindowTop = Top;
+		SaveWindowPosition();
+	}
+
+	/// <summary>
+	/// Persists the current window position as (WindowLeft, WindowBottom) relative to
+	/// the primary screen's working area so that the widget stays at the same visual
+	/// position even when the screen resolution or DPI changes.
+	/// </summary>
+	private void SaveWindowPosition () {
+		var primary = Screen.PrimaryScreen;
+		var s = App.SettingsService.Settings;
+		if (primary != null) {
+			var (scaleX, scaleY) = GetPrimaryScreenScale();
+			var wa = primary.WorkingArea;
+			double waLeft   = wa.Left   * scaleX;
+			double waBottom = wa.Bottom * scaleY;
+			s.WindowLeft   = Left - waLeft;
+			s.WindowBottom = waBottom - (Top + ActualHeight);
+		} else {
+		s.WindowLeft   = Left;
+			s.WindowBottom = SystemParameters.PrimaryScreenHeight - (Top + ActualHeight);
+		}
 		App.SettingsService.Save();
 	}
 
