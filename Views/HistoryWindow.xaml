@@ -22,8 +22,6 @@
 				<!-- title bar -->
 				<RowDefinition Height="*"/>
 				<!-- list -->
-				<RowDefinition Height="Auto"/>
-				<!-- footer -->
 			</Grid.RowDefinitions>
 
 			<!-- Title bar -->
@@ -53,7 +51,7 @@
 					  FontSize="13"
 					  Margin="8,4"
 					  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-					  SelectionChanged="HistoryList_SelectionChanged">
+					  SelectionMode="Single">
 				<ListView.ItemContainerStyle>
 					<Style TargetType="ListViewItem">
 						<Setter Property="Padding" Value="10,8"/>
@@ -85,55 +83,49 @@
 				<ListView.ItemTemplate>
 					<DataTemplate>
 						<Grid>
-							<Grid.RowDefinitions>
-								<RowDefinition/>
-								<RowDefinition/>
-							</Grid.RowDefinitions>
-						<TextBox Grid.Row="0"
-								 Text="{Binding Text, Mode=OneWay}"
-								 Foreground="{StaticResource TextPrimaryBrush}"
-								 Background="Transparent"
-								 BorderThickness="0"
-								 IsReadOnly="True"
-								 TextWrapping="Wrap"
-								 MaxHeight="60"
-								 IsTabStop="False"
-								 FocusVisualStyle="{x:Null}"
-								 Cursor="IBeam"
-								 FontFamily="Segoe UI"
-								 FontSize="13"/>
-							<TextBlock Grid.Row="1"
-									   Foreground="{StaticResource TextSecondaryBrush}"
-									   FontSize="11"
-									   Margin="0,3,0,0">
-								<TextBlock.Text>
-									<MultiBinding StringFormat="{}{0:HH:mm:ss}  •  {1:0.0}s">
-										<Binding Path="Timestamp"/>
-										<Binding Path="Duration.TotalSeconds"/>
-									</MultiBinding>
-								</TextBlock.Text>
-							</TextBlock>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*"/>
+								<ColumnDefinition Width="Auto"/>
+							</Grid.ColumnDefinitions>
+							<Grid Grid.Column="0" Margin="0,0,8,0">
+								<Grid.RowDefinitions>
+									<RowDefinition/>
+									<RowDefinition/>
+								</Grid.RowDefinitions>
+								<TextBox Grid.Row="0"
+										 Text="{Binding Text, Mode=OneWay}"
+										 Foreground="{StaticResource TextPrimaryBrush}"
+										 Background="Transparent"
+										 BorderThickness="0"
+										 IsReadOnly="True"
+										 TextWrapping="Wrap"
+										 MaxHeight="60"
+										 IsTabStop="False"
+										 FocusVisualStyle="{x:Null}"
+										 Cursor="IBeam"
+										 FontFamily="Segoe UI"
+										 FontSize="13"/>
+								<TextBlock Grid.Row="1"
+										   Foreground="{StaticResource TextSecondaryBrush}"
+										   FontSize="11"
+										   Margin="0,3,0,0">
+									<TextBlock.Text>
+										<MultiBinding StringFormat="{}{0:HH:mm:ss}  &#x2022;  {1:0.0}s">
+											<Binding Path="Timestamp"/>
+											<Binding Path="Duration.TotalSeconds"/>
+										</MultiBinding>
+									</TextBlock.Text>
+								</TextBlock>
+							</Grid>
+							<Button Grid.Column="1"
+									Style="{StaticResource IconButton}"
+									Content="Copy"
+									VerticalAlignment="Center"
+									Click="BtnCopyEntry_Click"/>
 						</Grid>
 					</DataTemplate>
 				</ListView.ItemTemplate>
 			</ListView>
-
-			<!-- Footer: copy button -->
-			<Border Grid.Row="2" BorderThickness="0,1,0,0" BorderBrush="#22FFFFFF" Padding="12,8">
-				<Grid>
-					<TextBlock x:Name="FooterHint"
-							   Text="Select an entry to copy it"
-							   Foreground="{StaticResource TextSecondaryBrush}"
-							   FontSize="12" FontFamily="Segoe UI"
-							   VerticalAlignment="Center"/>
-					<Button x:Name="BtnCopy"
-							Style="{StaticResource IconButton}"
-							Content="Copy to clipboard"
-							HorizontalAlignment="Right"
-							IsEnabled="False"
-							Click="BtnCopy_Click"/>
-				</Grid>
-			</Border>
 		</Grid>
 	</Border>
 </Window>

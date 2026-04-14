@@ -192,13 +192,12 @@ public class AppSettings
 
 ### `Views/HistoryWindow.xaml`
 - `ListView` with `ObservableCollection` binding to `App.History.Entries`.
-- `DataTemplate`: main text as **`TextBox` IsReadOnly** (mouse-selectable!), below it timestamp + duration.
-- Footer: "Copy to clipboard" button (active only when an entry is selected).
+- `DataTemplate`: two-column `Grid` – left column contains the main text (`TextBox` IsReadOnly, mouse-selectable) + timestamp/duration row, right column has a per-item **"Copy"** button (`BtnCopyEntry_Click`). Left column has `Margin="0,0,8,0"` so text never flows under the button.
+- No footer – the global "Select an entry…" hint and shared "Copy to clipboard" button have been removed.
 
 ### `Views/SettingsWindow.xaml`
-- Form: `ModelPath` (ComboBox: 12 models), `Language` (ComboBox: 57 languages + `auto`), `Prompt` (multiline TextBox), hotkey info (read-only), `HistorySize` (numeric TextBox, min 1, max Int32.MaxValue), `CopyToClipboard` (CheckBox, default checked), `RunAtStartup` (CheckBox – reads/writes `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`, value name `WhisperWriter`, default unchecked).
-- `CmbModelPath`: each item has `Tag` = file path, `Content` = two-line `StackPanel` (name bold + HW requirements and size in smaller text).
-- Available models (largest to smallest): `large-v3-turbo`, `large-v3`, `large-v2`, `large-v1`, `medium`, `medium.en`, `small`, `small.en`, `base`, `base.en`, `tiny`, `tiny.en`.
+- Form: `ModelPath` (ComboBox: 12 models, items built at runtime in code-behind), `Language` (ComboBox: 57 languages + `auto`), `Prompt` (multiline TextBox), hotkey info (read-only), `HistorySize` (numeric TextBox, min 1, max Int32.MaxValue), `CopyToClipboard` (CheckBox, default checked), `RunAtStartup` (CheckBox – reads/writes `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`, value name `WhisperWriter`, default unchecked).
+- `CmbModelPath`: items are built dynamically in `BuildModelItems()` in code-behind. Each item has `Tag` = file path, `Content` = two-line `StackPanel` (name bold + HW requirements and size in smaller text). Models that are not downloaded (`File.Exists` check against `AppContext.BaseDirectory`) are shown with `Opacity=0.45`, `IsEnabled=false`, and ` · not downloaded` appended to the detail line.
 - `CmbLanguage`: each item has `Tag` = ISO language code (e.g. `"cs"`) and `Content` = `"cs – Čeština"` (code + native name).
 - `TxtHistorySize`: numeric TextBox, `PreviewTextInput` handler blocks non-numeric characters, fallback to `1` on save if value is invalid or < 1.
 - `ChkCopyToClipboard`: CheckBox bound to `AppSettings.CopyToClipboard`.

@@ -17,14 +17,8 @@ public partial class HistoryWindow : Window {
 
 	private void BtnClose_Click (object sender, RoutedEventArgs e) => Close();
 
-	private void HistoryList_SelectionChanged (object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
-		BtnCopy.IsEnabled = HistoryList.SelectedItem is TranscriptionEntry;
-	}
-
-	private void BtnCopy_Click (object sender, RoutedEventArgs e) {
-		if (HistoryList.SelectedItem is TranscriptionEntry entry) {
+	private void BtnCopyEntry_Click (object sender, RoutedEventArgs e) {
+		if (sender is System.Windows.Controls.Button btn && btn.DataContext is TranscriptionEntry entry)
 			System.Windows.Clipboard.SetText(entry.Text);
-			FooterHint.Text = "Copied!";
-		}
 	}
 }
