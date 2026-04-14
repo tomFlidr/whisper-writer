@@ -162,7 +162,7 @@ if ($cudaFound) {
 		$targetDir = Join-Path $root "bin\$cfg\net8.0-windows\runtimes\cuda\win-x64"
 		if (-not (Test-Path $targetDir)) {
 			# bin may not exist yet before the first build – that is fine, MSBuild copies on build
-			Write-Warn "Output folder not found (not built yet): bin\$cfg – skipping DLL copy for $cfg."
+			Write-Warn "Output folder not found (not built yet): bin\$cfg - skipping DLL copy for $cfg."
 			continue
 		}
 
@@ -206,7 +206,7 @@ if ($cudaFound) {
 			[System.IO.File]::WriteAllText($csproj, $updated, [System.Text.Encoding]::UTF8)
 			Write-Ok ".csproj updated."
 		} else {
-			Write-Warn "Skipped – .csproj not modified. Build may not copy CUDA DLLs correctly."
+		Write-Warn "Skipped - .csproj not modified. Build may not copy CUDA DLLs correctly."
 		}
 	} elseif ($null -ne $currentCudaBinDir) {
 		Write-Ok "CudaBinDir in .csproj already matches detected path."
