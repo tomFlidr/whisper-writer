@@ -30,15 +30,23 @@ public class SettingsService
 			var json = File.ReadAllText(_settingsPath);
 			Settings = JsonSerializer.Deserialize<AppSettings>(json, _jsonOptions) ?? new AppSettings();
 		}
-		catch
+		catch (Exception ex)
 		{
+			LogService.Error("Failed to load settings, using defaults", ex);
 			Settings = new AppSettings();
 		}
 	}
 
 	public void Save()
 	{
-		var json = JsonSerializer.Serialize(Settings, _jsonOptions);
-		File.WriteAllText(_settingsPath, json);
+		try
+		{
+			var json = JsonSerializer.Serialize(Settings, _jsonOptions);
+			File.WriteAllText(_settingsPath, json);
+		}
+		catch (Exception ex)
+		{
+			LogService.Error("Failed to save settings", ex);
+		}
 	}
 }

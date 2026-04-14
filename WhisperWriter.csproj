@@ -45,6 +45,8 @@
 
 	<ItemGroup>
 		<!-- Whisper inference via whisper.cpp bindings -->
+		<PackageReference Include="Serilog" Version="4.3.0" />
+		<PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
 		<PackageReference Include="Whisper.net" Version="1.7.2" />
 		<PackageReference Include="Whisper.net.Runtime" Version="1.7.2" />
 		<PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.7.2" />

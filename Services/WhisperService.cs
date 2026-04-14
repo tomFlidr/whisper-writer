@@ -53,6 +53,7 @@ public sealed class WhisperService : IAsyncDisposable
 		{
 			_initialized = false;
 			_factory = null;
+			LogService.Error("Failed to load Whisper model", ex);
 			StateChanged?.Invoke(TranscriptionState.Error, $"Model load failed: {ex.Message}");
 		}
 	}

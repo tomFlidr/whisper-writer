@@ -27,6 +27,7 @@ WhisperWriter je minimalistická WPF aplikace pro Windows – **lokální hlasov
 | Whisper.net | 1.7.2 (+ Runtime + Runtime.Cuda) |
 | NAudio | 2.2.1 |
 | System.Text.Json | 8.0.5 |
+| Serilog | 4.3.0 (+ Serilog.Sinks.File 6.0.0) |
 | Jazyk kódu | C# 12, nullable enable, implicit usings, file-scoped namespaces |
 | Odsazení | TAB (ne mezery) |
 | Komentáře | Anglicky |
@@ -52,6 +53,7 @@ D:\llms\whisper-writer\
 ├── Services\
 │   ├── AudioRecorder.cs               ← NAudio, 16 kHz mono WAV, RMS amplitude event
 │   ├── HotkeyService.cs               ← polling GetAsyncKeyState, 20ms interval
+│   ├── LogService.cs                  ← Serilog facade, daily rolling log do logs/
 │   ├── SettingsService.cs             ← JSON load/save do BaseDirectory/settings.json
 │   ├── TextInjector.cs                ← SaveFocus() + SendInput Unicode
 │   └── WhisperService.cs              ← WhisperFactory, TranscribeAsync, CUDA
@@ -87,6 +89,7 @@ D:\llms\whisper-writer\
   ```
 - Dvojklik na tray ikonu → `Show()` + `Activate()` na `MainWindow`.
 - `WhisperService.InitializeAsync(modelPath)` se spustí asynchronně na pozadí při startu.
+- Globální zachytávání výjimek: `DispatcherUnhandledException` (UI vlákno) + `AppDomain.CurrentDomain.UnhandledException` (background vlákna) – oboje loguje přes `LogService`.
 
 ### `Models/AppSettings.cs`
 ```csharp
@@ -108,6 +111,14 @@ public enum HotkeyModifiers { None=0, Alt=1, Control=2, Shift=4, Win=8 }
 ### `Models/TranscriptionHistory.cs`
 - `TranscriptionEntry`: `Timestamp`, `Text`, `Duration` (TimeSpan – doba přepisu).
 - `TranscriptionHistory.Add()`: thread-safe, vkládá na index 0 (nejnovější nahoře), ořezává na `MaxSize`.
+
+### `Services/LogService.cs`
+- Statická fasáda nad `Serilog.Log`.
+- `Initialize()` – konfiguruje rolling file sink do `logs/whisperwriter-YYYYMMDD.log` vedle exe, retence 14 dní.
+- Metody: `Info(string)`, `Warning(string, Exception?)`, `Error(string, Exception?)`.
+- `CloseAndFlush()` – voláno z `App.OnExit`.
+- `LogDirectory` – veřejná property s cestou k log složce.
+- Loguje se ve všech `catch` blocích v aplikaci + globální `DispatcherUnhandledException` a `AppDomain.UnhandledException`.
 
 ### `Services/SettingsService.cs`
 - Ukládá do `AppContext.BaseDirectory + "settings.json"` (tj. vedle exe).

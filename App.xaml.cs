@@ -18,6 +18,22 @@ public partial class App : System.Windows.Application
 	{
 		base.OnStartup(e);
 
+		LogService.Initialize();
+
+		// Catch any unhandled WPF dispatcher exceptions
+		DispatcherUnhandledException += (_, args) =>
+		{
+			LogService.Error("Unhandled dispatcher exception", args.Exception);
+			args.Handled = true;
+		};
+
+		// Catch unhandled exceptions from non-UI threads
+		AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+		{
+			if (args.ExceptionObject is Exception ex)
+				LogService.Error("Unhandled background exception", ex);
+		};
+
 		SettingsService.Load();
 		History.MaxSize = SettingsService.Settings.HistorySize;
 
@@ -88,6 +104,7 @@ public partial class App : System.Windows.Application
 	protected override void OnExit(ExitEventArgs e)
 	{
 		_trayIcon?.Dispose();
+		LogService.CloseAndFlush();
 		base.OnExit(e);
 	}
 }

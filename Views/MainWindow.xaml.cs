@@ -124,6 +124,7 @@ public partial class MainWindow : Window
 			catch (Exception ex)
 			{
 				StopEtaCountdown();
+				LogService.Error("Transcription failed", ex);
 				SetStatus($"Error: {ex.Message}", isError: true);
 			}
 		});
