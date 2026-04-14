@@ -137,6 +137,7 @@ public enum HotkeyModifiers { None=0, Alt=1, Control=2, Shift=4, Win=8 }
   - Builder: `.WithLanguage(effectiveLanguage).WithThreads(processorCount - 2)`.
   - Volitelně `.WithPrompt(prompt)`.
 - `StateChanged` event: `(TranscriptionState, string)` → `Loading`, `Transcribing`, `Done`, `Error`.
+- `InitializeAsync` je celý zabalen do try/catch – při chybě načtení modelu vyvolá `StateChanged(Error, "Model load failed: …")` místo tiché ztráty výjimky (fire-and-forget v `App.xaml.cs`).
 - **Pozor**: `WithGreedySamplingStrategy()` vrací `IWhisperSamplingStrategyBuilder` (jiný interface než hlavní builder) – nelze za ním řetězit `WithPrompt` ani `Build()`. Nepřidávat do fluent chain.
 
 ### `Views/MainWindow.xaml`
@@ -199,13 +200,14 @@ Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe
 | Medium | **EtaFactor kalibrace** – aktuálně `0.35`, změřit reálný poměr `transcription_time / recording_length` a případně upravit v `MainWindow.xaml.cs:33`. Ideálně by se faktor počítal adaptivně z posledních N přepisů. |
 | Medium | **HotkeyService – konfigurovatelné klávesy** – aktuálně jsou VK kódy `VK_LCONTROL` a `VK_LWIN` hardcoded. `AppSettings.HotkeyModifiers` bitmaska se sice ukládá, ale `IsComboHeld()` ignoruje Alt a Shift větve. Nutno doplnit VK lookup tabulku pro Alt (`VK_LMENU = 0xA4`) a Shift (`VK_LSHIFT = 0xA0`). |
 | Low | **settings.json přepsání při buildu** – `PreserveNewest` zkopíruje zdrojový `settings.json` do bin pokud je novější, čímž přepíše uživatelská nastavení. Zvážit `CopyToOutputDirectory=Never` a ruční inicializaci při prvním spuštění (SettingsService to již dělá přes `Save()` když soubor neexistuje). |
-| Low | **Whisper model download fallback** – pokud výchozí model (`ggml-large-v2.bin`) chybí, `InitializeAsync` stáhne `GgmlType.Medium` (ne Large). Text v kódu říká „Downloading medium model…" – nesedí s výchozím nastavením. |
+| Low | **Whisper model download fallback** – pokud výchozí model (`ggml-large-v2.bin`) chybí, `InitializeAsync` stáhne `GgmlType.Medium` (ne Large). Zobrazí se zpráva „Downloading model…". |
 
 ### Vyřešené problémy (pro kontext)
 
 - **Překlad místo transkripce**: `WithTranslate()` se nesmí volat. Bez explicitního jazyka whisper.cpp může překládat. Opraveno: vždy `WithLanguage(effectiveLanguage)`, `"auto"` → `"cs"`.
 - **`WithGreedySamplingStrategy()` API**: tato metoda vrací jiný interface (`IWhisperSamplingStrategyBuilder`) bez `WithPrompt`/`Build`. Nelze řetězit. Aktuálně se nepoužívá.
 - **Ambiguous reference `System.Windows` vs `System.Windows.Forms`**: řešeno aliasem `using WpfApp = System.Windows.Application`.
+- **Chyba "Failed to load the whisper model" při puštění PTT**: `InitializeAsync` neobsahoval try/catch, výjimka z `WhisperFactory.FromPath` se tichce ztratila, `_initialized` zůstal `false`. Opraveno: celý `InitializeAsync` zabalen do try/catch, chyba se zobrazí přes `StateChanged(Error, "Model load failed: …")`. Zároveň `RecDot` se správně zčervená při chybovém stavu.
 
 ---
 

@@ -28,24 +28,33 @@ public sealed class WhisperService : IAsyncDisposable
 	{
 		StateChanged?.Invoke(TranscriptionState.Loading, "Loading model…");
 
-		// Download model if missing
-		if (!File.Exists(modelPath))
+		try
 		{
-			var dir = Path.GetDirectoryName(modelPath)!;
-			Directory.CreateDirectory(dir);
-			StateChanged?.Invoke(TranscriptionState.Loading, "Downloading medium model…");
-			await WhisperGgmlDownloader.GetGgmlModelAsync(GgmlType.Medium, QuantizationType.NoQuantization)
-				.ContinueWith(async t =>
-				{
-					await using var src = await t;
-					await using var dst = File.Create(modelPath);
-					await src.CopyToAsync(dst);
-				}).Unwrap();
-		}
+			// Download model if missing
+			if (!File.Exists(modelPath))
+			{
+				var dir = Path.GetDirectoryName(modelPath)!;
+				Directory.CreateDirectory(dir);
+				StateChanged?.Invoke(TranscriptionState.Loading, "Downloading model…");
+				await WhisperGgmlDownloader.GetGgmlModelAsync(GgmlType.Medium, QuantizationType.NoQuantization)
+					.ContinueWith(async t =>
+					{
+						await using var src = await t;
+						await using var dst = File.Create(modelPath);
+						await src.CopyToAsync(dst);
+					}).Unwrap();
+			}
 
-		_factory = WhisperFactory.FromPath(modelPath);
-		_initialized = true;
-		StateChanged?.Invoke(TranscriptionState.Idle, "Ready");
+			_factory = WhisperFactory.FromPath(modelPath);
+			_initialized = true;
+			StateChanged?.Invoke(TranscriptionState.Idle, "Ready");
+		}
+		catch (Exception ex)
+		{
+			_initialized = false;
+			_factory = null;
+			StateChanged?.Invoke(TranscriptionState.Error, $"Model load failed: {ex.Message}");
+		}
 	}
 
 	/// <summary>
@@ -55,7 +64,7 @@ public sealed class WhisperService : IAsyncDisposable
 	public async Task<string> TranscribeAsync(byte[] wavBytes, string language, string prompt)
 	{
 		if (!_initialized || _factory == null)
-			throw new InvalidOperationException("WhisperService not initialized.");
+			throw new InvalidOperationException("Model is not loaded. Check the model path in Settings.");
 
 		StateChanged?.Invoke(TranscriptionState.Transcribing, "Transcribing…");
 

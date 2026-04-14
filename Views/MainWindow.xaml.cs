@@ -191,8 +191,9 @@ public partial class MainWindow : Window
 					SetStatus("Ready  —  hold Ctrl+Win");
 					RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
 					break;
-				case TranscriptionState.Error:
+			case TranscriptionState.Error:
 					SetStatus(msg, isError: true);
+					RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentRecordingBrush"];
 					break;
 				default:
 					SetStatus("Ready  —  hold Ctrl+Win");
