@@ -26,10 +26,30 @@ public partial class MainWindow : Window {
 	private double _etaSeconds;
 
 	/// <summary>
-	/// Empirical factor: transcription time ≈ recording length × EtaFactor.
-	/// Tune based on GPU / model. 0.35 = large-v2 on Quadro T2000 CUDA.
+	/// Per-model empirical ETA factors: transcription time ≈ recording length × factor.
+	/// Measured / estimated for Quadro T2000 (Turing, 4 GB VRAM) with CUDA 13.
+	/// large-v2 = 0.90 (measured); others derived from whisper.cpp parameter ratios.
 	/// </summary>
-	private const double EtaFactor = 0.35;
+	private static readonly Dictionary<string, double> EtaFactors = new() {
+		{ "ggml-large-v3-turbo", 0.25 }, // distilled encoder, ~3.5× faster than large
+		{ "ggml-large-v3",       0.90 }, // same encoder size as large-v2
+		{ "ggml-large-v2",       0.90 }, // measured baseline
+		{ "ggml-large-v1",       0.90 }, // same encoder size
+		{ "ggml-medium",         0.38 }, // ~2.3× faster than large
+		{ "ggml-medium.en",      0.38 },
+		{ "ggml-small",          0.18 }, // ~5× faster than large
+		{ "ggml-small.en",       0.18 },
+		{ "ggml-base",           0.10 }, // ~10× faster than large
+		{ "ggml-base.en",        0.10 },
+		{ "ggml-tiny",           0.05 }, // ~20× faster than large
+		{ "ggml-tiny.en",        0.05 },
+	};
+
+	private double GetEtaFactor () {
+		var modelFile = System.IO.Path.GetFileNameWithoutExtension(
+			App.SettingsService.Settings.ModelPath);
+		return EtaFactors.TryGetValue(modelFile, out var f) ? f : 0.35;
+	}
 
 	private const int GWL_EXSTYLE = -20;
 	private const int WS_EX_TOOLWINDOW = 0x00000080;
@@ -115,7 +135,7 @@ public partial class MainWindow : Window {
 			// Estimate ETA from recorded audio length
 			// WAV bytes: 16000 samples/s × 2 bytes = 32000 bytes/s
 			double recordedSeconds = wav.Length / 32000.0;
-			StartEtaCountdown(recordedSeconds * EtaFactor);
+			StartEtaCountdown(recordedSeconds * GetEtaFactor());
 
 			var settings = App.SettingsService.Settings;
 			try {

@@ -183,7 +183,7 @@ public class AppSettings
 
 ### `Views/MainWindow.xaml.cs`
 - **ETA countdown**: after releasing PTT calculates `estimatedSeconds = wavBytes.Length / 32000.0 * EtaFactor`.
-  - `EtaFactor = 0.35` (empirical coefficient for large-v2 + Quadro T2000 CUDA) – **may need calibration**.
+- `EtaFactor = 0.90` (empirical coefficient for large-v2 + Quadro T2000 CUDA) – **may need calibration**.
   - `DispatcherTimer` 100 ms counts down and displays `~Xs` next to "Transcribing…".
 - PTT flow: `SaveFocus` → `StartRecording` → (release) → `StopRecording` → `StartEtaCountdown` → `TranscribeAsync` → `StopEtaCountdown` → (if `CopyToClipboard`) `Clipboard.SetText` → `InjectText`.
 
@@ -254,7 +254,7 @@ Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe
 
 | Priority | Description |
 |---|---|
-| Medium | **EtaFactor calibration** – currently `0.35`, measure the real ratio `transcription_time / recording_length` and update in `MainWindow.xaml.cs:33` if needed. Ideally the factor would be computed adaptively from the last N transcriptions. |
+| Medium | **EtaFactor calibration** – currently `0.90`, measure the real ratio `transcription_time / recording_length` and update in `MainWindow.xaml.cs` if needed. Ideally the factor would be computed adaptively from the last N transcriptions. |
 | Medium | **HotkeyService – configurable keys** – VK codes `VK_LCONTROL` and `VK_LWIN` are currently hardcoded. The `AppSettings.HotkeyModifiers` bitmask is saved, but `IsComboHeld()` ignores the Alt and Shift branches. A VK lookup table for Alt (`VK_LMENU = 0xA4`) and Shift (`VK_LSHIFT = 0xA0`) needs to be added. |
 | Low | **settings.json overwrite on build** – `PreserveNewest` copies the source `settings.json` to bin if it is newer, overwriting user settings. Consider `CopyToOutputDirectory=Never` and manual initialization on first run (SettingsService already handles this via `Save()` when the file does not exist). |
 | Low | **Whisper model download fallback** – if the default model (`ggml-large-v2.bin`) is missing, `InitializeAsync` downloads `GgmlType.Medium` (not Large). A "Downloading model…" message is shown. |
