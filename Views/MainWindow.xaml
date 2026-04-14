@@ -1,0 +1,81 @@
+<Window x:Class="WhisperWriter.Views.MainWindow"
+		xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+		Title="WhisperWriter"
+		SizeToContent="WidthAndHeight"
+		WindowStyle="None"
+		AllowsTransparency="True"
+		Background="Transparent"
+		Topmost="True"
+		ShowInTaskbar="False"
+		ResizeMode="NoResize">
+
+	<Window.Resources>
+		<!-- Pulse animation for the recording dot -->
+		<Storyboard x:Key="PulseAnim" RepeatBehavior="Forever">
+			<DoubleAnimation Storyboard.TargetName="RecDot"
+							 Storyboard.TargetProperty="Opacity"
+							 From="1" To="0.2" Duration="0:0:0.6"
+							 AutoReverse="True"/>
+		</Storyboard>
+		<!-- Fade-in on show -->
+		<Storyboard x:Key="FadeIn">
+			<DoubleAnimation Storyboard.TargetName="WidgetBorder"
+							 Storyboard.TargetProperty="Opacity"
+							 From="0" To="1" Duration="0:0:0.15"/>
+		</Storyboard>
+	</Window.Resources>
+
+	<!-- Compact pill: minimal padding -->
+	<Border x:Name="WidgetBorder"
+			Background="{StaticResource BgBrush}"
+			CornerRadius="16"
+			Padding="10,5"
+			MouseLeftButtonDown="Border_MouseLeftButtonDown"
+			Cursor="SizeAll">
+		<Border.Effect>
+			<DropShadowEffect Color="Black" BlurRadius="14" ShadowDepth="3" Opacity="0.5"/>
+		</Border.Effect>
+
+		<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+
+			<!-- Recording indicator dot -->
+			<Ellipse x:Name="RecDot"
+					 Width="8" Height="8"
+					 Margin="0,0,8,0"
+					 Fill="{StaticResource AccentBrush}"
+					 VerticalAlignment="Center"/>
+
+			<!-- Status text + ETA on one line -->
+			<StackPanel VerticalAlignment="Center" Margin="0,4">
+				<StackPanel Orientation="Horizontal">
+					<TextBlock x:Name="StatusLabel"
+							   Text="Ready  —  hold Ctrl+Win"
+							   Foreground="{StaticResource TextSecondaryBrush}"
+							   FontSize="12"
+							   FontFamily="Segoe UI"
+							   VerticalAlignment="Center"/>
+					<TextBlock x:Name="EtaLabel"
+							   Foreground="{StaticResource AccentBrush}"
+							   FontSize="12"
+							   FontFamily="Segoe UI"
+							   Margin="6,0,0,0"
+							   VerticalAlignment="Center"
+							   Visibility="Collapsed"/>
+				</StackPanel>
+
+				<!-- Amplitude bar (visible only while recording) -->
+				<Grid x:Name="AmplitudeRow" Height="3" Margin="0,3,0,0" Visibility="Collapsed"
+					  MinWidth="160">
+					<Rectangle Fill="#22FFFFFF" RadiusX="1" RadiusY="1"/>
+					<Rectangle x:Name="AmplitudeBar"
+							   Fill="{StaticResource AccentRecordingBrush}"
+							   RadiusX="1" RadiusY="1"
+							   HorizontalAlignment="Left"
+							   Width="0"/>
+				</Grid>
+			</StackPanel>
+
+		</StackPanel>
+	</Border>
+</Window>

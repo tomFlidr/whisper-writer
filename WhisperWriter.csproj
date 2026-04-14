@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net8.0-windows</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UseWPF>true</UseWPF>
+		<UseWindowsForms>true</UseWindowsForms>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<AssemblyName>WhisperWriter</AssemblyName>
+		<RootNamespace>WhisperWriter</RootNamespace>
+	</PropertyGroup>
+
+	<!-- Copy models folder to output -->
+	<ItemGroup>
+		<Content Include="models\**\*">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+		<!-- Default settings – copied only if not already present in output -->
+		<Content Include="settings.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Whisper inference via whisper.cpp bindings -->
+		<PackageReference Include="Whisper.net" Version="1.7.2" />
+		<PackageReference Include="Whisper.net.Runtime" Version="1.7.2" />
+		<PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.7.2" />
+		<!-- Audio capture -->
+		<PackageReference Include="NAudio" Version="2.2.1" />
+		<!-- JSON settings -->
+		<PackageReference Include="System.Text.Json" Version="8.0.5" />
+	</ItemGroup>
+
+</Project>

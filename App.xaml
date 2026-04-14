@@ -1,0 +1,46 @@
+<Application x:Class="WhisperWriter.App"
+			 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 ShutdownMode="OnExplicitShutdown">
+	<Application.Resources>
+		<!-- Color palette -->
+		<Color x:Key="BgColor">#CC1C1C1E</Color>
+		<Color x:Key="AccentColor">#8B8BFF</Color>
+		<Color x:Key="AccentRecording">#FF3B30</Color>
+		<Color x:Key="TextPrimary">#FFFFFFFF</Color>
+		<Color x:Key="TextSecondary">#99FFFFFF</Color>
+
+		<SolidColorBrush x:Key="BgBrush" Color="{StaticResource BgColor}"/>
+		<SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}"/>
+		<SolidColorBrush x:Key="AccentRecordingBrush" Color="{StaticResource AccentRecording}"/>
+		<SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}"/>
+		<SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}"/>
+
+		<!-- Shared icon button style -->
+		<Style x:Key="IconButton" TargetType="Button">
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+			<Setter Property="Cursor" Value="Hand"/>
+			<Setter Property="FontSize" Value="13"/>
+			<Setter Property="Padding" Value="6,3"/>
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="Button">
+						<Border Background="{TemplateBinding Background}"
+								CornerRadius="6"
+								Padding="{TemplateBinding Padding}">
+							<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter Property="Background" Value="#33FFFFFF"/>
+								<Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+	</Application.Resources>
+</Application>

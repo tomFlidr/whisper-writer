@@ -1,0 +1,138 @@
+<Window x:Class="WhisperWriter.Views.SettingsWindow"
+		xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+		Title="Settings"
+		Width="460" Height="420"
+		WindowStyle="None"
+		AllowsTransparency="True"
+		Background="Transparent"
+		WindowStartupLocation="CenterScreen"
+		ResizeMode="NoResize">
+
+	<Border Background="{StaticResource BgBrush}"
+			CornerRadius="14"
+			MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+		<Border.Effect>
+			<DropShadowEffect Color="Black" BlurRadius="24" ShadowDepth="6" Opacity="0.55"/>
+		</Border.Effect>
+
+		<Grid Margin="20">
+			<Grid.RowDefinitions>
+				<RowDefinition Height="Auto"/>
+				<!-- title -->
+				<RowDefinition Height="16"/>
+				<RowDefinition Height="Auto"/>
+				<!-- model path -->
+				<RowDefinition Height="12"/>
+				<RowDefinition Height="Auto"/>
+				<!-- language -->
+				<RowDefinition Height="12"/>
+				<RowDefinition Height="Auto"/>
+				<!-- prompt -->
+				<RowDefinition Height="12"/>
+				<RowDefinition Height="Auto"/>
+				<!-- hotkey -->
+				<RowDefinition Height="12"/>
+				<RowDefinition Height="Auto"/>
+				<!-- history size -->
+				<RowDefinition Height="*"/>
+				<RowDefinition Height="Auto"/>
+				<!-- buttons -->
+			</Grid.RowDefinitions>
+
+			<!-- Title -->
+			<Grid Grid.Row="0">
+				<TextBlock Text="Settings"
+						   Foreground="{StaticResource TextPrimaryBrush}"
+						   FontSize="14" FontWeight="SemiBold" FontFamily="Segoe UI"/>
+				<Button Style="{StaticResource IconButton}"
+						Content="✕"
+						HorizontalAlignment="Right"
+						Click="BtnCancel_Click"/>
+			</Grid>
+
+			<!-- Model path -->
+			<StackPanel Grid.Row="2">
+				<TextBlock Text="Model path" Foreground="{StaticResource TextSecondaryBrush}"
+						   FontSize="11" FontFamily="Segoe UI" Margin="0,0,0,4"/>
+				<TextBox x:Name="TxtModelPath"
+						 Background="#33FFFFFF" Foreground="{StaticResource TextPrimaryBrush}"
+						 BorderBrush="#44FFFFFF" BorderThickness="1"
+						 FontFamily="Consolas" FontSize="12"
+						 Padding="8,5" CaretBrush="White"/>
+			</StackPanel>
+
+			<!-- Language -->
+			<StackPanel Grid.Row="4">
+				<TextBlock Text="Language" Foreground="{StaticResource TextSecondaryBrush}"
+						   FontSize="11" FontFamily="Segoe UI" Margin="0,0,0,4"/>
+				<ComboBox x:Name="CmbLanguage"
+						  Background="#33FFFFFF" Foreground="{StaticResource TextPrimaryBrush}"
+						  BorderBrush="#44FFFFFF"
+						  FontFamily="Segoe UI" FontSize="13" Padding="6,4">
+					<ComboBoxItem Content="auto (detect)" Tag="auto"/>
+					<ComboBoxItem Content="cs – Czech" Tag="cs"/>
+					<ComboBoxItem Content="en – English" Tag="en"/>
+					<ComboBoxItem Content="de – German" Tag="de"/>
+					<ComboBoxItem Content="fr – French" Tag="fr"/>
+					<ComboBoxItem Content="es – Spanish" Tag="es"/>
+					<ComboBoxItem Content="pl – Polish" Tag="pl"/>
+					<ComboBoxItem Content="sk – Slovak" Tag="sk"/>
+				</ComboBox>
+			</StackPanel>
+
+			<!-- Prompt -->
+			<StackPanel Grid.Row="6">
+				<TextBlock Text="Prompt (helps Whisper with domain vocabulary)"
+						   Foreground="{StaticResource TextSecondaryBrush}"
+						   FontSize="11" FontFamily="Segoe UI" Margin="0,0,0,4"/>
+				<TextBox x:Name="TxtPrompt"
+						 Background="#33FFFFFF" Foreground="{StaticResource TextPrimaryBrush}"
+						 BorderBrush="#44FFFFFF" BorderThickness="1"
+						 FontFamily="Segoe UI" FontSize="13"
+						 Padding="8,5" Height="60"
+						 TextWrapping="Wrap" AcceptsReturn="True"
+						 CaretBrush="White"
+						 VerticalScrollBarVisibility="Auto"/>
+			</StackPanel>
+
+			<!-- Hotkey display (read-only info for now) -->
+			<StackPanel Grid.Row="8">
+				<TextBlock Text="Push-to-talk hotkey"
+						   Foreground="{StaticResource TextSecondaryBrush}"
+						   FontSize="11" FontFamily="Segoe UI" Margin="0,0,0,4"/>
+				<TextBlock Text="Left Ctrl + Left Win  (hold to record)"
+						   Foreground="{StaticResource TextPrimaryBrush}"
+						   FontSize="13" FontFamily="Segoe UI"/>
+			</StackPanel>
+
+			<!-- History size -->
+			<StackPanel Grid.Row="10">
+				<TextBlock Foreground="{StaticResource TextSecondaryBrush}"
+						   FontSize="11" FontFamily="Segoe UI" Margin="0,0,0,4">
+					<Run Text="History size: "/>
+					<Run x:Name="HistorySizeLabel" Text="30"/>
+				</TextBlock>
+				<Slider x:Name="SliderHistory"
+						Minimum="5" Maximum="100" TickFrequency="5"
+						IsSnapToTickEnabled="True"
+						Foreground="{StaticResource AccentBrush}"
+						ValueChanged="SliderHistory_ValueChanged"/>
+			</StackPanel>
+
+			<!-- Action buttons -->
+			<StackPanel Grid.Row="12" Orientation="Horizontal" HorizontalAlignment="Right">
+				<Button Style="{StaticResource IconButton}"
+						Content="Cancel"
+						Margin="0,0,8,0"
+						Click="BtnCancel_Click"/>
+				<Button x:Name="BtnSave"
+						Style="{StaticResource IconButton}"
+						Content="Save"
+						Background="{StaticResource AccentBrush}"
+						Foreground="White"
+						Click="BtnSave_Click"/>
+			</StackPanel>
+		</Grid>
+	</Border>
+</Window>

@@ -1,0 +1,9 @@
+{
+  "ModelPath": "models/ggml-large-v2.bin",
+  "Language": "auto",
+  "Prompt": "",
+  "HotkeyModifiers": 10,
+  "HistorySize": 30,
+  "WindowLeft": -1,
+  "WindowTop": -1
+}
