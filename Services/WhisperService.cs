@@ -4,8 +4,7 @@ using Whisper.net.Ggml;
 
 namespace WhisperWriter.Services;
 
-public enum TranscriptionState
-{
+public enum TranscriptionState {
 	Idle,
 	Loading,
 	Transcribing,
@@ -13,8 +12,7 @@ public enum TranscriptionState
 	Error,
 }
 
-public sealed class WhisperService : IAsyncDisposable
-{
+public sealed class WhisperService: IAsyncDisposable {
 	private WhisperFactory? _factory;
 	private bool _initialized;
 
@@ -24,21 +22,17 @@ public sealed class WhisperService : IAsyncDisposable
 	/// Initializes the Whisper model from disk. Call once at startup.
 	/// Prefers CUDA; falls back to CPU automatically via Whisper.net.Runtime.Cuda.
 	/// </summary>
-	public async Task InitializeAsync(string modelPath)
-	{
+	public async Task InitializeAsync (string modelPath) {
 		StateChanged?.Invoke(TranscriptionState.Loading, "Loading model…");
 
-		try
-		{
+		try {
 			// Download model if missing
-			if (!File.Exists(modelPath))
-			{
+			if (!File.Exists(modelPath)) {
 				var dir = Path.GetDirectoryName(modelPath)!;
 				Directory.CreateDirectory(dir);
 				StateChanged?.Invoke(TranscriptionState.Loading, "Downloading model…");
 				await WhisperGgmlDownloader.GetGgmlModelAsync(GgmlType.Medium, QuantizationType.NoQuantization)
-					.ContinueWith(async t =>
-					{
+					.ContinueWith(async t => {
 						await using var src = await t;
 						await using var dst = File.Create(modelPath);
 						await src.CopyToAsync(dst);
@@ -48,9 +42,7 @@ public sealed class WhisperService : IAsyncDisposable
 			_factory = WhisperFactory.FromPath(modelPath);
 			_initialized = true;
 			StateChanged?.Invoke(TranscriptionState.Idle, "Ready");
-		}
-		catch (Exception ex)
-		{
+		} catch (Exception ex) {
 			_initialized = false;
 			_factory = null;
 			LogService.Error("Failed to load Whisper model", ex);
@@ -62,8 +54,7 @@ public sealed class WhisperService : IAsyncDisposable
 	/// Transcribes the given WAV bytes (16 kHz mono PCM).
 	/// Returns the transcribed text, or throws on error.
 	/// </summary>
-	public async Task<string> TranscribeAsync(byte[] wavBytes, string language, string prompt)
-	{
+	public async Task<string> TranscribeAsync (byte[] wavBytes, string language, string prompt) {
 		if (!_initialized || _factory == null)
 			throw new InvalidOperationException("Model is not loaded. Check the model path in Settings.");
 
@@ -96,8 +87,7 @@ public sealed class WhisperService : IAsyncDisposable
 		return result;
 	}
 
-	public async ValueTask DisposeAsync()
-	{
+	public async ValueTask DisposeAsync () {
 		_factory?.Dispose();
 		await ValueTask.CompletedTask;
 	}

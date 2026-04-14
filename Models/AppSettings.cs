@@ -1,7 +1,6 @@
 namespace WhisperWriter.Models;
 
-public class AppSettings
-{
+public class AppSettings {
 	// Path to the ggml model file
 	public string ModelPath { get; set; } = "models/ggml-large-v2.bin";
 
@@ -23,8 +22,7 @@ public class AppSettings
 }
 
 [Flags]
-public enum HotkeyModifiers
-{
+public enum HotkeyModifiers {
 	None = 0,
 	Alt = 0x0001,
 	Control = 0x0002,

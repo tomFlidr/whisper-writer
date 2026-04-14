@@ -8,8 +8,7 @@ namespace WhisperWriter.Services;
 /// Call StartRecording() / StopRecording() around the push-to-talk period.
 /// GetWavBytes() returns the complete 16 kHz mono WAV suitable for Whisper.
 /// </summary>
-public sealed class AudioRecorder : IDisposable
-{
+public sealed class AudioRecorder: IDisposable {
 	private const int SampleRate = 16000;
 	private const int Channels = 1;
 	private const int BitsPerSample = 16;
@@ -23,18 +22,15 @@ public sealed class AudioRecorder : IDisposable
 	// Fires periodically with the current amplitude (0–1) for the VU meter
 	public event Action<float>? AmplitudeChanged;
 
-	public void StartRecording()
-	{
-		lock (_lock)
-		{
+	public void StartRecording () {
+		lock (_lock) {
 			if (_recording) return;
 
 			_buffer = new MemoryStream();
 			var format = new WaveFormat(SampleRate, BitsPerSample, Channels);
 			_writer = new WaveFileWriter(_buffer, format);
 
-			_waveIn = new WaveInEvent
-			{
+			_waveIn = new WaveInEvent {
 				WaveFormat = format,
 				BufferMilliseconds = 50,
 			};
@@ -44,10 +40,8 @@ public sealed class AudioRecorder : IDisposable
 		}
 	}
 
-	public byte[]? StopRecording()
-	{
-		lock (_lock)
-		{
+	public byte[]? StopRecording () {
+		lock (_lock) {
 			if (!_recording) return null;
 			_recording = false;
 
@@ -67,10 +61,8 @@ public sealed class AudioRecorder : IDisposable
 		}
 	}
 
-	private void OnDataAvailable(object? sender, WaveInEventArgs e)
-	{
-		lock (_lock)
-		{
+	private void OnDataAvailable (object? sender, WaveInEventArgs e) {
+		lock (_lock) {
 			if (!_recording || _writer == null) return;
 			_writer.Write(e.Buffer, 0, e.BytesRecorded);
 
@@ -80,13 +72,11 @@ public sealed class AudioRecorder : IDisposable
 		}
 	}
 
-	private static float CalculateRms(byte[] buffer, int length)
-	{
+	private static float CalculateRms (byte[] buffer, int length) {
 		if (length < 2) return 0f;
 		double sum = 0;
 		int samples = length / 2;
-		for (int i = 0; i < length - 1; i += 2)
-		{
+		for (int i = 0; i < length - 1; i += 2) {
 			short sample = (short)(buffer[i] | (buffer[i + 1] << 8));
 			double norm = sample / 32768.0;
 			sum += norm * norm;
@@ -94,8 +84,7 @@ public sealed class AudioRecorder : IDisposable
 		return (float)Math.Sqrt(sum / samples);
 	}
 
-	public void Dispose()
-	{
+	public void Dispose () {
 		StopRecording();
 	}
 }

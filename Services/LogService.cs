@@ -9,13 +9,11 @@ namespace WhisperWriter.Services;
 /// Writes daily rolling log files to the "logs" folder next to the exe.
 /// Call LogService.Initialize() once at startup before using Log methods.
 /// </summary>
-public static class LogService
-{
+public static class LogService {
 	/// <summary>Directory where log files are written.</summary>
 	public static string LogDirectory { get; } = Path.Combine(AppContext.BaseDirectory, "logs");
 
-	public static void Initialize()
-	{
+	public static void Initialize () {
 		Directory.CreateDirectory(LogDirectory);
 
 		Log.Logger = new LoggerConfiguration()
@@ -30,21 +28,19 @@ public static class LogService
 		Log.Information("WhisperWriter starting up");
 	}
 
-	public static void Info(string message) =>
+	public static void Info (string message) =>
 		Log.Information(message);
 
-	public static void Warning(string message, Exception? ex = null)
-	{
+	public static void Warning (string message, Exception? ex = null) {
 		if (ex is null) Log.Warning(message);
 		else Log.Warning(ex, message);
 	}
 
-	public static void Error(string message, Exception? ex = null)
-	{
+	public static void Error (string message, Exception? ex = null) {
 		if (ex is null) Log.Error(message);
 		else Log.Error(ex, message);
 	}
 
-	public static void CloseAndFlush() =>
+	public static void CloseAndFlush () =>
 		Log.CloseAndFlush();
 }

@@ -11,8 +11,7 @@ using WpfColor = System.Windows.Media.Color;
 
 namespace WhisperWriter.Views;
 
-public partial class MainWindow : Window
-{
+public partial class MainWindow : Window {
 	private readonly AudioRecorder _recorder = new();
 	private readonly HotkeyService _hotkey;
 	private bool _allowClose;
@@ -28,8 +27,7 @@ public partial class MainWindow : Window
 	/// </summary>
 	private const double EtaFactor = 0.35;
 
-	public MainWindow()
-	{
+	public MainWindow () {
 		InitializeComponent();
 		PositionWindow();
 
@@ -50,16 +48,12 @@ public partial class MainWindow : Window
 		anim.Begin(this);
 	}
 
-	private void PositionWindow()
-	{
+	private void PositionWindow () {
 		var s = App.SettingsService.Settings;
-		if (s.WindowLeft >= 0 && s.WindowTop >= 0)
-		{
+		if (s.WindowLeft >= 0 && s.WindowTop >= 0) {
 			Left = s.WindowLeft;
 			Top = s.WindowTop;
-		}
-		else
-		{
+		} else {
 			// Default: bottom-center of primary screen
 			Left = (SystemParameters.PrimaryScreenWidth - 280) / 2;
 			Top = SystemParameters.PrimaryScreenHeight - 80;
@@ -67,8 +61,7 @@ public partial class MainWindow : Window
 	}
 
 	// ── Drag to reposition ───────────────────────────────────────────────────
-	private void Border_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-	{
+	private void Border_MouseLeftButtonDown (object sender, System.Windows.Input.MouseButtonEventArgs e) {
 		DragMove();
 		App.SettingsService.Settings.WindowLeft = Left;
 		App.SettingsService.Settings.WindowTop = Top;
@@ -76,25 +69,22 @@ public partial class MainWindow : Window
 	}
 
 	// ── Push-to-talk ─────────────────────────────────────────────────────────
-	private void OnPttStarted()
-	{
+	private void OnPttStarted () {
 		TextInjector.SaveFocus();
 
-		Dispatcher.Invoke(() =>
-		{
+		Dispatcher.Invoke(() => {
 			SetRecordingState(true);
 			_recorder.StartRecording();
 		});
 	}
 
-	private void OnPttStopped()
-	{
-		Dispatcher.Invoke(async () =>
-		{
+	private void OnPttStopped () {
+		Dispatcher.Invoke(async () => {
 			var wav = _recorder.StopRecording();
 			SetRecordingState(false);
 
-			if (wav == null || wav.Length < 1000) return;
+			if (wav == null || wav.Length < 1000)
+				return;
 
 			// Estimate ETA from recorded audio length
 			// WAV bytes: 16000 samples/s × 2 bytes = 32000 bytes/s
@@ -102,8 +92,7 @@ public partial class MainWindow : Window
 			StartEtaCountdown(recordedSeconds * EtaFactor);
 
 			var settings = App.SettingsService.Settings;
-			try
-			{
+			try {
 				var sw = System.Diagnostics.Stopwatch.StartNew();
 				var text = await App.WhisperService.TranscribeAsync(
 					wav, settings.Language, settings.Prompt);
@@ -111,18 +100,14 @@ public partial class MainWindow : Window
 
 				StopEtaCountdown();
 
-				if (!string.IsNullOrWhiteSpace(text))
-				{
-					App.History.Add(new TranscriptionEntry
-					{
+				if (!string.IsNullOrWhiteSpace(text)) {
+					App.History.Add(new TranscriptionEntry {
 						Text = text,
 						Duration = sw.Elapsed,
 					});
 					TextInjector.InjectText(text);
 				}
-			}
-			catch (Exception ex)
-			{
+			} catch (Exception ex) {
 				StopEtaCountdown();
 				LogService.Error("Transcription failed", ex);
 				SetStatus($"Error: {ex.Message}", isError: true);
@@ -131,8 +116,7 @@ public partial class MainWindow : Window
 	}
 
 	// ── ETA countdown ─────────────────────────────────────────────────────────
-	private void StartEtaCountdown(double estimatedSeconds)
-	{
+	private void StartEtaCountdown (double estimatedSeconds) {
 		_etaSeconds = Math.Max(estimatedSeconds, 1.0);
 		_transcribeStarted = DateTime.UtcNow;
 		EtaLabel.Visibility = Visibility.Visible;
@@ -140,46 +124,40 @@ public partial class MainWindow : Window
 		_etaTimer.Start();
 	}
 
-	private void StopEtaCountdown()
-	{
+	private void StopEtaCountdown () {
 		_etaTimer.Stop();
 		EtaLabel.Visibility = Visibility.Collapsed;
 	}
 
-	private void OnEtaTick(object? sender, EventArgs e)
-	{
+	private void OnEtaTick (object? sender, EventArgs e) {
 		UpdateEtaLabel();
 	}
 
-	private void UpdateEtaLabel()
-	{
+	private void UpdateEtaLabel () {
 		double elapsed = (DateTime.UtcNow - _transcribeStarted).TotalSeconds;
 		double remaining = _etaSeconds - elapsed;
-		if (remaining < 0) remaining = 0;
+		if (remaining < 0)
+			remaining = 0;
 
 		int secs = (int)Math.Ceiling(remaining);
 		EtaLabel.Text = $"~{secs}s";
 	}
 
 	// ── Amplitude VU meter ───────────────────────────────────────────────────
-	private void OnAmplitude(float rms)
-	{
-		Dispatcher.Invoke(() =>
-		{
+	private void OnAmplitude (float rms) {
+		Dispatcher.Invoke(() => {
 			double maxWidth = AmplitudeRow.ActualWidth;
-			if (maxWidth <= 0) maxWidth = 160;
+			if (maxWidth <= 0)
+				maxWidth = 160;
 			double barWidth = Math.Min(rms * 4.0, 1.0) * maxWidth;
 			AmplitudeBar.Width = barWidth;
 		});
 	}
 
 	// ── Whisper state callback ────────────────────────────────────────────────
-	private void OnWhisperState(TranscriptionState state, string msg)
-	{
-		Dispatcher.Invoke(() =>
-		{
-			switch (state)
-			{
+	private void OnWhisperState (TranscriptionState state, string msg) {
+		Dispatcher.Invoke(() => {
+			switch (state) {
 				case TranscriptionState.Loading:
 					SetStatus(msg);
 					RecDot.Fill = new SolidColorBrush(WpfColor.FromRgb(0xFF, 0xCC, 0x00));
@@ -205,18 +183,14 @@ public partial class MainWindow : Window
 	}
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
-	private void SetRecordingState(bool recording)
-	{
+	private void SetRecordingState (bool recording) {
 		var pulse = (Storyboard)Resources["PulseAnim"];
-		if (recording)
-		{
+		if (recording) {
 			RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentRecordingBrush"];
 			pulse.Begin(this, true);
 			AmplitudeRow.Visibility = Visibility.Visible;
 			SetStatus("Recording…");
-		}
-		else
-		{
+		} else {
 			pulse.Stop(this);
 			RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
 			AmplitudeRow.Visibility = Visibility.Collapsed;
@@ -224,8 +198,7 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private void SetStatus(string text, bool isError = false)
-	{
+	private void SetStatus (string text, bool isError = false) {
 		StatusLabel.Text = text;
 		StatusLabel.Foreground = isError
 			? (SolidColorBrush)WpfApp.Current.Resources["AccentRecordingBrush"]
@@ -233,18 +206,15 @@ public partial class MainWindow : Window
 	}
 
 	// ── Window lifecycle ──────────────────────────────────────────────────────
-	protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
-	{
-		if (!_allowClose)
-		{
+	protected override void OnClosing (System.ComponentModel.CancelEventArgs e) {
+		if (!_allowClose) {
 			e.Cancel = true;
 			Hide();
 		}
 		base.OnClosing(e);
 	}
 
-	public void ForceClose()
-	{
+	public void ForceClose () {
 		_allowClose = true;
 		_etaTimer.Stop();
 		_hotkey.Dispose();

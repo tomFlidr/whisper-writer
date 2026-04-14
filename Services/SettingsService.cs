@@ -4,48 +4,37 @@ using WhisperWriter.Models;
 
 namespace WhisperWriter.Services;
 
-public class SettingsService
-{
+public class SettingsService {
 	private static readonly string _settingsPath = Path.Combine(
 		AppContext.BaseDirectory, "settings.json");
 
-	private static readonly JsonSerializerOptions _jsonOptions = new()
-	{
+	private static readonly JsonSerializerOptions _jsonOptions = new() {
 		WriteIndented = true,
 	};
 
 	public AppSettings Settings { get; private set; } = new();
 
-	public void Load()
-	{
-		if (!File.Exists(_settingsPath))
-		{
+	public void Load () {
+		if (!File.Exists(_settingsPath)) {
 			Settings = new AppSettings();
 			Save();
 			return;
 		}
 
-		try
-		{
+		try {
 			var json = File.ReadAllText(_settingsPath);
 			Settings = JsonSerializer.Deserialize<AppSettings>(json, _jsonOptions) ?? new AppSettings();
-		}
-		catch (Exception ex)
-		{
+		} catch (Exception ex) {
 			LogService.Error("Failed to load settings, using defaults", ex);
 			Settings = new AppSettings();
 		}
 	}
 
-	public void Save()
-	{
-		try
-		{
+	public void Save () {
+		try {
 			var json = JsonSerializer.Serialize(Settings, _jsonOptions);
 			File.WriteAllText(_settingsPath, json);
-		}
-		catch (Exception ex)
-		{
+		} catch (Exception ex) {
 			LogService.Error("Failed to save settings", ex);
 		}
 	}

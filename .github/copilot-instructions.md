@@ -222,7 +222,7 @@ Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe
 - **`WithGreedySamplingStrategy()` API**: tato metoda vrací jiný interface (`IWhisperSamplingStrategyBuilder`) bez `WithPrompt`/`Build`. Nelze řetězit. Aktuálně se nepoužívá.
 - **Ambiguous reference `System.Windows` vs `System.Windows.Forms`**: řešeno aliasem `using WpfApp = System.Windows.Application`.
 - **Chyba "Failed to load the whisper model" při puštění PTT**: `InitializeAsync` neobsahoval try/catch, výjimka z `WhisperFactory.FromPath` se tichce ztratila, `_initialized` zůstal `false`. Opraveno: celý `InitializeAsync` zabalen do try/catch, chyba se zobrazí přes `StateChanged(Error, "Model load failed: …")`. Zároveň `RecDot` se správně zčervená při chybovém stavu.
-- **CRLF v C# souborech**: `LogService.cs`, `WhisperService.cs` a `AssemblyInfo.cs` měly konce řádků `\r\n`. Opraveno na `\n` přes Node.js. `.editorconfig` doplněn o kompletní C# Allman style pravidla (`csharp_new_line_before_open_brace = all` atd.) – VS Ctrl+K+D teď bude formátovat konzistentně.
+- **CRLF v C# souborech**: `LogService.cs`, `WhisperService.cs` a `AssemblyInfo.cs` měly konce řádků `\r\n`. Opraveno na `\n` přes Node.js. `.editorconfig` doplněn o kompletní C# K&R style pravidla (`csharp_new_line_before_open_brace = none` atd.). Veškerý kód projektu přeformátován na K&R styl (otevírací `{` na konci řádku).
 - **Špatné odsazení `case TranscriptionState.Error:` v MainWindow.xaml.cs**: chyběl jeden tab. Opraveno.
 
 ---
@@ -252,23 +252,11 @@ insert_final_newline = false
 trim_trailing_whitespace = false
 
 [*.cs]
-# Allman brace style - opening brace on its own line (same as VS Ctrl+K+D default)
-csharp_new_line_before_open_brace = all
-csharp_new_line_before_else = true
-csharp_new_line_before_catch = true
-csharp_new_line_before_finally = true
-csharp_new_line_before_members_in_object_initializers = true
-csharp_new_line_before_members_in_anonymous_types = true
-csharp_new_line_between_query_expression_clauses = true
-
-# Indentation
-csharp_indent_case_contents = true
-csharp_indent_switch_labels = true
-csharp_indent_labels = one_less_than_current
-
-# Spacing
-csharp_space_after_cast = false
-csharp_space_after_keywords_in_control_flow_statements = true
+# K&R brace style - opening brace on the same line as the statement
+csharp_new_line_before_open_brace = none
+csharp_new_line_before_else = false
+csharp_new_line_before_catch = false
+csharp_new_line_before_finally = false
 ...
 ```
 
@@ -278,7 +266,8 @@ Klíčové body:
 - Konce řádků: **LF** (`\n`), ne CRLF.
 - Žádný prázdný řádek na konci souboru (`insert_final_newline = false`).
 - Trailing whitespace se neořezává (`trim_trailing_whitespace = false`).
-- C# styl: **Allman** – otevírací `{` vždy na vlastním řádku (odpovídá VS Ctrl+K+D).
+- C# styl: **K&R** – otevírací `{` vždy na **konci řádku** (ne Allman).
+- **Pozor**: VS 2022 Ctrl+K+D ignoruje `csharp_new_line_before_open_brace = none` a vždy dává `{` na nový řádek (Allman). Formátování kódu proto nelze opravit přes Ctrl+K+D – K&R je udržován ručně.
 
 ---
 
