@@ -2,8 +2,10 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
-using WhisperWriter.Models;
+using WhisperWriter.Util;
 using WhisperWriter.Services;
+using WhisperWriter.Util;
+
 
 // Alias to avoid ambiguity with System.Windows.Forms.Application
 using WpfApp = System.Windows.Application;

@@ -46,13 +46,11 @@ D:\llms\whisper-writer\
 ├── WhisperWriter.csproj
 ├── WhisperWriter.pfx                  ← Authenticode certificate (self-signed, password 1234, in .gitignore)
 ├── WhisperWriter.snk                  ← Strong Name key (in .gitignore)
+├── download-models.ps1                ← interactive PowerShell script: download GGML models to models\
 ├── App.xaml                           ← global WPF resources, styles
 ├── App.xaml.cs                        ← startup, tray icon, static services
 ├── AssemblyInfo.cs
 ├── settings.json                      ← default configuration (copied to bin on build)
-├── Models\
-│   ├── AppSettings.cs                 ← POCO configuration (serialized to settings.json)
-│   └── TranscriptionHistory.cs        ← ObservableCollection<TranscriptionEntry>
 ├── Services\
 │   ├── AudioRecorder.cs               ← NAudio, 16 kHz mono WAV, RMS amplitude event
 │   ├── HotkeyService.cs               ← polling GetAsyncKeyState, 20 ms interval
@@ -60,6 +58,11 @@ D:\llms\whisper-writer\
 │   ├── SettingsService.cs             ← JSON load/save to BaseDirectory/settings.json
 │   ├── TextInjector.cs                ← SaveFocus() + SendInput Unicode
 │   └── WhisperService.cs              ← WhisperFactory, TranscribeAsync, CUDA
+├── Util\
+│   ├── AppSettings.cs                 ← POCO configuration (serialized to settings.json)
+│   ├── HotkeyModifiers.cs             ← [Flags] enum: None, Alt, Control, Shift, Win
+│   ├── TranscriptionEntry.cs          ← data record: Timestamp, Text, Duration
+│   └── TranscriptionHistory.cs        ← ObservableCollection<TranscriptionEntry>, thread-safe Add()
 ├── Views\
 │   ├── MainWindow.xaml/.cs            ← floating pill widget, PTT logic, VU meter, ETA
 │   ├── HistoryWindow.xaml/.cs         ← transcription list, copy to clipboard
@@ -94,7 +97,8 @@ D:\llms\whisper-writer\
 - `WhisperService.InitializeAsync(modelPath)` starts asynchronously in the background on startup.
 - Global exception handling: `DispatcherUnhandledException` (UI thread) + `AppDomain.CurrentDomain.UnhandledException` (background threads) – both logged via `LogService`.
 
-### `Models/AppSettings.cs`
+### `Util/AppSettings.cs`
+- namespace `WhisperWriter.Util`
 ```csharp
 public class AppSettings
 {
@@ -106,13 +110,18 @@ public class AppSettings
     public double WindowLeft      { get; set; } = -1;  // -1 = default bottom-center
     public double WindowTop       { get; set; } = -1;
 }
-
-[Flags]
-public enum HotkeyModifiers { None=0, Alt=1, Control=2, Shift=4, Win=8 }
 ```
 
-### `Models/TranscriptionHistory.cs`
-- `TranscriptionEntry`: `Timestamp`, `Text`, `Duration` (TimeSpan – transcription time).
+### `Util/HotkeyModifiers.cs`
+- namespace `WhisperWriter.Util`
+- `[Flags]` enum: `None=0`, `Alt=0x0001`, `Control=0x0002`, `Shift=0x0004`, `Win=0x0008`.
+
+### `Util/TranscriptionEntry.cs`
+- namespace `WhisperWriter.Util`
+- Record-like class: `Timestamp` (DateTime), `Text` (string), `Duration` (TimeSpan – transcription time).
+
+### `Util/TranscriptionHistory.cs`
+- namespace `WhisperWriter.Util`
 - `TranscriptionHistory.Add()`: thread-safe, inserts at index 0 (newest on top), trims to `MaxSize`.
 
 ### `Services/LogService.cs`
@@ -193,6 +202,18 @@ public enum HotkeyModifiers { None=0, Alt=1, Control=2, Shift=4, Win=8 }
 - **Certificate** (`WhisperWriter.pfx`): self-signed, CN=Tomáš Flídr, valid 10 years (until 2036), stored in `Cert:\CurrentUser\My`.
 - Both files (`.pfx`, `.snk`) are in `.gitignore` – must not be committed.
 
+### `download-models.ps1`
+- Interactive PowerShell script (no external dependencies, runs on built-in Windows PowerShell 5.1+).
+- **Location**: project root, next to `WhisperWriter.csproj`. Should also be present next to the release `WhisperWriter.exe` in the ZIP.
+- **What it does**:
+  1. Shows a numbered table of all 12 GGML models (name, disk size, VRAM, description). Already-downloaded models are highlighted in green with `[downloaded]`.
+  2. User enters a selection: comma/space-separated numbers and/or ranges (e.g. `1-3,7`).
+  3. After confirmation, downloads missing files one by one via `System.Net.WebClient.DownloadFileTaskAsync` with live progress (`%`, MB received / MB total).
+  4. Downloads are written to a `.tmp` file first, then atomically renamed on success. Failed downloads clean up the `.tmp` file.
+  5. The `models\` folder is created automatically if it does not exist.
+- **Source URL base**: `https://huggingface.co/ggerganov/whisper.cpp/resolve/main`
+- **Execution policy**: if blocked, user must run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+
 ---
 
 ## 5. Build and run
@@ -222,6 +243,7 @@ Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe
 
 ### Resolved issues (for context)
 
+- **`Models/` folder renamed to `Util/`, classes split into separate files**: C# source files (`AppSettings.cs`, `HotkeyModifiers.cs`, `TranscriptionEntry.cs`, `TranscriptionHistory.cs`) moved from `Models\` to `Util\`. Each class is now in its own file. All namespaces updated from `WhisperWriter.Models` to `WhisperWriter.Util`. All `using WhisperWriter.Models` directives updated accordingly in `SettingsService.cs`, `HotkeyService.cs`, and `MainWindow.xaml.cs`. The `models\` directory (lowercase) remains as the data folder for Whisper `.bin` weight files only.
 - **Translation instead of transcription**: `WithTranslate()` must not be called. Without an explicit language, whisper.cpp may translate. Fixed: always use `WithLanguage(effectiveLanguage)`, `"auto"` → `"cs"`.
 - **`WithGreedySamplingStrategy()` API**: this method returns a different interface (`IWhisperSamplingStrategyBuilder`) without `WithPrompt`/`Build`. Cannot be chained. Not used currently.
 - **Ambiguous reference `System.Windows` vs `System.Windows.Forms`**: resolved with alias `using WpfApp = System.Windows.Application`.

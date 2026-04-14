@@ -1,6 +1,6 @@
 using System.IO;
 using System.Text.Json;
-using WhisperWriter.Models;
+using WhisperWriter.Util;
 
 namespace WhisperWriter.Services;
 

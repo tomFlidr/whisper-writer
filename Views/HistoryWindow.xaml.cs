@@ -1,6 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
-using WhisperWriter.Models;
+using WhisperWriter.Util;
 
 namespace WhisperWriter.Views;
 

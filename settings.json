@@ -1,5 +1,5 @@
 {
-  "ModelPath": "models/ggml-large-v2.bin",
+  "ModelPath": "models/ggml-medium.bin",
   "Language": "auto",
   "Prompt": "",
   "HotkeyModifiers": 10,

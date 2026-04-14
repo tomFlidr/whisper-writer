@@ -1,4 +1,4 @@
-namespace WhisperWriter.Models;
+namespace WhisperWriter.Util;
 
 public class AppSettings {
 	// Path to the ggml model file
@@ -19,13 +19,4 @@ public class AppSettings {
 	// Widget position on screen (negative = use default bottom-center)
 	public double WindowLeft { get; set; } = -1;
 	public double WindowTop { get; set; } = -1;
-}
-
-[Flags]
-public enum HotkeyModifiers {
-	None = 0,
-	Alt = 0x0001,
-	Control = 0x0002,
-	Shift = 0x0004,
-	Win = 0x0008,
 }

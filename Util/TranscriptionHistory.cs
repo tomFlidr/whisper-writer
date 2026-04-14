@@ -1,12 +1,6 @@
 using System.Collections.ObjectModel;
 
-namespace WhisperWriter.Models;
-
-public class TranscriptionEntry {
-	public DateTime Timestamp { get; init; } = DateTime.Now;
-	public string Text { get; init; } = string.Empty;
-	public TimeSpan Duration { get; init; }
-}
+namespace WhisperWriter.Util;
 
 public class TranscriptionHistory {
 	private readonly object _lock = new();

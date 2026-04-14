@@ -1,13 +1,14 @@
 using System.Windows;
 using System.Windows.Forms;
 using WhisperWriter.Services;
+using WhisperWriter.Util;
 using WhisperWriter.Views;
 
 namespace WhisperWriter;
 
 public partial class App : System.Windows.Application {
 	public static SettingsService SettingsService { get; } = new();
-	public static Models.TranscriptionHistory History { get; } = new();
+	public static TranscriptionHistory History { get; } = new();
 	public static WhisperService WhisperService { get; } = new();
 
 	private NotifyIcon? _trayIcon;

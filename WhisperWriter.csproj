@@ -24,6 +24,7 @@
 		<Content Include="models\**\*">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
+		<Content Remove="models\TranscriptionHistory.cs" />
 		<!-- Default settings – copied only if not already present in output -->
 		<Content Include="settings.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -54,6 +55,15 @@
 		<PackageReference Include="NAudio" Version="2.2.1" />
 		<!-- JSON settings -->
 		<PackageReference Include="System.Text.Json" Version="8.0.5" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Compile Update="Util\AppSettings.cs">
+	    <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+	  </Compile>
+	  <Compile Update="Util\TranscriptionHistory.cs">
+	    <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+	  </Compile>
 	</ItemGroup>
 
 </Project>
