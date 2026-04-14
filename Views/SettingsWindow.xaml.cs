@@ -14,6 +14,13 @@ public partial class SettingsWindow : Window {
 	private void LoadSettings () {
 		var s = App.SettingsService.Settings;
 		foreach (ComboBoxItem item in CmbModelPath.Items) {
+			var relativePath = item.Tag as string ?? string.Empty;
+			var fullPath = System.IO.Path.Combine(AppContext.BaseDirectory, relativePath);
+			var downloaded = System.IO.File.Exists(fullPath);
+			item.IsEnabled = downloaded;
+			item.Opacity = downloaded ? 1.0 : 0.4;
+		}
+		foreach (ComboBoxItem item in CmbModelPath.Items) {
 			if (item.Tag as string == s.ModelPath) {
 				CmbModelPath.SelectedItem = item;
 				break;

@@ -18,6 +18,15 @@ public partial class App : System.Windows.Application {
 	protected override async void OnStartup (StartupEventArgs e) {
 		base.OnStartup(e);
 
+		// Add the CUDA runtime folder (next to ggml-cuda-whisper.dll) to the process PATH
+		// so the OS loader finds cudart64_13.dll / cublas64_13.dll without requiring
+		// a system-wide CUDA installation or changes to the user's environment.
+		var cudaRuntimeDir = System.IO.Path.Combine(
+			AppContext.BaseDirectory, "runtimes", "cuda", "win-x64");
+		var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+		if (!currentPath.Contains(cudaRuntimeDir, StringComparison.OrdinalIgnoreCase))
+			Environment.SetEnvironmentVariable("PATH", cudaRuntimeDir + ";" + currentPath);
+
 		LogService.Initialize();
 
 		// Catch any unhandled WPF dispatcher exceptions

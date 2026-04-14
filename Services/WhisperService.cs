@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using Whisper.net;
 using Whisper.net.Ggml;
 
@@ -19,11 +20,40 @@ public sealed class WhisperService: IAsyncDisposable {
 	public event Action<TranscriptionState, string>? StateChanged;
 
 	/// <summary>
+	/// Probes whether CUDA runtime DLLs required by ggml-cuda-whisper.dll are loadable.
+	/// Returns true = CUDA will be used; false = CPU fallback (DLLs missing).
+	/// </summary>
+	public static bool IsCudaAvailable () {
+		// ggml-cuda-whisper.dll (Whisper.net.Runtime.Cuda 1.9+) is built against CUDA 13.
+		// Both runtime DLLs must be resolvable by the OS loader.
+		foreach (var dll in new[] { "cudart64_13.dll", "cublas64_13.dll" }) {
+			var h = NativeMethods.LoadLibraryEx(dll, IntPtr.Zero, NativeMethods.LOAD_LIBRARY_AS_DATAFILE);
+			if (h == IntPtr.Zero)
+				return false;
+			NativeMethods.FreeLibrary(h);
+		}
+		return true;
+	}
+
+	private static class NativeMethods {
+		internal const uint LOAD_LIBRARY_AS_DATAFILE = 0x00000002;
+		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+		internal static extern IntPtr LoadLibraryEx (string lpFileName, IntPtr hFile, uint dwFlags);
+		[DllImport("kernel32.dll", SetLastError = true)]
+		internal static extern bool FreeLibrary (IntPtr hModule);
+	}
+
+	/// <summary>
 	/// Initializes the Whisper model from disk. Call once at startup.
 	/// Prefers CUDA; falls back to CPU automatically via Whisper.net.Runtime.Cuda.
 	/// </summary>
 	public async Task InitializeAsync (string modelPath) {
 		StateChanged?.Invoke(TranscriptionState.Loading, "Loading model…");
+
+		var cudaAvailable = IsCudaAvailable();
+		LogService.Info(cudaAvailable
+			? "CUDA probe: cudart64_13.dll + cublas64_13.dll found — GPU will be used"
+			: "CUDA probe: cudart64_13.dll or cublas64_13.dll NOT found — falling back to CPU");
 
 		try {
 			// Download model if missing
@@ -31,7 +61,9 @@ public sealed class WhisperService: IAsyncDisposable {
 				var dir = Path.GetDirectoryName(modelPath)!;
 				Directory.CreateDirectory(dir);
 				StateChanged?.Invoke(TranscriptionState.Loading, "Downloading model…");
-				await WhisperGgmlDownloader.GetGgmlModelAsync(GgmlType.Medium, QuantizationType.NoQuantization)
+				using var httpClient = new System.Net.Http.HttpClient();
+				var downloader = new WhisperGgmlDownloader(httpClient);
+				await downloader.GetGgmlModelAsync(GgmlType.Medium, QuantizationType.NoQuantization)
 					.ContinueWith(async t => {
 						await using var src = await t;
 						await using var dst = File.Create(modelPath);

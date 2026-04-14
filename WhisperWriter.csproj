@@ -44,17 +44,31 @@
 		<Exec Command="&quot;$(SignTool)&quot; sign /f &quot;$(PfxFile)&quot; /p &quot;$(PfxPassword)&quot; /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com &quot;$(OutputExe)&quot;" ContinueOnError="true" />
 	</Target>
 
+	<!-- Copy CUDA 13 runtime DLLs next to ggml-cuda-whisper.dll so the OS loader finds them. -->
+	<Target Name="CopyCudaRuntimeDlls" AfterTargets="Build">
+		<PropertyGroup>
+			<CudaBinDir>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\x64</CudaBinDir>
+			<CudaTargetDir>$(OutputPath)runtimes\cuda\win-x64</CudaTargetDir>
+		</PropertyGroup>
+		<ItemGroup>
+			<CudaDll Include="$(CudaBinDir)\cublas64_13.dll" />
+			<CudaDll Include="$(CudaBinDir)\cublasLt64_13.dll" />
+			<CudaDll Include="$(CudaBinDir)\cudart64_13.dll" />
+		</ItemGroup>
+		<Copy SourceFiles="@(CudaDll)" DestinationFolder="$(CudaTargetDir)" SkipUnchangedFiles="true" ContinueOnError="true" />
+	</Target>
+
 	<ItemGroup>
 		<!-- Whisper inference via whisper.cpp bindings -->
 		<PackageReference Include="Serilog" Version="4.3.0" />
 		<PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
-		<PackageReference Include="Whisper.net" Version="1.7.2" />
-		<PackageReference Include="Whisper.net.Runtime" Version="1.7.2" />
-		<PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.7.2" />
+		<PackageReference Include="Whisper.net" Version="1.9.0" />
+		<PackageReference Include="Whisper.net.Runtime" Version="1.9.0" />
+		<PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.0" />
 		<!-- Audio capture -->
 		<PackageReference Include="NAudio" Version="2.2.1" />
-		<!-- JSON settings -->
-		<PackageReference Include="System.Text.Json" Version="8.0.5" />
+		<!-- JSON settings – version floor only, allow transitive upgrades from Whisper.net -->
+		<PackageReference Include="System.Text.Json" Version="8.0.5" VersionOverride="8.0.5" NoWarn="NU1605" />
 	</ItemGroup>
 
 	<ItemGroup>

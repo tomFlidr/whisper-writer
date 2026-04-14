@@ -58,6 +58,10 @@ public partial class MainWindow : Window {
 
 		_hotkey.Start();
 
+		// Show GPU/CPU backend info in status during startup
+		bool cuda = WhisperService.IsCudaAvailable();
+		SetStatus(cuda ? "Loading model… (GPU)" : "Loading model… (CPU — CUDA 13 DLLs missing)");
+
 		// Fade in
 		var anim = (Storyboard)Resources["FadeIn"];
 		anim.Begin(this);
@@ -207,7 +211,8 @@ public partial class MainWindow : Window {
 					RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentRecordingBrush"];
 					break;
 				default:
-					SetStatus("Ready  —  hold Ctrl+Win");
+					var backend = WhisperService.IsCudaAvailable() ? "GPU" : "CPU";
+					SetStatus($"Ready  —  hold Ctrl+Win  [{backend}]");
 					RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
 					break;
 			}
