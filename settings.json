@@ -3,7 +3,7 @@
   "Language": "auto",
   "Prompt": "Přepis mluvené češtiny, neformální styl, vulgarismy ponechej beze změny. IT termíny piš v angličtině (např. commit, pull request, merge, deploy, backend, frontend, API, Docker, branch, debug, framework, server, build, release, pipeline, dotnet). Nepřekládej, pouze přepisuj.",
   "HotkeyModifiers": 10,
-  "HistorySize": 30,
+  "HistorySize": 10,
   "WindowLeft": -1,
   "WindowTop": -1
 }
