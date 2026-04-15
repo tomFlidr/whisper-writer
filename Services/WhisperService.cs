@@ -53,6 +53,9 @@ public sealed class WhisperService: IAsyncDisposable {
 	// A file smaller than this is certainly truncated or corrupted.
 	private const long MinModelFileSizeBytes = 70 * 1024 * 1024; // 70 MB
 
+	/// <summary>Returns the number of CPU threads used for Whisper inference.</summary>
+	public static int GetInferenceThreadCount () => Math.Max(1, Environment.ProcessorCount - 2);
+
 	/// <summary>
 	/// Initializes the Whisper model from disk. Call once at startup.
 	/// Prefers CUDA; falls back to CPU automatically via Whisper.net.Runtime.Cuda.
@@ -124,7 +127,7 @@ public sealed class WhisperService: IAsyncDisposable {
 		try {
 			var builder = _factory.CreateBuilder()
 				.WithLanguage(effectiveLanguage)
-				.WithThreads(Math.Max(1, Environment.ProcessorCount - 2));
+				.WithThreads(GetInferenceThreadCount());
 
 			if (!string.IsNullOrEmpty(prompt))
 				builder = builder.WithPrompt(prompt);

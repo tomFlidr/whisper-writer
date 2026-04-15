@@ -10,6 +10,7 @@ public partial class App : System.Windows.Application {
 	public static SettingsService SettingsService { get; } = new();
 	public static TranscriptionHistory History { get; } = new();
 	public static WhisperService WhisperService { get; } = new();
+	public static EtaStatsService EtaStats { get; } = new();
 
 	private NotifyIcon? _trayIcon;
 	private MainWindow? _mainWindow;
@@ -43,6 +44,7 @@ public partial class App : System.Windows.Application {
 
 		SettingsService.Load();
 		History.MaxSize = SettingsService.Settings.HistorySize;
+		EtaStats.Initialize();
 
 		// Create the floating widget
 		_mainWindow = new MainWindow();
@@ -124,6 +126,7 @@ public partial class App : System.Windows.Application {
 
 	protected override void OnExit (ExitEventArgs e) {
 		_trayIcon?.Dispose();
+		EtaStats.Dispose();
 		LogService.CloseAndFlush();
 		base.OnExit(e);
 	}

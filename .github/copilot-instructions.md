@@ -24,10 +24,12 @@ No data leaves the computer. CUDA GPU acceleration is automatic.
 | Item | Value |
 |---|---|
 | Platform | Windows 10/11, .NET 8, WPF + WinForms (NotifyIcon) |
-| Project | `D:\llms\whisper-writer\WhisperWriter.csproj` |
+| Project | `D:\tec\cs\whisper-writer\WhisperWriter.csproj` |
 | GPU | NVIDIA Quadro T2000, 4 GB VRAM, CUDA 13.2, driver 595.71 |
 | Whisper.net | 1.9.0 (+ Runtime + Runtime.Cuda) |
 | NAudio | 2.2.1 |
+| Microsoft.Data.Sqlite | 8.0.0 |
+| System.Management | 8.0.0 |
 | System.Text.Json | 8.0.5 |
 | Serilog | 4.3.0 (+ Serilog.Sinks.File 6.0.0) |
 | Code language | C# 12, nullable enable, implicit usings, file-scoped namespaces |
@@ -39,7 +41,7 @@ No data leaves the computer. CUDA GPU acceleration is automatic.
 ## 3. Project structure
 
 ```
-D:\llms\whisper-writer\
+D:\tec\cs\whisper-writer\
 ├── .github\
 │   ├── copilot-instructions.md       ← this file
 │   └── workflows\
@@ -58,6 +60,7 @@ D:\llms\whisper-writer\
 ├── settings.json                      ← default configuration (copied to bin on build)
 ├── Services\
 │   ├── AudioRecorder.cs               ← NAudio, 16 kHz mono WAV, RMS amplitude event
+│   ├── EtaStatsService.cs             ← SQLite-backed ETA statistics (per-model timing history)
 │   ├── HotkeyService.cs               ← polling GetAsyncKeyState, 20 ms interval
 │   ├── LogService.cs                  ← Serilog facade, daily rolling log to logs/
 │   ├── SettingsService.cs             ← JSON load/save to BaseDirectory/settings.json
@@ -75,8 +78,9 @@ D:\llms\whisper-writer\
 │   ├── SettingsWindow.xaml/.cs        ← settings form
 │   └── AboutWindow.xaml/.cs           ← about window
 └── models\
-    ├── ggml-large-v2.bin              ← 2.95 GB, default model
-    └── ggml-medium.bin                ← 1.46 GB, fallback model
+    ├── eta-time-stats.db          ← SQLite database with per-model ETA timing statistics
+    ├── ggml-large-v2.bin          ← 2.95 GB, default model
+    └── ggml-medium.bin            ← 1.46 GB, fallback model
 ```
 
 ---
@@ -89,7 +93,9 @@ D:\llms\whisper-writer\
 - `ShutdownMode="OnExplicitShutdown"` – the app does not close when the window is closed.
 
 ### `App.xaml.cs`
-- Three static services: `App.SettingsService`, `App.History`, `App.WhisperService`.
+- Four static services: `App.SettingsService`, `App.History`, `App.WhisperService`, `App.EtaStats`.
+- `EtaStats.Initialize()` is called on startup (opens/creates `models/eta-time-stats.db`).
+- `EtaStats.Dispose()` is called in `OnExit` to cleanly close the SQLite connection.
 - Tray icon (`NotifyIcon` from WinForms) – **right-click** opens menu:
   ```
   About WhisperWriter
@@ -148,6 +154,22 @@ public class AppSettings
 - Saves to `AppContext.BaseDirectory + "settings.json"` (i.e. next to exe).
 - On deserialization error silently returns `new AppSettings()`.
 
+### `Services/EtaStatsService.cs`
+- Manages a SQLite database at `<BaseDirectory>/models/eta-time-stats.db` via `Microsoft.Data.Sqlite`.
+- **Schema**: two tables:
+  - `Versions (value TEXT)` – single row with the current DB/application version string (`1.1.0.0`).
+  - `Environments (id INTEGER PK AUTOINCREMENT, fingerprint TEXT UNIQUE, value TEXT UNIQUE)` – one row per detected runtime environment.
+  - `Models (id INTEGER PK AUTOINCREMENT, model_key TEXT UNIQUE)` – auto-populated on first use of each model.
+  - `Stats (id INTEGER PK AUTOINCREMENT, model_id INTEGER FK, environment_id INTEGER FK, audio_seconds REAL, processing_seconds REAL)` – one row per completed transcription.
+  - Indexes: `idx_stats_model_env_id ON Stats(model_id, environment_id, id DESC)` and `idx_stats_model_env_audio ON Stats(model_id, environment_id, audio_seconds)`.
+- `Initialize()` – opens/creates the DB from scratch, creates all tables/indexes, and seeds `Versions` when empty. No migration logic is present; the DB is assumed to be created fresh.
+- `BuildEnvironmentJson()` – creates a canonical JSON description of the current runtime environment. It includes CPU model, logical/physical core counts, `gpus` (all detected GPU names sorted alphabetically), backend (`CPU`/`GPU`), CUDA version, total RAM, OS version/build, process architecture, Whisper thread count, `onAcPower`, and `powerSaverEnabled`.
+- `ComputeFingerprint(json)` – stores a SHA-256 hex fingerprint alongside the JSON (`fingerprint TEXT UNIQUE`), while also keeping the full JSON unique in `value`.
+- `EstimateProcessingSeconds(modelKey, audioSeconds)` – returns `double?`. It uses only rows from the same `model_id + environment_id`, first with similar recording lengths (±30%), then ±50%, then all rows for the same model/environment. ETA is shown from the **second matching transcription onward**, i.e. once at least one previous matching row exists.
+- `Record(modelKey, audioSeconds, processingSeconds)` – inserts a new `Stats` row and trims oldest rows to keep at most `MaxRecordsPerModelEnvironment` (= 1000) rows per `model_id + environment_id`.
+- Environment discovery uses `System.Management` (WMI) for CPU/GPU/RAM details and `GetSystemPowerStatus` from `kernel32.dll` for AC power and battery-saver state.
+- All public methods are silently no-ops (with error logging) when the DB is unavailable.
+
 ### `Services/AudioRecorder.cs`
 - `WaveInEvent`, 16 000 Hz, 16 bit, mono, 50 ms buffer.
 - `StartRecording()` / `StopRecording()` – returns `byte[]` WAV.
@@ -175,6 +197,7 @@ public class AppSettings
 
 ### `Services/WhisperService.cs`
 - `DetectCudaVersion()` – static method that probes CUDA runtime DLLs (`cudart64_N.dll` + `cublas64_N.dll`) for major versions **13, 12, 11** in order using `LoadLibraryEx`. Returns the first available major version as `int?`, or `null` if no CUDA runtime is found. Replaces the old `IsCudaAvailable()` bool method.
+- `GetInferenceThreadCount()` – static helper returning `Math.Max(1, Environment.ProcessorCount - 2)`. Used both by Whisper inference and by the ETA environment fingerprint.
 - `InitializeAsync(modelPath)` – loads model from disk (`WhisperFactory.FromPath`). Before loading, validates file size against `MinModelFileSizeBytes` (70 MB): if the file is smaller it is deleted and re-downloaded (guards against truncated/corrupted files). If the model is missing, downloads medium via `WhisperGgmlDownloader`.
 - `TranscribeAsync(byte[] wavBytes, string language, string prompt)`:
   - Always sets an explicit language (`"auto"` → fallback `"cs"`) to **prevent translation**.
@@ -196,10 +219,10 @@ public class AppSettings
 - `ReloadHotkey()` – public method called by `App.ShowSettings()` after settings are saved; calls `_hotkey.UpdateKeys()` with the new VK list from settings for instant live reload without restart.
 
 ### `Views/MainWindow.xaml.cs`
-- **ETA countdown**: after releasing PTT calculates `estimatedSeconds = wavBytes.Length / 32000.0 * EtaFactor`.
-- `EtaFactor = 0.90` (empirical coefficient for large-v2 + Quadro T2000 CUDA) – **may need calibration**.
-  - `DispatcherTimer` 100 ms counts down and displays `~Xs` next to "Transcribing…".
-- PTT flow: `SaveFocus` → `StartRecording` → (release) → `StopRecording` → `StartEtaCountdown` → `TranscribeAsync` → `StopEtaCountdown` → (if `CopyToClipboard`) `Clipboard.SetText` → `InjectText`.
+- **ETA countdown**: statistics-based and environment-aware. After releasing PTT, calls `App.EtaStats.EstimateProcessingSeconds(modelKey, audioSeconds)`. The query uses only the same model and the same runtime environment, preferring similar audio lengths (±30%, then ±50%, then all rows for the same model/environment). ETA appears from the **second matching transcription onward**; until then the UI shows only "Transcribing…".
+- After `InjectText` completes on the background thread, calls `App.EtaStats.Record(modelKey, audioSeconds, sw.Elapsed.TotalSeconds)` to persist the actual processing time for the current environment. Over time, estimates converge to real values and remain separated across different hardware/power states.
+- `GetModelKey()` – static helper, returns `Path.GetFileNameWithoutExtension(Settings.ModelPath)` for use as the DB model key.
+- PTT flow: `SaveFocus` → `StartRecording` → (release) → `StopRecording` → (if stats available) `StartEtaCountdown` → `TranscribeAsync` → `StopEtaCountdown` → (if `CopyToClipboard`) `Clipboard.SetText` → `RestoreFocus` → `Task.Run(InjectText + Record)`.
 - **Window positioning architecture**:
 - Position is stored as `(WindowLeft, WindowBottom)` relative to the primary screen's working area (device-independent pixels). Both values represent the **centre** of the widget so that it expands symmetrically from the anchor point regardless of size changes.
 - `PositionWindow()` (called from constructor): registers a `Loaded` handler that calls either `ApplyStoredPosition()` or `PlaceAtDefaultPosition()` once `ActualHeight` is known.
@@ -217,9 +240,9 @@ public class AppSettings
 
 ### `Views/SettingsWindow.xaml`
 - Form: `ModelPath` (ComboBox: 12 models, items built at runtime in code-behind), `Language` (ComboBox: 57 languages + `auto`), `Prompt` (multiline TextBox), **hotkey capture** (display field + "Change…" button), `HistorySize` (numeric TextBox, min 1, max Int32.MaxValue), `CopyToClipboard` (CheckBox, default checked), `RunAtStartup` (CheckBox – reads/writes `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`, value name `WhisperWriter`, default unchecked).
-- **Hotkey capture UI**: `TxtHotkeyDisplay` (read-only `TextBlock` inside a styled `Border`) shows the current combo. `BtnCaptureHotkey` ("Change…" / "Cancel") toggles capture mode. `TxtCaptureHint` (collapsed outside capture) shows instructions.
+- **Hotkey capture UI**: `TxtHotkeyDisplay` (read-only `TextBlock` inside a styled `Border`) shows the current combo. `BtnCaptureHotkey` ("Change…" / "Cancel") toggles capture mode. `TxtCaptureHint` (collapsed outside capture) shows instructions. Default combo: Left Alt + Left Win (`VK_LMENU` + `VK_LWIN`).
 - Capture mode: `PreviewKeyDown` accumulates VK codes into `_captureDown`; on `PreviewKeyUp` the full set is snapshotted as `_capturedVkCodes` and capture exits. Escape cancels without saving. The captured combo is previewed live while keys are held. WPF input types aliased as `WpfKeyEventArgs` / `WpfKey` / `WpfKeyInterop` to avoid `System.Windows.Forms.KeyEventArgs` ambiguity.
-- `CmbModelPath`: items are built dynamically in `BuildModelItems()` in code-behind. Each item has `Tag` = file path, `Content` = two-line `StackPanel` (name bold + HW requirements and size in smaller text). Models that are not downloaded (`File.Exists` check against `AppContext.BaseDirectory`) are shown with `Opacity=0.45`, `IsEnabled=false`, and ` · not downloaded` appended to the detail line.
+- `CmbModelPath`: items are built dynamically in `BuildModelItems()` in code-behind. Each item has `Tag` = file path, `Content` = two-line `StackPanel` (name bold + HW requirements and size in smaller text). Models that are not downloaded (`File.Exists` check against `AppContext.BaseDirectory`) are shown with `Opacity=0.45`, `IsEnabled=false`, and ` · not downloaded` appended to the detail line. Model availability is checked against the 12 known `.bin` paths only, so `eta-time-stats.db` in the same `models\` folder is ignored.
 - `CmbLanguage`: each item has `Tag` = ISO language code (e.g. `"cs"`) and `Content` = `"cs – Čeština"` (code + native name).
 - `TxtHistorySize`: numeric TextBox, `PreviewTextInput` handler blocks non-numeric characters, fallback to `1` on save if value is invalid or < 1.
 - `ChkCopyToClipboard`: CheckBox bound to `AppSettings.CopyToClipboard`.
@@ -302,10 +325,10 @@ public class AppSettings
 
 ```powershell
 # Build (without restore – models are large)
-dotnet build "D:\llms\whisper-writer\WhisperWriter.csproj" -c Debug --no-restore
+dotnet build "D:\tec\cs\whisper-writer\WhisperWriter.csproj" -c Debug --no-restore
 
 # Run
-Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe"
+Start-Process "D:\tec\cs\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe"
 ```
 
 > **Important**: The app must be closed before building – the exe file is locked by the running instance.
@@ -318,12 +341,12 @@ Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe
 
 | Priority | Description |
 |---|---|
-| Medium | **EtaFactor calibration** – currently `0.90`, measure the real ratio `transcription_time / recording_length` and update in `MainWindow.xaml.cs` if needed. Ideally the factor would be computed adaptively from the last N transcriptions. |
 | Low | **settings.json overwrite on build** – `PreserveNewest` copies the source `settings.json` to bin if it is newer, overwriting user settings. Consider `CopyToOutputDirectory=Never` and manual initialization on first run (SettingsService already handles this via `Save()` when the file does not exist). |
 | Low | **Whisper model download fallback** – if the default model (`ggml-large-v2.bin`) is missing, `InitializeAsync` downloads `GgmlType.Medium` (not Large). A "Downloading model…" message is shown. |
 
 ### Resolved issues (for context)
 
+- **Environment-aware adaptive ETA**: replaced the old hardcoded per-model ETA factor approach with `EtaStatsService` backed by `models\eta-time-stats.db`. The DB now stores `Versions`, `Environments`, `Models`, and `Stats`. Each completed transcription records `(model_id, environment_id, audio_seconds, processing_seconds)`, where `environment_id` is derived from a fingerprinted JSON of CPU/GPUs/RAM/OS/backend/CUDA/thread-count/power state. ETA is estimated only from the same model + same environment, preferring similar recording lengths (±30%, then ±50%, then all rows). ETA appears from the second matching transcription onward; otherwise the UI shows only "Transcribing…".
 - **`Models/` folder renamed to `Util/`, classes split into separate files**: C# source files (`AppSettings.cs`, `HotkeyModifiers.cs`, `TranscriptionEntry.cs`, `TranscriptionHistory.cs`) moved from `Models\` to `Util\`. Each class is now in its own file. All namespaces updated from `WhisperWriter.Models` to `WhisperWriter.Util`. All `using WhisperWriter.Models` directives updated accordingly in `SettingsService.cs`, `HotkeyService.cs`, and `MainWindow.xaml.cs`. The `models\` directory (lowercase) remains as the data folder for Whisper `.bin` weight files only.
 - **`IsCudaAvailable()` replaced by `DetectCudaVersion()`**: the old boolean probe hardcoded CUDA 13. Replaced with `DetectCudaVersion()` (returns `int?`) that probes major versions 13, 12, 11 in order and returns the first that has both `cudart64_N.dll` and `cublas64_N.dll` loadable. `MainWindow.xaml.cs` updated at both call sites to use the new method (startup status message and `OnWhisperState` backend label).
 - **`WithGreedySamplingStrategy()` API**: this method returns a different interface (`IWhisperSamplingStrategyBuilder`) without `WithPrompt`/`Build`. Cannot be chained. Not used currently.
@@ -352,7 +375,7 @@ Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe
 - No MVVM framework – direct code-behind, the app is small.
 
 ### `.editorconfig`
-The `.editorconfig` file is in the project root (`D:\llms\whisper-writer\.editorconfig`) and defines mandatory formatting rules:
+The `.editorconfig` file is in the project root (`D:\tec\cs\whisper-writer\.editorconfig`) and defines mandatory formatting rules:
 
 ```ini
 root = true
@@ -416,7 +439,6 @@ At the same time, check whether the changes affect user-visible behavior (instal
 
 Ideas mentioned during development, not yet implemented:
 
-- **Adaptive EtaFactor** – average from the last N transcriptions, saved to settings.
 - **More languages in ComboBox** – add Slovak, German, etc. (the base in SettingsWindow.xaml is already there).
 - **History export** – CSV or plain text.
 - **Dark/light theme** – the color palette base is in App.xaml, just add a second ResourceDictionary.

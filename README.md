@@ -27,11 +27,12 @@ Hold a keyboard shortcut, speak, release — the transcribed text is instantly t
 
 ## Features
 
-- 🎙️ **Push-to-talk** recording with `Left Ctrl + Left Win` (hold to record, release to transcribe)
+- 🎙️ **Push-to-talk** recording with a **configurable hotkey** — default is `Left Alt + Left Win`
 - 🤖 **Local AI transcription** via [Whisper.net](https://github.com/sandrohanea/whisper.net) (whisper.cpp backend) — no cloud, no API key
 - ⚡ **CUDA GPU acceleration** — automatic if an NVIDIA GPU is present
 - 🌍 **57 languages** supported, including auto-detection
 - 🪟 **Floating pill widget** — stays on top, draggable, remembers position
+- ⏱️ **Adaptive ETA countdown** — estimated from real previous transcription timings stored locally per model and runtime environment
 - 📋 **Transcription history** — browse, select and copy past transcriptions
 - 🔕 **System tray** — runs silently in the background
 - 🔒 **100% offline** — your voice data never leaves the machine
@@ -113,8 +114,9 @@ On the very first launch:
 
 1. The app checks for `models\ggml-large-v2.bin` by default.
 2. If the model file is **not found**, it automatically downloads `ggml-medium` (~1.5 GB) from the official Hugging Face repository. This may take a few minutes depending on your connection.
-3. The floating pill widget appears at the bottom-center of your screen showing **"Loading…"** while the model is being loaded into memory (or downloaded).
-4. Once it shows **"Ready"**, you can start transcribing.
+3. The app also creates a local SQLite database `models\eta-time-stats.db` for ETA timing statistics.
+4. The floating pill widget appears at the bottom-center of your screen showing **"Loading…"** while the model is being loaded into memory (or downloaded).
+5. Once it shows **"Ready"**, you can start transcribing.
 
 ---
 
@@ -123,8 +125,8 @@ On the very first launch:
 ### Basic workflow
 
 1. **Click into any text field** — a browser address bar, Notepad, Word, chat app, anywhere.
-2. **Hold `Left Ctrl + Left Win`** — the widget turns red and shows "Recording…". Speak clearly into your microphone.
-3. **Release both keys** — the widget shows "Transcribing… ~Xs" with a countdown.
+2. **Hold your push-to-talk hotkey** — by default `Left Alt + Left Win`. The widget turns red and shows "Recording…". Speak clearly into your microphone.
+3. **Release the keys** — the widget shows "Transcribing…". Starting from the **second matching transcription** for the same model and runtime environment, it also shows an ETA countdown like `~Xs`.
 4. The transcribed text is **automatically typed** into the window that had focus before you started recording.
 
 > ⚠️ Make sure to click into the target text field *before* pressing the hotkey. The app saves the focus at the moment you press the keys.
@@ -147,7 +149,7 @@ Open Settings via the **tray icon → Settings**.
 | **Model** | Which Whisper model to use. Affects accuracy, speed and VRAM usage. See [Whisper Models](#whisper-models). |
 | **Language** | Transcription language. `auto` attempts to detect the language automatically. Explicitly selecting a language is faster and more reliable. |
 | **Prompt** | Optional hint text for Whisper. Use it to teach the model uncommon words, names or formatting. Example: `Whisper, GPT-4, OpenAI, CUDA`. |
-| **Push-to-talk hotkey** | Currently fixed to `Left Ctrl + Left Win` (display only, not configurable via UI yet). |
+| **Push-to-talk hotkey** | Configurable directly in Settings. Click **Change…**, hold the desired key combination, then release it to save. Default is `Left Alt + Left Win`. |
 | **History size** | Maximum number of transcriptions kept in memory during a session (1 to 2,147,483,647). |
 
 Click **Save** to apply changes. The model is reloaded automatically if you change it.
@@ -237,6 +239,19 @@ If the app behaves unexpectedly, check the latest log file for details.
 
 ---
 
+## ETA Statistics Database
+
+WhisperWriter stores ETA timing data in a local SQLite database:
+
+- File: `models\eta-time-stats.db`
+- The database is used only to improve the ETA countdown.
+- It stores timing samples per **model** and per detected **runtime environment**.
+- The environment fingerprint includes CPU, all detected GPUs (stored as a sorted array), RAM, OS version, whether Whisper is running on CPU or GPU, CUDA version, Whisper thread count, AC/battery power, and power-saver state.
+- For a new ETA estimate, WhisperWriter prefers past transcriptions with a **similar audio length** (roughly ±30%, then ±50%, then fallback to all samples for the same model/environment).
+- ETA is shown only after at least **one previous matching sample** exists, so it starts appearing from the **second matching transcription** onward.
+
+---
+
 ## Privacy
 
 - **No internet connection required** after the model is downloaded (first run only).
@@ -311,6 +326,8 @@ The MSBuild target `CopyCudaRuntimeDlls` in `WhisperWriter.csproj` automatically
 | Whisper.net.Runtime | 1.9.0 | Native whisper.cpp runtime |
 | Whisper.net.Runtime.Cuda | 1.9.0 | CUDA GPU acceleration |
 | NAudio | 2.2.1 | Microphone capture |
+| Microsoft.Data.Sqlite | 8.0.0 | Local ETA timing statistics database |
+| System.Management | 8.0.0 | Windows hardware discovery for ETA environment fingerprinting |
 | Serilog | 4.3.0 | Logging |
 | System.Text.Json | 8.0.5 | Settings serialization |
 

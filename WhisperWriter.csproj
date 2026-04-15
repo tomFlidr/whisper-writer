@@ -101,6 +101,10 @@
 		<PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.0" />
 		<!-- Audio capture -->
 		<PackageReference Include="NAudio" Version="2.2.1" />
+		<!-- SQLite for ETA statistics -->
+		<PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
+		<!-- Windows hardware discovery for environment fingerprinting -->
+		<PackageReference Include="System.Management" Version="8.0.0" />
 		<!-- System.Text.Json: no explicit pin – version is driven by Whisper.net transitive dependency -->
 	</ItemGroup>
 
