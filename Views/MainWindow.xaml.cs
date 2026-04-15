@@ -71,7 +71,7 @@ public partial class MainWindow : Window {
 		SourceInitialized += OnSourceInitialized;
 
 		var settings = App.SettingsService.Settings;
-		_hotkey = new HotkeyService((HotkeyModifiers)settings.HotkeyModifiers);
+		_hotkey = new HotkeyService(settings.HotkeyVkCodes);
 		_hotkey.PushToTalkStarted += OnPttStarted;
 		_hotkey.PushToTalkStopped += OnPttStopped;
 		_recorder.AmplitudeChanged += OnAmplitude;
@@ -459,6 +459,14 @@ public partial class MainWindow : Window {
 	}
 
 	// ── Window lifecycle ──────────────────────────────────────────────────────
+	/// <summary>
+	/// Applies a new key combination to the live hotkey service without restarting the app.
+	/// Called by App after settings are saved.
+	/// </summary>
+	public void ReloadHotkey () {
+		_hotkey.UpdateKeys(App.SettingsService.Settings.HotkeyVkCodes);
+	}
+
 	protected override void OnClosing (System.ComponentModel.CancelEventArgs e) {
 		if (!_allowClose) {
 			e.Cancel = true;

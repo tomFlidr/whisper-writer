@@ -9,12 +9,14 @@
 		WindowStartupLocation="CenterScreen"
 		ResizeMode="NoResize">
 
-	<Border Background="{StaticResource BgBrush}"
-			CornerRadius="14"
-			MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
-		<Border.Effect>
-			<DropShadowEffect Color="Black" BlurRadius="24" ShadowDepth="6" Opacity="0.55"/>
-		</Border.Effect>
+	<Border x:Name="WidgetBorder"
+		Background="{StaticResource BgBrush}"
+		CornerRadius="10"
+		Padding="0"
+		Opacity="0.97"
+		BorderBrush="#66FFFFFF"
+		BorderThickness="1"
+		MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
 
 		<Grid Margin="20">
 			<Grid.RowDefinitions>
@@ -151,14 +153,42 @@
 						 VerticalScrollBarVisibility="Auto"/>
 			</StackPanel>
 
-			<!-- Hotkey display (read-only info for now) -->
+			<!-- Hotkey capture -->
 			<StackPanel Grid.Row="8">
-				<TextBlock Text="Push-to-talk hotkey"
+				<TextBlock Text="Push-to-talk hotkey  (hold to record)"
 						   Foreground="{StaticResource TextSecondaryBrush}"
 						   FontSize="11" FontFamily="Segoe UI" Margin="0,0,0,4"/>
-				<TextBlock Text="Left Ctrl + Left Win  (hold to record)"
-						   Foreground="{StaticResource TextPrimaryBrush}"
-						   FontSize="13" FontFamily="Segoe UI"/>
+				<Grid>
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="*"/>
+						<ColumnDefinition Width="8"/>
+						<ColumnDefinition Width="Auto"/>
+					</Grid.ColumnDefinitions>
+					<!-- Shows the current / captured combo -->
+					<Border Grid.Column="0"
+							Background="#33FFFFFF" BorderBrush="#44FFFFFF" BorderThickness="1"
+							CornerRadius="6" Padding="8,5">
+						<TextBlock x:Name="TxtHotkeyDisplay"
+								   Foreground="{StaticResource TextPrimaryBrush}"
+								   FontFamily="Segoe UI" FontSize="13"
+								   VerticalAlignment="Center"/>
+					</Border>
+					<!-- Button to enter capture mode -->
+					<Button x:Name="BtnCaptureHotkey"
+							Grid.Column="2"
+							Style="{StaticResource IconButton}"
+							Background="#33FFFFFF"
+							Foreground="{StaticResource TextPrimaryBrush}"
+							Content="Change…"
+							Click="BtnCaptureHotkey_Click"/>
+				</Grid>
+				<!-- Instruction shown only during capture -->
+				<TextBlock x:Name="TxtCaptureHint"
+						   Text="Hold the desired key combination, then release all keys…"
+						   Foreground="{StaticResource AccentBrush}"
+						   FontFamily="Segoe UI" FontSize="11"
+						   Margin="0,4,0,0"
+						   Visibility="Collapsed"/>
 			</StackPanel>
 
 			<!-- History size -->

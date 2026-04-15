@@ -1,16 +1,43 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
+using WhisperWriter.Util;
+using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
+using WpfKeyInterop = System.Windows.Input.KeyInterop;
+using WpfKey = System.Windows.Input.Key;
+using WpfMouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
+using WpfMouseButtonState = System.Windows.Input.MouseButtonState;
+using WpfTextCompositionEventArgs = System.Windows.Input.TextCompositionEventArgs;
 
 namespace WhisperWriter.Views;
 
 public partial class SettingsWindow : Window {
 	private const string StartupKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
 	private const string StartupValueName = "WhisperWriter";
+
+	// ── Hotkey capture state ──────────────────────────────────────────────────
+
+	[DllImport("user32.dll")]
+	private static extern short GetAsyncKeyState (int vKey);
+
+	// VK codes excluded from capture (they are UI-navigation keys, not hotkey material).
+	private static readonly HashSet<int> _captureExcluded = [
+		0x1B, // Escape – cancels capture
+		0x0D, // Enter
+		0x09, // Tab
+	];
+
+	private bool _captureMode;
+	// The VK codes held during the last capture session.
+	private List<int> _capturedVkCodes = [];
+	// All VKs seen as "down" since capture mode started (held simultaneously at peak).
+	private readonly HashSet<int> _captureDown = [];
+	// The combo that was saved/loaded from settings (displayed when not in capture mode).
+	private List<int> _currentVkCodes = [];
 
 	private static readonly (string Tag, string Name, string Details)[] _models = [
 		("models/ggml-large-v3-turbo.bin", "large-v3-turbo  (best speed/accuracy tradeoff)", "~3 GB VRAM · 1.6 GB disk · CUDA GPU recommended"),
@@ -114,14 +141,100 @@ public partial class SettingsWindow : Window {
 		}
 		if (CmbLanguage.SelectedItem == null)
 			CmbLanguage.SelectedIndex = 0;
+
+		// Hotkey
+		_currentVkCodes = new List<int>(s.HotkeyVkCodes);
+		_capturedVkCodes = new List<int>(_currentVkCodes);
+		TxtHotkeyDisplay.Text = VkCodeHelper.FormatCombo(_currentVkCodes);
 	}
 
-	private void TxtHistorySize_PreviewTextInput (object sender, TextCompositionEventArgs e) {
+	private void TxtHistorySize_PreviewTextInput (object sender, WpfTextCompositionEventArgs e) {
 		e.Handled = !Regex.IsMatch(e.Text, @"^\d+$");
 	}
 
-	private void TitleBar_MouseLeftButtonDown (object sender, MouseButtonEventArgs e) {
-		if (e.ButtonState == MouseButtonState.Pressed)
+	// ── Hotkey capture ────────────────────────────────────────────────────────
+
+	private void BtnCaptureHotkey_Click (object sender, RoutedEventArgs e) {
+		if (_captureMode) {
+			ExitCaptureMode(accept: false);
+			return;
+		}
+		EnterCaptureMode();
+	}
+
+	private void EnterCaptureMode () {
+		_captureMode = true;
+		_captureDown.Clear();
+		BtnCaptureHotkey.Content = "Cancel";
+		TxtCaptureHint.Visibility = Visibility.Visible;
+		TxtHotkeyDisplay.Text = "(press keys…)";
+		TxtHotkeyDisplay.Foreground = (System.Windows.Media.SolidColorBrush)
+			System.Windows.Application.Current.Resources["AccentBrush"];
+
+		// Hook window-level key events to capture ALL keys including modifiers.
+		PreviewKeyDown += Capture_PreviewKeyDown;
+		PreviewKeyUp   += Capture_PreviewKeyUp;
+
+		// Suppress default key handling while capturing so e.g. Tab doesn't move focus.
+		KeyDown += Capture_SuppressKey;
+		KeyUp   += Capture_SuppressKey;
+	}
+
+	private void ExitCaptureMode (bool accept) {
+		_captureMode = false;
+		PreviewKeyDown -= Capture_PreviewKeyDown;
+		PreviewKeyUp   -= Capture_PreviewKeyUp;
+		KeyDown -= Capture_SuppressKey;
+		KeyUp   -= Capture_SuppressKey;
+
+		BtnCaptureHotkey.Content = "Change…";
+		TxtCaptureHint.Visibility = Visibility.Collapsed;
+		TxtHotkeyDisplay.Foreground = (System.Windows.Media.SolidColorBrush)
+			System.Windows.Application.Current.Resources["TextPrimaryBrush"];
+
+		if (accept && _capturedVkCodes.Count > 0) {
+			_currentVkCodes = new List<int>(_capturedVkCodes);
+		}
+		TxtHotkeyDisplay.Text = VkCodeHelper.FormatCombo(_currentVkCodes);
+		_capturedVkCodes = new List<int>(_currentVkCodes);
+	}
+
+	private void Capture_PreviewKeyDown (object sender, WpfKeyEventArgs e) {
+		e.Handled = true;
+		var vk = WpfKeyInterop.VirtualKeyFromKey(e.Key == WpfKey.System ? e.SystemKey : e.Key);
+
+		// Escape cancels without accepting.
+		if (vk == 0x1B) {
+			ExitCaptureMode(accept: false);
+			return;
+		}
+
+		if (!_captureExcluded.Contains(vk)) {
+			_captureDown.Add(vk);
+			// Show live preview of currently held keys.
+			TxtHotkeyDisplay.Text = VkCodeHelper.FormatCombo(_captureDown.ToList());
+		}
+	}
+
+	private void Capture_PreviewKeyUp (object sender, WpfKeyEventArgs e) {
+		e.Handled = true;
+
+		// On first key release: snapshot all keys that were down simultaneously.
+		if (_captureDown.Count > 0) {
+			_capturedVkCodes = [.._captureDown];
+			_captureDown.Clear();
+		}
+		ExitCaptureMode(accept: true);
+	}
+
+	private void Capture_SuppressKey (object sender, WpfKeyEventArgs e) {
+		e.Handled = true;
+	}
+
+	// ── Save / Cancel ─────────────────────────────────────────────────────────
+
+	private void TitleBar_MouseLeftButtonDown (object sender, WpfMouseButtonEventArgs e) {
+		if (e.ButtonState == WpfMouseButtonState.Pressed)
 			DragMove();
 	}
 
@@ -139,6 +252,9 @@ public partial class SettingsWindow : Window {
 
 		if (CmbLanguage.SelectedItem is ComboBoxItem selected)
 			s.Language = selected.Tag as string ?? "auto";
+
+		// Persist hotkey VK codes
+		s.HotkeyVkCodes = new List<int>(_currentVkCodes);
 
 		DialogResult = true;
 		Close();

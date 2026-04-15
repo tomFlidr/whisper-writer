@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using WhisperWriter.Util;
 
 namespace WhisperWriter.Services;
 
@@ -148,23 +149,31 @@ public static class TextInjector {
 	}
 
 	/// <summary>
-	/// Blocks (max 2 s) until VK_LWIN and VK_LCONTROL are physically released.
+	/// Blocks (max 2 s) until all PTT hotkey VK codes are physically released.
 	/// This is necessary because HotkeyService polling fires PushToTalkStopped
-	/// the moment it sees both keys up, but the Win key kernel shell hook may
+	/// the moment it sees the combo released, but the Win key kernel shell hook may
 	/// still register them as held for a few milliseconds. Sending a keyup via
-	/// SendInput while the key is still physically down is silently ignored by
+	/// SendInput while a key is still physically down is silently ignored by
 	/// Windows – the shell hook stays active and permanently breaks mouse input.
 	/// </summary>
 	private static void WaitForPhysicalRelease () {
 		const int timeoutMs = 2000;
 		const int stepMs = 10;
 		int elapsed = 0;
+		// Read the current hotkey VK list from settings; always also check Win keys.
+		var hotkeyVks = App.SettingsService.Settings.HotkeyVkCodes;
 		while (elapsed < timeoutMs) {
-			bool winHeld = (GetAsyncKeyState(VK_LWIN) & 0x8000) != 0
-				|| (GetAsyncKeyState(VK_RWIN) & 0x8000) != 0;
-			bool ctrlHeld = (GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0
-				|| (GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0;
-			if (!winHeld && !ctrlHeld)
+			bool anyHeld = false;
+			// Check all configured PTT keys
+			foreach (var vk in hotkeyVks) {
+				if ((GetAsyncKeyState(vk) & 0x8000) != 0) { anyHeld = true; break; }
+			}
+			// Always check both Win keys – the shell hook specifically reacts to them
+			if (!anyHeld) {
+				anyHeld = (GetAsyncKeyState(VK_LWIN) & 0x8000) != 0
+					|| (GetAsyncKeyState(VK_RWIN) & 0x8000) != 0;
+			}
+			if (!anyHeld)
 				return;
 			Thread.Sleep(stepMs);
 			elapsed += stepMs;

@@ -4,7 +4,7 @@
 			 ShutdownMode="OnExplicitShutdown">
 	<Application.Resources>
 		<!-- Color palette -->
-		<Color x:Key="BgColor">#F71C1C1E</Color>
+		<Color x:Key="BgColor">#Fe1C1C1C</Color>
 		<Color x:Key="AccentColor">#8BbbFF</Color>
 		<Color x:Key="AccentRecording">#FF3B30</Color>
 		<Color x:Key="TextPrimary">#FFFFFFFF</Color>

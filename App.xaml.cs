@@ -110,6 +110,8 @@ public partial class App : System.Windows.Application {
 		if (win.ShowDialog() == true) {
 			SettingsService.Save();
 			History.MaxSize = SettingsService.Settings.HistorySize;
+			// Apply new hotkey combination immediately, without restarting.
+			(Current as App)?._mainWindow?.ReloadHotkey();
 		}
 		_secondaryWindow = null;
 	}

@@ -74,9 +74,12 @@
 	<Target Name="CopyCudaRuntimeDlls" AfterTargets="Build;Publish">
 		<PropertyGroup>
 			<CudaBinDir>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\x64</CudaBinDir>
-			<!-- During publish $(PublishDir) is set; during regular build it is empty – fall back to $(OutputPath) -->
-			<CudaEffectiveOutputDir Condition="'$(PublishDir)' != ''">$(PublishDir)</CudaEffectiveOutputDir>
-			<CudaEffectiveOutputDir Condition="'$(PublishDir)' == ''">$(OutputPath)</CudaEffectiveOutputDir>
+			<!-- Use PublishDir only during an actual dotnet publish invocation (IsPublishing=true).
+			     During a regular build $(PublishDir) is also set by the SDK (to the publish sub-folder)
+			     because PublishSingleFile=true forces publish property evaluation at build time.
+			     Using $(OutputPath) for builds avoids copying into the wrong publish\ sub-folder. -->
+			<CudaEffectiveOutputDir Condition="'$(IsPublishing)' == 'true'">$(PublishDir)</CudaEffectiveOutputDir>
+			<CudaEffectiveOutputDir Condition="'$(IsPublishing)' != 'true'">$(OutputPath)</CudaEffectiveOutputDir>
 			<CudaTargetDir>$(CudaEffectiveOutputDir)runtimes\cuda\win-x64</CudaTargetDir>
 			<!-- Extract major version number from the last path segment, e.g. v13.2\bin\x64 -> 13 -->
 			<CudaVersion>$([System.Text.RegularExpressions.Regex]::Match($(CudaBinDir), 'v(\d+)\.').Groups[1].Value)</CudaVersion>

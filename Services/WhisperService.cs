@@ -49,6 +49,10 @@ public sealed class WhisperService: IAsyncDisposable {
 		internal static extern bool FreeLibrary (IntPtr hModule);
 	}
 
+	// Minimum acceptable file size for any GGML model (tiny.en = ~78 MB).
+	// A file smaller than this is certainly truncated or corrupted.
+	private const long MinModelFileSizeBytes = 70 * 1024 * 1024; // 70 MB
+
 	/// <summary>
 	/// Initializes the Whisper model from disk. Call once at startup.
 	/// Prefers CUDA; falls back to CPU automatically via Whisper.net.Runtime.Cuda.
@@ -62,6 +66,12 @@ public sealed class WhisperService: IAsyncDisposable {
 			: "CUDA probe: no CUDA runtime found (tried versions 13, 12, 11) — falling back to CPU");
 
 		try {
+			// Delete and re-download if the file exists but is clearly truncated.
+			if (File.Exists(modelPath) && new FileInfo(modelPath).Length < MinModelFileSizeBytes) {
+				LogService.Warning($"Model file '{modelPath}' is too small ({new FileInfo(modelPath).Length / 1024 / 1024} MB) — deleting and re-downloading.");
+				File.Delete(modelPath);
+			}
+
 			// Download model if missing
 			if (!File.Exists(modelPath)) {
 				var dir = Path.GetDirectoryName(modelPath)!;
@@ -96,33 +106,56 @@ public sealed class WhisperService: IAsyncDisposable {
 		if (!_initialized || _factory == null)
 			throw new InvalidOperationException("Model is not loaded. Check the model path in Settings.");
 
+		string? modelPath = null;
+		try {
+			modelPath = App.SettingsService.Settings.ModelPath;
+		} catch { }
+
 		StateChanged?.Invoke(TranscriptionState.Transcribing, "Transcribing…");
 
 		// Build processor with current settings.
 		// IMPORTANT: never call WithTranslate() – we want transcription only.
-		// Always set an explicit language; fall back to "cs" when "auto" is selected
+		// Always set an explicit language; fall back to "en" when "auto" is selected
 		// to prevent whisper.cpp from silently translating non-English speech.
 		var effectiveLanguage = (!string.IsNullOrWhiteSpace(language) && language != "auto")
 			? language
-			: "cs";
+			: "en";
 
-		var builder = _factory.CreateBuilder()
-			.WithLanguage(effectiveLanguage)
-			.WithThreads(Math.Max(1, Environment.ProcessorCount - 2));
+		try {
+			var builder = _factory.CreateBuilder()
+				.WithLanguage(effectiveLanguage)
+				.WithThreads(Math.Max(1, Environment.ProcessorCount - 2));
 
-		if (!string.IsNullOrEmpty(prompt))
-			builder = builder.WithPrompt(prompt);
+			if (!string.IsNullOrEmpty(prompt))
+				builder = builder.WithPrompt(prompt);
 
-		await using var processor = builder.Build();
+			await using var processor = builder.Build();
 
-		using var ms = new MemoryStream(wavBytes);
-		var segments = new System.Text.StringBuilder();
-		await foreach (var seg in processor.ProcessAsync(ms))
-			segments.Append(seg.Text);
+			using var ms = new MemoryStream(wavBytes);
+			var segments = new System.Text.StringBuilder();
+			await foreach (var seg in processor.ProcessAsync(ms))
+				segments.Append(seg.Text);
 
-		var result = segments.ToString().Trim();
-		StateChanged?.Invoke(TranscriptionState.Done, result);
-		return result;
+			var result = segments.ToString().Trim();
+			StateChanged?.Invoke(TranscriptionState.Done, result);
+			return result;
+		} catch (WhisperModelLoadException ex) {
+			// The factory accepted the file (only reads header) but the model is
+			// corrupted or truncated. Delete it so InitializeAsync re-downloads it
+			// on next startup, then surface a clear error to the user.
+			LogService.Error("Whisper model corrupted – deleting file for re-download", ex);
+			_initialized = false;
+			_factory.Dispose();
+			_factory = null;
+			if (modelPath != null && File.Exists(modelPath)) {
+				try { File.Delete(modelPath); } catch (Exception delEx) {
+					LogService.Warning($"Could not delete corrupted model file '{modelPath}'", delEx);
+				}
+			}
+			var userMsg = "Model file is corrupted and has been deleted. Restart the app to re-download it.";
+			StateChanged?.Invoke(TranscriptionState.Error, userMsg);
+			throw new InvalidOperationException(userMsg, ex);
+		}
 	}
 
 	public async ValueTask DisposeAsync () {

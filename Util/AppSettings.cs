@@ -10,8 +10,13 @@ public class AppSettings {
 	// System prompt prepended to every transcription request
 	public string Prompt { get; set; } = "";
 
-	// Bitmask of HotkeyModifiers (default: Ctrl + Win)
-	public int HotkeyModifiers { get; set; } = 0x0002 | 0x0008; // Control | Win
+	// Bitmask of HotkeyModifiers – kept for potential future use, not used for polling
+	public int HotkeyModifiers { get; set; } = 0x0001 | 0x0008; // Alt | Win
+
+	// VK codes that must all be held simultaneously to trigger push-to-talk.
+	// Default: Left Alt (0xA4) + Left Win (0x5B).
+	// An empty list means "use HotkeyModifiers bitmask" (legacy fallback).
+	public List<int> HotkeyVkCodes { get; set; } = [0xA4, 0x5B]; // VK_LMENU + VK_LWIN
 
 	// How many transcriptions to keep in history
 	public int HistorySize { get; set; } = 30;

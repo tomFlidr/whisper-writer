@@ -9,12 +9,14 @@
 		WindowStartupLocation="CenterScreen"
 		ResizeMode="CanResizeWithGrip">
 
-	<Border Background="{StaticResource BgBrush}"
-			CornerRadius="14"
-			MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
-		<Border.Effect>
-			<DropShadowEffect Color="Black" BlurRadius="24" ShadowDepth="6" Opacity="0.55"/>
-		</Border.Effect>
+	<Border x:Name="WidgetBorder"
+		Background="{StaticResource BgBrush}"
+		CornerRadius="10"
+		Padding="0"
+		Opacity="0.97"
+		BorderBrush="#66FFFFFF"
+		BorderThickness="1"
+		MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
 
 		<Grid>
 			<Grid.RowDefinitions>

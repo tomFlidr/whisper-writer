@@ -10,7 +10,7 @@ This file describes the current state of the **WhisperWriter** project and serve
 
 WhisperWriter is a minimalist WPF application for Windows – **local push-to-talk voice transcription**. Inspired by Wispr Flow.
 
-1. The user holds a keyboard shortcut (default: Left Ctrl + Left Win).
+1. The user holds a keyboard shortcut (default: Left Alt + Left Win).
 2. The app records audio from the microphone.
 3. After releasing the keys, the recording is transcribed by a local Whisper model (whisper.cpp via Whisper.net).
 4. The transcribed text is injected (`SendInput` Unicode) into the window that had focus before recording started.
@@ -67,7 +67,8 @@ D:\llms\whisper-writer\
 │   ├── AppSettings.cs                 ← POCO configuration (serialized to settings.json)
 │   ├── HotkeyModifiers.cs             ← [Flags] enum: None, Alt, Control, Shift, Win
 │   ├── TranscriptionEntry.cs          ← data record: Timestamp, Text, Duration
-│   └── TranscriptionHistory.cs        ← ObservableCollection<TranscriptionEntry>, thread-safe Add()
+│   ├── TranscriptionHistory.cs        ← ObservableCollection<TranscriptionEntry>, thread-safe Add()
+│   └── VkCodeHelper.cs                ← static helper: VK code → display name, FormatCombo()
 ├── Views\
 │   ├── MainWindow.xaml/.cs            ← floating pill widget, PTT logic, VU meter, ETA
 │   ├── HistoryWindow.xaml/.cs         ← transcription list, copy to clipboard
@@ -110,7 +111,8 @@ public class AppSettings
     public string ModelPath { get; set; } = "models/ggml-large-v2.bin";
     public string Language  { get; set; } = "auto";   // "auto", "cs", "en", ...
     public string Prompt    { get; set; } = "";
-    public int    HotkeyModifiers { get; set; } = 0x0002 | 0x0008; // Ctrl + Win
+    public int    HotkeyModifiers { get; set; } = 0x0001 | 0x0008; // Alt + Win (kept for reference)
+    public List<int> HotkeyVkCodes { get; set; } = [0xA4, 0x5B]; // VK_LMENU + VK_LWIN (default: L Alt + L Win)
     public int    HistorySize     { get; set; } = 30;
     public bool   CopyToClipboard { get; set; } = true;  // copy result to clipboard after each transcription
     public bool   RunAtStartup     { get; set; } = false; // register/unregister HKCU Run key
@@ -155,14 +157,16 @@ public class AppSettings
 - **Polling** (not `RegisterHotKey`) – `GetAsyncKeyState` every 20 ms on a background thread.
 - Reason: `RegisterHotKey` with the Win key behaves unreliably on Win 10/11.
 - Events: `PushToTalkStarted`, `PushToTalkStopped`.
-- Currently hardcoded VK codes: `VK_LCONTROL (0xA2)` + `VK_LWIN (0x5B)`.
-- `HotkeyModifiers` bitmask from `AppSettings` controls what is checked.
+- Constructor `HotkeyService(IReadOnlyList<int> vkCodes)` – primary constructor, drives polling off an explicit VK list.
+- Constructor `HotkeyService(HotkeyModifiers)` – legacy constructor, converts bitmask to VK list via `ModifiersToVkCodes()`.
+- `UpdateKeys(IReadOnlyList<int>)` – atomically replaces the active key combination at runtime (no restart needed). If recording was in progress, fires `PushToTalkStopped` immediately.
+- `IsComboHeld()` – all listed VKs must be simultaneously pressed; lock-protected read of `_vkCodes`.
 
 ### `Services/TextInjector.cs`
 - `SaveFocus()` – saves the `GetForegroundWindow()` handle before PTT steals focus.
 - `RestoreFocus()` – must be called from the **UI thread** (owns message pump). Uses `AttachThreadInput` + `SetForegroundWindow` + `BringWindowToTop`. `AttachThreadInput` requires a thread with a message queue – it fails silently on threadpool threads.
 - `InjectText(string)` – must be called from a **background thread** (via `Task.Run`), NOT from the UI/Dispatcher thread, so that `Thread.Sleep` in `WaitForPhysicalRelease` does not block the message pump:
-  1. `WaitForPhysicalRelease()` – polls `GetAsyncKeyState` up to 2 s until `VK_LWIN`, `VK_RWIN`, `VK_LCONTROL`, `VK_RCONTROL` are all physically released. **This is the critical step** – sending a synthetic keyup while the key is still physically held is silently ignored by Windows, leaving the Win shell hook active and permanently breaking mouse input.
+  1. `WaitForPhysicalRelease()` – polls `GetAsyncKeyState` up to 2 s until all currently configured PTT VK codes (read from `App.SettingsService.Settings.HotkeyVkCodes` at call time) plus both Win keys are physically released. **This is the critical step** – sending a synthetic keyup while the key is still physically held is silently ignored by Windows, leaving the Win shell hook active and permanently breaking mouse input.
   2. `ReleaseModifierKeys()` – sends synthetic `KEYEVENTF_KEYUP` for all 8 modifier VKs (LWin, RWin, LCtrl, RCtrl, LAlt, RAlt, LShift, RShift). This is **critical**: without it, the physically-held Win+Ctrl keys interfere with `SendInput` (text arrives as shortcuts) and Win key permanently breaks mouse buttons until reboot. **Win keys (`VK_LWIN`, `VK_RWIN`) additionally require `KEYEVENTF_EXTENDEDKEY` flag** – without it the keyup event is silently ignored by Windows and the Win shell hook stays active.
   3. `Thread.Sleep(80)` – gives the target window time to process the focus change from `RestoreFocus()`.
   4. `SendInput` Unicode (each char as keydown+keyup with `KEYEVENTF_UNICODE`, `wVk=0`).
@@ -171,7 +175,7 @@ public class AppSettings
 
 ### `Services/WhisperService.cs`
 - `DetectCudaVersion()` – static method that probes CUDA runtime DLLs (`cudart64_N.dll` + `cublas64_N.dll`) for major versions **13, 12, 11** in order using `LoadLibraryEx`. Returns the first available major version as `int?`, or `null` if no CUDA runtime is found. Replaces the old `IsCudaAvailable()` bool method.
-- `InitializeAsync(modelPath)` – loads model from disk (`WhisperFactory.FromPath`). If the model is missing, downloads medium via `WhisperGgmlDownloader`.
+- `InitializeAsync(modelPath)` – loads model from disk (`WhisperFactory.FromPath`). Before loading, validates file size against `MinModelFileSizeBytes` (70 MB): if the file is smaller it is deleted and re-downloaded (guards against truncated/corrupted files). If the model is missing, downloads medium via `WhisperGgmlDownloader`.
 - `TranscribeAsync(byte[] wavBytes, string language, string prompt)`:
   - Always sets an explicit language (`"auto"` → fallback `"cs"`) to **prevent translation**.
   - **Never calls `WithTranslate()`** – whisper.cpp translates only if explicitly enabled.
@@ -189,6 +193,7 @@ public class AppSettings
 - Animations: `PulseAnim` (RecDot blinking during recording), `FadeIn` on show, `FadeToHover`/`FadeToIdle` (mouse enter/leave opacity).
 - **`AmplitudeRow`**: uses `Visibility="Collapsed"` (no `MinWidth`) – fully hidden outside recording so the window size adapts freely to the status text. Set to `Visibility.Visible` only during active recording, back to `Visibility.Collapsed` in `SetRecordingState(false)`.
 - **`WidgetBorder_MouseEnter` / `WidgetBorder_MouseLeave`**: event handlers that trigger the `FadeToHover` / `FadeToIdle` storyboards (opacity 0.6 ↔ 1.0). Defined in `MainWindow.xaml.cs`.
+- `ReloadHotkey()` – public method called by `App.ShowSettings()` after settings are saved; calls `_hotkey.UpdateKeys()` with the new VK list from settings for instant live reload without restart.
 
 ### `Views/MainWindow.xaml.cs`
 - **ETA countdown**: after releasing PTT calculates `estimatedSeconds = wavBytes.Length / 32000.0 * EtaFactor`.
@@ -211,7 +216,9 @@ public class AppSettings
 - No footer – the global "Select an entry…" hint and shared "Copy to clipboard" button have been removed.
 
 ### `Views/SettingsWindow.xaml`
-- Form: `ModelPath` (ComboBox: 12 models, items built at runtime in code-behind), `Language` (ComboBox: 57 languages + `auto`), `Prompt` (multiline TextBox), hotkey info (read-only), `HistorySize` (numeric TextBox, min 1, max Int32.MaxValue), `CopyToClipboard` (CheckBox, default checked), `RunAtStartup` (CheckBox – reads/writes `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`, value name `WhisperWriter`, default unchecked).
+- Form: `ModelPath` (ComboBox: 12 models, items built at runtime in code-behind), `Language` (ComboBox: 57 languages + `auto`), `Prompt` (multiline TextBox), **hotkey capture** (display field + "Change…" button), `HistorySize` (numeric TextBox, min 1, max Int32.MaxValue), `CopyToClipboard` (CheckBox, default checked), `RunAtStartup` (CheckBox – reads/writes `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`, value name `WhisperWriter`, default unchecked).
+- **Hotkey capture UI**: `TxtHotkeyDisplay` (read-only `TextBlock` inside a styled `Border`) shows the current combo. `BtnCaptureHotkey` ("Change…" / "Cancel") toggles capture mode. `TxtCaptureHint` (collapsed outside capture) shows instructions.
+- Capture mode: `PreviewKeyDown` accumulates VK codes into `_captureDown`; on `PreviewKeyUp` the full set is snapshotted as `_capturedVkCodes` and capture exits. Escape cancels without saving. The captured combo is previewed live while keys are held. WPF input types aliased as `WpfKeyEventArgs` / `WpfKey` / `WpfKeyInterop` to avoid `System.Windows.Forms.KeyEventArgs` ambiguity.
 - `CmbModelPath`: items are built dynamically in `BuildModelItems()` in code-behind. Each item has `Tag` = file path, `Content` = two-line `StackPanel` (name bold + HW requirements and size in smaller text). Models that are not downloaded (`File.Exists` check against `AppContext.BaseDirectory`) are shown with `Opacity=0.45`, `IsEnabled=false`, and ` · not downloaded` appended to the detail line.
 - `CmbLanguage`: each item has `Tag` = ISO language code (e.g. `"cs"`) and `Content` = `"cs – Čeština"` (code + native name).
 - `TxtHistorySize`: numeric TextBox, `PreviewTextInput` handler blocks non-numeric characters, fallback to `1` on save if value is invalid or < 1.
@@ -226,6 +233,7 @@ public class AppSettings
 - `CopyCudaRuntimeDlls` MSBuild target copies `cublas64_N.dll`, `cublasLt64_N.dll`, `cudart64_N.dll` to `$(OutputPath)runtimes\cuda\win-x64` after each build.
 - `<CudaBinDir>` holds the full path to the CUDA bin folder (e.g. `C:\...\CUDA\v13.2\bin\x64`). Updated automatically by `setup-dev.ps1`.
 - `<CudaVersion>` is extracted at build time from the path suffix via MSBuild `Regex` property function (e.g. `v13.2` → `13`). DLL names are assembled as `cublas64_$(CudaVersion).dll` – no hardcoded version number. Supports CUDA 11, 12, 13 and any future major version without further changes.
+- **`$(IsPublishing)` condition**: `CudaEffectiveOutputDir` uses `$(IsPublishing) == 'true'` to decide between `$(PublishDir)` and `$(OutputPath)`. Using `$(PublishDir) != ''` was incorrect because the .NET SDK sets `$(PublishDir)` during every regular build when `<PublishSingleFile>true</PublishSingleFile>` is present, causing the DLLs to be copied into `bin\Debug\...\publish\runtimes\...` instead of the actual run directory.
 - `ContinueOnError="true"` – build does not fail if CUDA is not installed.
 
 ### `WhisperWriter.csproj` – signing
@@ -311,7 +319,6 @@ Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe
 | Priority | Description |
 |---|---|
 | Medium | **EtaFactor calibration** – currently `0.90`, measure the real ratio `transcription_time / recording_length` and update in `MainWindow.xaml.cs` if needed. Ideally the factor would be computed adaptively from the last N transcriptions. |
-| Medium | **HotkeyService – configurable keys** – VK codes `VK_LCONTROL` and `VK_LWIN` are currently hardcoded. The `AppSettings.HotkeyModifiers` bitmask is saved, but `IsComboHeld()` ignores the Alt and Shift branches. A VK lookup table for Alt (`VK_LMENU = 0xA4`) and Shift (`VK_LSHIFT = 0xA0`) needs to be added. |
 | Low | **settings.json overwrite on build** – `PreserveNewest` copies the source `settings.json` to bin if it is newer, overwriting user settings. Consider `CopyToOutputDirectory=Never` and manual initialization on first run (SettingsService already handles this via `Save()` when the file does not exist). |
 | Low | **Whisper model download fallback** – if the default model (`ggml-large-v2.bin`) is missing, `InitializeAsync` downloads `GgmlType.Medium` (not Large). A "Downloading model…" message is shown. |
 
@@ -328,6 +335,9 @@ Start-Process "D:\llms\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe
 - **`WindowTop` replaced by `WindowBottom`, visibility clamping improved**: `AppSettings.WindowTop` was removed entirely and replaced by `WindowBottom` (distance from the bottom of the widget to the bottom of the primary screen's working area). This ensures the widget stays visually anchored to the bottom after resolution/DPI/dock changes. `ClampWindowToScreen()` uses `Screen.AllScreens` with maximum-overlap selection, checks all screens for visibility, and is also triggered by `SizeChanged`. `SaveWindowPosition()` stores only `WindowLeft` and `WindowBottom`.
 - **Centre-based window anchor**: `WindowLeft`/`WindowBottom` now store the **centre** of the widget (not the bottom-left corner). `ApplyStoredPosition()`, `PlaceAtDefaultPosition()`, `SaveWindowPosition()` and the `ClampWindowToScreen()` fallback all updated accordingly. The widget now expands symmetrically from its anchor point when the status text changes length (e.g. "Ready [GPU]" ↔ "Transcribing…").
 - **Release publish failing with `GenerateBundle` error**: `dotnet publish -c Release` crashed with `System.ArgumentException: Stream length minus starting position is too large to hold a PEImage` because the `GenerateBundle` task (single-file publish) tried to parse Whisper model `.bin` files in `models\` as PE assemblies. Fixed by adding `<ExcludeFromSingleFile>true</ExcludeFromSingleFile>` to both `<Content>` items in `.csproj` (`models\**\*` and `settings.json`). The files are still copied next to the exe – just not bundled into it.
+- **Configurable push-to-talk hotkey**: the hotkey was previously hardcoded to Left Ctrl + Left Win. Now the full key combination is stored in `AppSettings.HotkeyVkCodes` (a `List<int>` of Windows VK codes). Default changed to Left Alt + Left Win (`[0xA4, 0x5B]`). Settings dialog has an interactive capture UI: clicking "Change…" enters capture mode, the user holds the desired keys and releases them – the snapshot of simultaneously held keys becomes the new combo. `HotkeyService.UpdateKeys()` applies the change immediately without restart. `VkCodeHelper` provides human-readable display names for VK codes. `TextInjector.WaitForPhysicalRelease()` now reads the active VK list from settings at call time.
+- **CUDA DLLs copied to wrong directory on build**: `CopyCudaRuntimeDlls` MSBuild target used `'$(PublishDir)' != ''` to decide the output directory, but the .NET SDK sets `$(PublishDir)` during every regular `dotnet build` when `<PublishSingleFile>true</PublishSingleFile>` is set, so DLLs landed in `bin\Debug\...\publish\runtimes\...` instead of the actual run directory. Fixed by using `'$(IsPublishing)' == 'true'` as the condition.
+- **Truncated model file causes `WhisperModelLoadException`**: `WhisperFactory.FromPath` succeeds on a truncated GGML file (only reads header metadata) but `CreateBuilder()` fails at transcription time. Two-layer defence: (1) `MinModelFileSizeBytes` (70 MB) size check in `InitializeAsync` deletes and re-downloads the file before `FromPath` is called; (2) `TranscribeAsync` catches `WhisperModelLoadException` from `CreateBuilder()` (for files that pass the size check but are still corrupted), disposes and nulls `_factory`, deletes the model file, and fires `StateChanged(Error, …)` with a user-facing message so the status widget shows the error and the file is removed for re-download on next startup.
 
 ---
 
@@ -407,7 +417,6 @@ At the same time, check whether the changes affect user-visible behavior (instal
 Ideas mentioned during development, not yet implemented:
 
 - **Adaptive EtaFactor** – average from the last N transcriptions, saved to settings.
-- **Configurable hotkey via UI** – "press a key" dialog in SettingsWindow.
 - **More languages in ComboBox** – add Slovak, German, etc. (the base in SettingsWindow.xaml is already there).
 - **History export** – CSV or plain text.
 - **Dark/light theme** – the color palette base is in App.xaml, just add a second ResourceDictionary.
