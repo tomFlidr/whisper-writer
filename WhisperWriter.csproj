@@ -11,9 +11,9 @@
 		<AssemblyName>WhisperWriter</AssemblyName>
 		<RootNamespace>WhisperWriter</RootNamespace>
 		<ApplicationIcon>app.ico</ApplicationIcon>
-		<Version>1.0.0</Version>
-		<AssemblyVersion>1.0.0.0</AssemblyVersion>
-		<FileVersion>1.0.0.0</FileVersion>
+		<Version>1.1.0</Version>
+		<AssemblyVersion>1.1.0.0</AssemblyVersion>
+		<FileVersion>1.1.0.0</FileVersion>
 		<!-- Strong name signing via .snk (no password required) -->
 		<SignAssembly>true</SignAssembly>
 		<AssemblyOriginatorKeyFile>WhisperWriter.snk</AssemblyOriginatorKeyFile>
