@@ -24,6 +24,7 @@ No data leaves the computer. CUDA GPU acceleration is automatic.
 | Item | Value |
 |---|---|
 | Platform | Windows 10/11, .NET 8, WPF + WinForms (NotifyIcon) |
+| Version | 1.2.0.0 |
 | Project | `D:\tec\cs\whisper-writer\WhisperWriter.csproj` |
 | GPU | NVIDIA Quadro T2000, 4 GB VRAM, CUDA 13.2, driver 595.71 |
 | Whisper.net | 1.9.0 (+ Runtime + Runtime.Cuda) |
