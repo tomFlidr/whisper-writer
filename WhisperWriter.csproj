@@ -11,9 +11,9 @@
 		<AssemblyName>WhisperWriter</AssemblyName>
 		<RootNamespace>WhisperWriter</RootNamespace>
 		<ApplicationIcon>app.ico</ApplicationIcon>
-		<Version>1.1.0</Version>
-		<AssemblyVersion>1.1.0.0</AssemblyVersion>
-		<FileVersion>1.1.0.0</FileVersion>
+		<Version>1.2.0</Version>
+		<AssemblyVersion>1.2.0.0</AssemblyVersion>
+		<FileVersion>1.2.0.0</FileVersion>
 		<!-- Strong name signing via .snk (no password required) -->
 		<SignAssembly>true</SignAssembly>
 		<AssemblyOriginatorKeyFile>WhisperWriter.snk</AssemblyOriginatorKeyFile>
@@ -55,6 +55,7 @@
 	  <Content Include="app.ico">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
+	  <None Include=".github\AGENTS.md" />
 	  <None Include=".github\workflows\release.yml" />
 	  <None Include="WhisperWriter.sln" />
 	  <None Include="WhisperWriter.pfx" />
