@@ -28,8 +28,8 @@ namespace WhisperWriter.Services;
 /// </summary>
 public sealed class EtaStatsService : IDisposable {
 	private const int MaxRecordsPerModelEnvironment = 1000;
-	private const string CurrentDatabaseVersion = "1.1.0.0";
 	private const int MinimumSamplesForEta = 1;
+	private static string CurrentDatabaseVersion => typeof(App).Assembly.GetName().Version?.ToString()!;
 
 	private readonly string _dbPath;
 	private SqliteConnection? _connection;

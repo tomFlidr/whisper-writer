@@ -157,7 +157,7 @@ public class AppSettings
 ### `Services/EtaStatsService.cs`
 - Manages a SQLite database at `<BaseDirectory>/models/eta-time-stats.db` via `Microsoft.Data.Sqlite`.
 - **Schema**: two tables:
-  - `Versions (value TEXT)` – single row with the current DB/application version string (`1.1.0.0`).
+  - `Versions (value TEXT)` – single row seeded from the current assembly version (`typeof(App).Assembly.GetName().Version`).
   - `Environments (id INTEGER PK AUTOINCREMENT, fingerprint TEXT UNIQUE, value TEXT UNIQUE)` – one row per detected runtime environment.
   - `Models (id INTEGER PK AUTOINCREMENT, model_key TEXT UNIQUE)` – auto-populated on first use of each model.
   - `Stats (id INTEGER PK AUTOINCREMENT, model_id INTEGER FK, environment_id INTEGER FK, audio_seconds REAL, processing_seconds REAL)` – one row per completed transcription.
