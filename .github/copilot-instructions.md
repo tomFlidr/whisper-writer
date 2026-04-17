@@ -4,6 +4,8 @@ This file describes the current state of the **WhisperWriter** project and serve
 
 > **Language rule**: Always respond and reason in **English**, regardless of the language the user writes in. This applies to all explanations, plans, code comments, commit messages, and file edits.
 
+> **Skills rule**: At the start of every chat, read `docs/SKILLS.md`. Before performing any action listed in that file, read the corresponding skill document and follow its checklist.
+
 ---
 
 ## 1. What the app does
@@ -47,6 +49,10 @@ D:\tec\cs\whisper-writer\
 │   ├── copilot-instructions.md       ← this file
 │   └── workflows\
 │       └── release.yml               ← GitHub Actions: build & publish release ZIPs on tag push
+├── docs\
+│   ├── ROADMAP.md                    ← prioritized plan of all planned changes (Czech, sorted by code impact)
+│   ├── skills\coding-standards.md    ← mandatory coding conventions for this project (English)
+│   └── SKILLS.md                     ← discovered knowledge, gotchas, hard-won insights (English)
 ├── README.md                          ← user-facing documentation (EN)
 ├── WhisperWriter.csproj
 ├── WhisperWriter.pfx                  ← Authenticode certificate (self-signed, password 1234, in .gitignore)
@@ -322,7 +328,31 @@ public class AppSettings
 
 ---
 
-## 5. Build and run
+## 5. Docs folder
+
+### `docs/ROADMAP.md`
+- Written in **Czech**.
+- Contains all planned features and refactoring tasks, sorted by **impact on the codebase** (largest first).
+- Refactoring always comes first.
+- Each item describes: what the problem is, why it is being addressed, and exactly what will change.
+- **Only things that have been explicitly discussed and agreed upon are written here.** Nothing is invented.
+- After every successfully completed task (confirmed by a passing `run_build`), move the finished item to the **Dokončeno** section at the bottom of `ROADMAP.md`.
+- Do **not** add new items without the user's instruction.
+
+### `docs/skills/coding-standards.md`
+- Written in **English**.
+- Defines all mandatory coding conventions: formatting, brace style, namespaces, async patterns, P/Invoke, naming, project structure, and file editing rules.
+- Update this file whenever a new convention is established or an existing one is clarified.
+
+### `docs/SKILLS.md`
+- Written in **English**.
+- Collects non-obvious discoveries, gotchas, and hard-won insights from development.
+- Add an entry whenever something surprising or tricky is learned.
+- Currently empty – entries are added as development progresses.
+
+---
+
+## 6. Build and run
 
 ```powershell
 # Build (without restore – models are large)
@@ -336,7 +366,7 @@ Start-Process "D:\tec\cs\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.e
 
 ---
 
-## 6. Known issues / TODO
+## 7. Known issues / TODO
 
 ### Open tasks
 
@@ -365,7 +395,7 @@ Start-Process "D:\tec\cs\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.e
 
 ---
 
-## 7. Code conventions
+## 8. Code conventions
 
 - **OOP**, clean code, no unnecessary dependencies.
 - Comments in **English**, indentation with **TAB**.
@@ -420,23 +450,40 @@ Exception: files outside the project (`.editorconfig`, `.md`) may be written via
 If you need PowerShell only for **reading or searching**, use it, but add `-Encoding UTF8` and run the command as a single line, not as a block script.
 Line endings in C# files are **LF** – do not fix them manually, `replace_string_in_file` will preserve them.
 
-### Updating the instruction file after completing a task
-**After every successfully completed task where `run_build` returns a successful build, you MUST update this file (`.github/copilot-instructions.md`) to reflect the current state of the application.**
+### Updating files after completing a task
+**After every successfully completed task where `run_build` returns a successful build, you MUST update ALL of the following files to reflect the current state of the application:**
 
-Specifically, always check and update if needed:
+#### `copilot-instructions.md` (this file)
 - Section **3. Project structure** – add/remove files as appropriate.
 - Section **4. Key files** – update descriptions of changed files, add descriptions of new files.
-- Section **6. Known issues / TODO** – move resolved items to "Resolved issues", remove or update items that have changed, add new open tasks if they arose.
-- Section **8. Ideas for future development** – remove ideas that have been implemented.
+- Section **7. Known issues / TODO** – move resolved items to "Resolved issues", remove or update items that have changed, add new open tasks if they arose.
+- Section **9. Ideas for future development** – remove ideas that have been implemented.
 - Any other sections whose content has become outdated by the task change.
 
-This file is the primary source of context for future AI sessions – keep it accurate and up to date.
+#### `docs/ROADMAP.md`
+- Move the completed item(s) to the **Dokončeno** section at the bottom.
+- Do not add new items without the user's explicit instruction.
 
-At the same time, check whether the changes affect user-visible behavior (installation, settings, model list, keyboard shortcuts, tray navigation, etc.). If so, also update **`README.md`** to reflect the current state of the application.
+#### `docs/skills/coding-standards.md`
+- Update if a new convention was established or an existing one was clarified during the task.
+
+#### `README.md`
+- Update if the changes affect user-visible behavior: installation, settings, model list, keyboard shortcuts, tray navigation, etc.
+
+These files together form the primary source of context for future AI sessions – keep them accurate and up to date.
 
 ---
 
-## 8. Ideas for future development
+## 9. Settings and Configuration
+
+- All user-configurable values live in `Util/AppSettings.cs` as public properties with defaults.
+- Settings are serialized to `settings.json` next to the exe via `SettingsService`.
+- Never hardcode a value that the user might want to change. If in doubt, add it to `AppSettings`.
+- `AppSettings` must remain a plain POCO – no logic, no dependencies, no constructor parameters.
+
+---
+
+## 10. Ideas for future development
 
 Ideas mentioned during development, not yet implemented:
 

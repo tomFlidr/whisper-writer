@@ -1,4 +1,4 @@
-# http://EditorConfig.org
+﻿# http://EditorConfig.org
 
 root = true
 
@@ -40,3 +40,34 @@ csharp_space_between_method_call_empty_parameter_list_parentheses = false
 # Wrapping
 csharp_preserve_single_line_statements = false
 csharp_preserve_single_line_blocks = true
+
+# Qualification - always use this. for instance members
+dotnet_style_qualification_for_field = true:warning
+dotnet_style_qualification_for_property = true:warning
+dotnet_style_qualification_for_method = true:warning
+dotnet_style_qualification_for_event = true:warning
+
+# Naming - private fields: _camelCase
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel_case
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel_case.capitalization = camel_case
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+
+# Naming - protected members: camelCase
+dotnet_naming_rule.protected_members_camel.symbols = protected_members
+dotnet_naming_rule.protected_members_camel.style = camel_case_style
+dotnet_naming_rule.protected_members_camel.severity = warning
+dotnet_naming_symbols.protected_members.applicable_kinds = field,property,method,event
+dotnet_naming_symbols.protected_members.applicable_accessibilities = protected,protected_internal
+dotnet_naming_style.camel_case_style.capitalization = camel_case
+
+# Naming - public members: PascalCase
+dotnet_naming_rule.public_members_pascal.symbols = public_members
+dotnet_naming_rule.public_members_pascal.style = pascal_case_style
+dotnet_naming_rule.public_members_pascal.severity = warning
+dotnet_naming_symbols.public_members.applicable_kinds = class,struct,interface,enum,property,method,field,event,delegate
+dotnet_naming_symbols.public_members.applicable_accessibilities = public,internal
+dotnet_naming_style.pascal_case_style.capitalization = pascal_case
