@@ -8,7 +8,7 @@ Každá hotová položka se přesouvá do sekce **Dokončeno** a zároveň se ak
 
 ---
 
-## Fáze 1 - dodělat refactoring
+## Fáze 1 - dodělat hrubý refactoring
 
 Je třeba do coding standards přidat pravidla:
 - nemají se vytvářet podmínky bez složených závorek, 
@@ -124,6 +124,12 @@ okamžitě upozorní, že text se nevložil.
 
 ---
 
+### 3.4 Do nastavení přidat volbu pro překlad
+
+Vyzkoumat jak funguje překládání textu - jaké jsou možnsoti, a podle toho rozšířit nastavení o checkbox nebo další combobox.
+
+---
+
 ## Fáze 4 – Podpora GPU backendů
 
 > Střední dopad – přidání NuGet balíčků, rozšíření stávajících servisních tříd a Settings.
@@ -170,6 +176,21 @@ GPU akceleraci dostupnou na každém Windows 10/11 systému bez závislosti na C
 - Rozšířit `OrtBackend` enum o hodnotu `Cuda`.
 - Probe: zkontrolovat existenci `onnxruntime_providers_cuda.dll` v adresáři `runtimes/cuda/win-x64`.
 - Aktualizovat MSBuild target `CopyCudaRuntimeDlls` v `.csproj`, aby zkopíroval i ORT CUDA DLL soubory.
+
+---
+
+### 4.4 const-me/whisper
+
+Zkusit implementovat na Windows rozpoznání podpory pro https://github.com/const-me/whisper,
+ale musí to být na jistotu, protože tato knihovna nemá fallback pro CPU, ale je 3.5x rychlejší v inferenci.
+
+**Co se změní:**
+- je třeba vytvořit C# wrapper,
+- je třeba tuto knihovnu přidat do projektu, detekovat Windows podporu při startu 
+  a podle toho zvolit jak se bude procesovat zvuk,
+- podle podpory nabízet stažení modelů, které pro tento procesing musí být v jiném formátu:
+  https://huggingface.co/ggerganov/whisper.cpp/tree/main
+- procesovat zvuk touto knihovnou a modely.
 
 ---
 
