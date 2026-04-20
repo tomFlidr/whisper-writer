@@ -67,20 +67,20 @@ public static class VkCodeHelper {
 
 	/// <summary>Returns a short, human-readable name for a virtual-key code.</summary>
 	public static string GetName (int vk) {
-		if (_overrides.TryGetValue(vk, out var name))
+		if (VkCodeHelper._overrides.TryGetValue(vk, out var name))
 			return name;
 
 		// Ask Windows for a name via the scan code.
-		uint scanCode = MapVirtualKey((uint)vk, 0); // MAPVK_VK_TO_VSC
+		uint scanCode = VkCodeHelper.MapVirtualKey((uint)vk, 0); // MAPVK_VK_TO_VSC
 		if (scanCode == 0)
 			return $"0x{vk:X2}";
 
 		int lParam = (int)(scanCode << 16);
-		if (_extendedKeys.Contains(vk))
+		if (VkCodeHelper._extendedKeys.Contains(vk))
 			lParam |= (1 << 24); // extended-key flag
 
 		var sb = new StringBuilder(64);
-		int len = GetKeyNameText(lParam, sb, sb.Capacity);
+		int len = VkCodeHelper.GetKeyNameText(lParam, sb, sb.Capacity);
 		if (len > 0) {
 			// Title-case (GetKeyNameText may return "SPACE", "ENTER" etc.)
 			var raw = sb.ToString();

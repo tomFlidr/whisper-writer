@@ -8,9 +8,9 @@ namespace WhisperWriter.Services;
 /// Using polling instead of RegisterHotKey because Win key combinations behave
 /// unreliably with RegisterHotKey on Windows 10/11.
 /// </summary>
-public sealed class HotkeyService: IDisposable {
+public class HotkeyService: IDisposable {
 	[DllImport("user32.dll")]
-	private static extern short GetAsyncKeyState (int vKey);
+	private static extern short GetAsyncKeyState(int vKey);
 
 	public event Action? PushToTalkStarted;
 	public event Action? PushToTalkStopped;
@@ -22,14 +22,14 @@ public sealed class HotkeyService: IDisposable {
 
 	// Guarded by _keysLock; replaced atomically by UpdateKeys().
 	private readonly object _keysLock = new();
-	private int[] _vkCodes;
+	private int[] _virtualKeyCodes;
 
 	/// <summary>
 	/// Initialises the service with an explicit list of VK codes.
 	/// All listed keys must be held simultaneously to trigger PTT.
 	/// </summary>
-	public HotkeyService (IReadOnlyList<int> vkCodes) {
-		_vkCodes = [..vkCodes];
+	public HotkeyService (IReadOnlyList<int> virtualKeyCodes) {
+		this._virtualKeyCodes = [..virtualKeyCodes];
 	}
 
 	/// <summary>
@@ -37,7 +37,7 @@ public sealed class HotkeyService: IDisposable {
 	/// Kept for code paths that have not been migrated yet.
 	/// </summary>
 	public HotkeyService (HotkeyModifiers modifiers) {
-		_vkCodes = ModifiersToVkCodes(modifiers);
+		this._virtualKeyCodes = HotkeyService._modifiersToVirtualKeyCodes(modifiers);
 	}
 
 	/// <summary>
@@ -45,75 +45,75 @@ public sealed class HotkeyService: IDisposable {
 	/// Safe to call from any thread.
 	/// </summary>
 	public void UpdateKeys (IReadOnlyList<int> vkCodes) {
-		lock (_keysLock) {
-			_vkCodes = [..vkCodes];
+		lock (this._keysLock) {
+			this._virtualKeyCodes = [..vkCodes];
 		}
 		// If the old combo was being held, synthesise a release so recording stops cleanly.
-		if (_isHeld) {
-			_isHeld = false;
-			PushToTalkStopped?.Invoke();
+		if (this._isHeld) {
+			this._isHeld = false;
+			this.PushToTalkStopped?.Invoke();
 		}
 	}
 
 	/// <summary>Starts the background polling loop.</summary>
 	public void Start () {
-		_cts = new CancellationTokenSource();
-		_pollThread = new Thread(PollLoop) {
+		this._cts = new CancellationTokenSource();
+		this._pollThread = new Thread(this._pollLoop) {
 			IsBackground = true,
 			Name = "HotkeyPoll",
 		};
-		_pollThread.Start(_cts.Token);
+		this._pollThread.Start(this._cts.Token);
 	}
 
 	public void Stop () {
-		_cts?.Cancel();
+		this._cts?.Cancel();
 	}
 
-	private void PollLoop (object? obj) {
-		var ct = (CancellationToken)obj!;
-		while (!ct.IsCancellationRequested) {
-			bool held = IsComboHeld();
-			if (held && !_isHeld) {
-				_isHeld = true;
-				PushToTalkStarted?.Invoke();
-			} else if (!held && _isHeld) {
-				_isHeld = false;
-				PushToTalkStopped?.Invoke();
-			}
-			Thread.Sleep(20);
-		}
-	}
-
-	private bool IsComboHeld () {
-		int[] codes;
-		lock (_keysLock) {
-			codes = _vkCodes;
-		}
-		if (codes.Length == 0)
-			return false;
-		foreach (var vk in codes) {
-			if ((GetAsyncKeyState(vk) & 0x8000) == 0)
-				return false;
-		}
-		return true;
+	public void Dispose () {
+		if (this._disposed) return;
+		this._disposed = true;
+		this.Stop();
 	}
 
 	/// <summary>
 	/// Derives a minimal set of VK codes from a HotkeyModifiers bitmask.
 	/// Uses the left-hand variant of each modifier key.
 	/// </summary>
-	private static int[] ModifiersToVkCodes (HotkeyModifiers modifiers) {
+	private static int[] _modifiersToVirtualKeyCodes (HotkeyModifiers modifiers) {
 		var list = new List<int>();
-		if ((modifiers & HotkeyModifiers.Alt)     != 0) list.Add(0xA4); // VK_LMENU
-		if ((modifiers & HotkeyModifiers.Control) != 0) list.Add(0xA2); // VK_LCONTROL
-		if ((modifiers & HotkeyModifiers.Shift)   != 0) list.Add(0xA0); // VK_LSHIFT
-		if ((modifiers & HotkeyModifiers.Win)     != 0) list.Add(0x5B); // VK_LWIN
+		if ((modifiers & HotkeyModifiers.Alt) != 0) list.Add(0xA4);		// VK_LMENU
+		if ((modifiers & HotkeyModifiers.Control) != 0) list.Add(0xA2);	// VK_LCONTROL
+		if ((modifiers & HotkeyModifiers.Shift) != 0) list.Add(0xA0);	// VK_LSHIFT
+		if ((modifiers & HotkeyModifiers.Win) != 0) list.Add(0x5B);		// _VK_LWIN
 		return [..list];
 	}
 
-	public void Dispose () {
-		if (_disposed) return;
-		_disposed = true;
-		Stop();
+	private void _pollLoop (object? obj) {
+		var ct = (CancellationToken)obj!;
+		while (!ct.IsCancellationRequested) {
+			bool held = this._isComboHeld();
+			if (held && !this._isHeld) {
+				this._isHeld = true;
+				this.PushToTalkStarted?.Invoke();
+			} else if (!held && this._isHeld) {
+				this._isHeld = false;
+				this.PushToTalkStopped?.Invoke();
+			}
+			Thread.Sleep(20);
+		}
+	}
+
+	private bool _isComboHeld () {
+		int[] codes;
+		lock (this._keysLock) {
+			codes = this._virtualKeyCodes;
+		}
+		if (codes.Length == 0)
+			return false;
+		foreach (var vk in codes) {
+			if ((HotkeyService.GetAsyncKeyState(vk) & 0x8000) == 0)
+				return false;
+		}
+		return true;
 	}
 }

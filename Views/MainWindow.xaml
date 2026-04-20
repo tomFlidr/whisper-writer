@@ -45,9 +45,9 @@
 			Opacity="0.85"
 			BorderBrush="#66FFFFFF"
 			BorderThickness="1"
-			MouseLeftButtonDown="Border_MouseLeftButtonDown"
-			MouseEnter="WidgetBorder_MouseEnter"
-			MouseLeave="WidgetBorder_MouseLeave"
+			MouseLeftButtonDown="_border_MouseLeftButtonDown"
+			MouseEnter="_widgetBorder_MouseEnter"
+			MouseLeave="_widgetBorder_MouseLeave"
 			Cursor="SizeAll">
 
 		<StackPanel Orientation="Horizontal" VerticalAlignment="Center">

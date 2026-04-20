@@ -278,3 +278,18 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 - Exception: non-source files (`.md`, `.editorconfig`, `.ps1`) may be written via terminal.
 - When using PowerShell to **read** files, always add `-Encoding UTF8`.
 - After every completed task with a successful build, update `copilot-instructions.md` and `docs/ROADMAP.md`.
+
+---
+
+## 16. No Section-Separator Comments
+
+Do **not** use visual separator comments of any form to divide members into sections within a class. Examples of **forbidden** patterns:
+
+```csharp
+// ── Events ────────────────────────────────────────────────────────────────
+// ─────────────────────────── Fields ──────────────────────────────────────
+// ==== Public API ==========================================================
+// ### Helpers ###
+```
+
+These decorative lines add noise without providing information that cannot be inferred from member types and XML `<summary>` docs. Use XML doc comments (`/// <summary>`) on individual members instead.

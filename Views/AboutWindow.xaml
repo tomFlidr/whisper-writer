@@ -16,7 +16,7 @@
 		Opacity="0.97"
 		BorderBrush="#66FFFFFF"
 		BorderThickness="1"
-		MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+		MouseLeftButtonDown="_handleTitleBarMouseLeftButtonDown">
 
 		<Grid>
 			<Grid.RowDefinitions>
@@ -36,7 +36,7 @@
 						Content="✕"
 						HorizontalAlignment="Right"
 						VerticalAlignment="Center"
-						Click="BtnClose_Click"/>
+						Click="_handleBtnCloseClick"/>
 			</Grid>
 
 			<Rectangle Grid.Row="0" VerticalAlignment="Bottom" Height="1"
@@ -57,7 +57,7 @@
 				<Button Style="{StaticResource IconButton}"
 						Content="Close"
 						HorizontalAlignment="Right"
-						Click="BtnClose_Click"/>
+						Click="_handleBtnCloseClick"/>
 			</Border>
 		</Grid>
 	</Border>

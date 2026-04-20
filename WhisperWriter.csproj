@@ -118,4 +118,8 @@
 	  </Compile>
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Folder Include="Util\Structs\" />
+	</ItemGroup>
+
 </Project>

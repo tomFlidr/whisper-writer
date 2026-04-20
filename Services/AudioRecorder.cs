@@ -8,10 +8,13 @@ namespace WhisperWriter.Services;
 /// Call StartRecording() / StopRecording() around the push-to-talk period.
 /// GetWavBytes() returns the complete 16 kHz mono WAV suitable for Whisper.
 /// </summary>
-public sealed class AudioRecorder: IDisposable {
-	private const int SampleRate = 16000;
-	private const int Channels = 1;
-	private const int BitsPerSample = 16;
+public class AudioRecorder : IDisposable {
+	private static readonly int _sampleRate = 16000;
+	private static readonly int _channels = 1;
+	private static readonly int _bitsPerSample = 16;
+
+	// Fires periodically with the current amplitude (0–1) for the VU meter
+	public event Action<float>? AmplitudeChanged;
 
 	private WaveInEvent? _waveIn;
 	private MemoryStream? _buffer;
@@ -19,60 +22,65 @@ public sealed class AudioRecorder: IDisposable {
 	private bool _recording;
 	private readonly object _lock = new();
 
-	// Fires periodically with the current amplitude (0–1) for the VU meter
-	public event Action<float>? AmplitudeChanged;
-
 	public void StartRecording () {
-		lock (_lock) {
-			if (_recording) return;
+		lock (this._lock) {
+			if (this._recording) return;
 
-			_buffer = new MemoryStream();
-			var format = new WaveFormat(SampleRate, BitsPerSample, Channels);
-			_writer = new WaveFileWriter(_buffer, format);
+			this._buffer = new MemoryStream();
+			var format = new WaveFormat(
+				AudioRecorder._sampleRate, 
+				AudioRecorder._bitsPerSample, 
+				AudioRecorder._channels
+			);
+			this._writer = new WaveFileWriter(this._buffer, format);
 
-			_waveIn = new WaveInEvent {
+			this._waveIn = new WaveInEvent {
 				WaveFormat = format,
 				BufferMilliseconds = 50,
 			};
-			_waveIn.DataAvailable += OnDataAvailable;
-			_waveIn.StartRecording();
-			_recording = true;
+			this._waveIn.DataAvailable += this._handleDataAvailable;
+			this._waveIn.StartRecording();
+			this._recording = true;
 		}
 	}
 
 	public byte[]? StopRecording () {
-		lock (_lock) {
-			if (!_recording) return null;
-			_recording = false;
+		lock (this._lock) {
+			if (!this._recording) return null;
+			this._recording = false;
 
-			_waveIn!.StopRecording();
-			_waveIn.DataAvailable -= OnDataAvailable;
-			_waveIn.Dispose();
-			_waveIn = null;
+			this._waveIn!.StopRecording();
+			this._waveIn.DataAvailable -= this._handleDataAvailable;
+			this._waveIn.Dispose();
+			this._waveIn = null;
 
-			_writer!.Flush();
-			_writer.Dispose();
-			_writer = null;
+			this._writer!.Flush();
+			this._writer.Dispose();
+			this._writer = null;
 
-			var bytes = _buffer!.ToArray();
-			_buffer.Dispose();
-			_buffer = null;
+			var bytes = this._buffer!.ToArray();
+			this._buffer.Dispose();
+			this._buffer = null;
 			return bytes;
 		}
 	}
 
-	private void OnDataAvailable (object? sender, WaveInEventArgs e) {
-		lock (_lock) {
-			if (!_recording || _writer == null) return;
-			_writer.Write(e.Buffer, 0, e.BytesRecorded);
+	public void Dispose () {
+		this.StopRecording();
+	}
+
+	private void _handleDataAvailable (object? sender, WaveInEventArgs e) {
+		lock (this._lock) {
+			if (!this._recording || this._writer == null) return;
+			this._writer.Write(e.Buffer, 0, e.BytesRecorded);
 
 			// Calculate RMS amplitude for VU meter
-			float rms = CalculateRms(e.Buffer, e.BytesRecorded);
-			AmplitudeChanged?.Invoke(rms);
+			float rms = AudioRecorder._calculateRms(e.Buffer, e.BytesRecorded);
+			this.AmplitudeChanged?.Invoke(rms);
 		}
 	}
 
-	private static float CalculateRms (byte[] buffer, int length) {
+	private static float _calculateRms (byte[] buffer, int length) {
 		if (length < 2) return 0f;
 		double sum = 0;
 		int samples = length / 2;
@@ -82,9 +90,5 @@ public sealed class AudioRecorder: IDisposable {
 			sum += norm * norm;
 		}
 		return (float)Math.Sqrt(sum / samples);
-	}
-
-	public void Dispose () {
-		StopRecording();
 	}
 }

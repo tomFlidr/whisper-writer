@@ -2,29 +2,30 @@ using System.IO;
 using System.Runtime.InteropServices;
 using Whisper.net;
 using Whisper.net.Ggml;
+using WhisperWriter.Util.Enums;
 
 namespace WhisperWriter.Services;
 
-public enum TranscriptionState {
-	Idle,
-	Loading,
-	Transcribing,
-	Done,
-	Error,
-}
-
-public sealed class WhisperService: IAsyncDisposable {
-	private WhisperFactory? _factory;
-	private bool _initialized;
+/// <summary>
+/// Whisper.net-backed transcription engine.
+/// Implements ITranscriptionService; prefers CUDA, falls back to CPU automatically.
+/// </summary>
+public class WhisperService : ITranscriptionService {
+	// Minimum acceptable file size for any GGML model (tiny.en ≈ 78 MB).
+	// A file smaller than this is certainly truncated or corrupted.
+	public const long MinModelFileSizeBytes = 70 * 1024 * 1024; // 70 MB
 
 	public event Action<TranscriptionState, string>? StateChanged;
+
+	protected WhisperFactory? factory;
+	protected bool initialized;
 
 	/// <summary>
 	/// Probes whether CUDA runtime DLLs required by ggml-cuda-whisper.dll are loadable.
 	/// Tries CUDA major versions 13, 12, 11 in order.
 	/// Returns the detected major version number, or null if no CUDA runtime was found.
 	/// </summary>
-	public static int? DetectCudaVersion () {
+	public static int? DetectCudaVersion() {
 		foreach (var version in new[] { 13, 12, 11 }) {
 			var cudart = $"cudart64_{version}.dll";
 			var cublas = $"cublas64_{version}.dll";
@@ -41,63 +42,48 @@ public sealed class WhisperService: IAsyncDisposable {
 		return null;
 	}
 
-	private static class NativeMethods {
-		internal const uint LOAD_LIBRARY_AS_DATAFILE = 0x00000002;
-		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-		internal static extern IntPtr LoadLibraryEx (string lpFileName, IntPtr hFile, uint dwFlags);
-		[DllImport("kernel32.dll", SetLastError = true)]
-		internal static extern bool FreeLibrary (IntPtr hModule);
-	}
-
-	// Minimum acceptable file size for any GGML model (tiny.en = ~78 MB).
-	// A file smaller than this is certainly truncated or corrupted.
-	private const long MinModelFileSizeBytes = 70 * 1024 * 1024; // 70 MB
-
 	/// <summary>Returns the number of CPU threads used for Whisper inference.</summary>
-	public static int GetInferenceThreadCount () => Math.Max(1, Environment.ProcessorCount - 2);
+	public static int GetInferenceThreadCount() => Math.Max(1, Environment.ProcessorCount - 2);
 
 	/// <summary>
-	/// Initializes the Whisper model from disk. Call once at startup.
+	/// Initialises the Whisper model from disk. Call once at startup.
 	/// Prefers CUDA; falls back to CPU automatically via Whisper.net.Runtime.Cuda.
 	/// </summary>
-	public async Task InitializeAsync (string modelPath) {
-		StateChanged?.Invoke(TranscriptionState.Loading, "Loading model…");
+	public async Task InitializeAsync(string modelPath) {
+		this.StateChanged?.Invoke(TranscriptionState.Loading, "Loading model…");
 
-		var cudaVersion = DetectCudaVersion();
+		var cudaVersion = WhisperService.DetectCudaVersion();
 		LogService.Info(cudaVersion.HasValue
 			? $"CUDA probe: cudart64_{cudaVersion}.dll + cublas64_{cudaVersion}.dll found — GPU will be used (CUDA {cudaVersion})"
 			: "CUDA probe: no CUDA runtime found (tried versions 13, 12, 11) — falling back to CPU");
 
 		try {
 			// Delete and re-download if the file exists but is clearly truncated.
-			if (File.Exists(modelPath) && new FileInfo(modelPath).Length < MinModelFileSizeBytes) {
+			if (File.Exists(modelPath) && new FileInfo(modelPath).Length < WhisperService.MinModelFileSizeBytes) {
 				LogService.Warning($"Model file '{modelPath}' is too small ({new FileInfo(modelPath).Length / 1024 / 1024} MB) — deleting and re-downloading.");
 				File.Delete(modelPath);
 			}
 
-			// Download model if missing
+			// Download model if missing.
 			if (!File.Exists(modelPath)) {
 				var dir = Path.GetDirectoryName(modelPath)!;
 				Directory.CreateDirectory(dir);
-				StateChanged?.Invoke(TranscriptionState.Loading, "Downloading model…");
+				this.StateChanged?.Invoke(TranscriptionState.Loading, "Downloading model…");
 				using var httpClient = new System.Net.Http.HttpClient();
 				var downloader = new WhisperGgmlDownloader(httpClient);
-				await downloader.GetGgmlModelAsync(GgmlType.Medium, QuantizationType.NoQuantization)
-					.ContinueWith(async t => {
-						await using var src = await t;
-						await using var dst = File.Create(modelPath);
-						await src.CopyToAsync(dst);
-					}).Unwrap();
+				await using var src = await downloader.GetGgmlModelAsync(GgmlType.Medium, QuantizationType.NoQuantization);
+				await using var dst = File.Create(modelPath);
+				await src.CopyToAsync(dst);
 			}
 
-			_factory = WhisperFactory.FromPath(modelPath);
-			_initialized = true;
-			StateChanged?.Invoke(TranscriptionState.Idle, "Ready");
+			this.factory = WhisperFactory.FromPath(modelPath);
+			this.initialized = true;
+			this.StateChanged?.Invoke(TranscriptionState.Idle, "Ready");
 		} catch (Exception ex) {
-			_initialized = false;
-			_factory = null;
+			this.initialized = false;
+			this.factory = null;
 			LogService.Error("Failed to load Whisper model", ex);
-			StateChanged?.Invoke(TranscriptionState.Error, $"Model load failed: {ex.Message}");
+			this.StateChanged?.Invoke(TranscriptionState.Error, $"Model load failed: {ex.Message}");
 		}
 	}
 
@@ -105,8 +91,8 @@ public sealed class WhisperService: IAsyncDisposable {
 	/// Transcribes the given WAV bytes (16 kHz mono PCM).
 	/// Returns the transcribed text, or throws on error.
 	/// </summary>
-	public async Task<string> TranscribeAsync (byte[] wavBytes, string language, string prompt) {
-		if (!_initialized || _factory == null)
+	public async Task<string> TranscribeAsync(byte[] wavBytes, string language, string prompt) {
+		if (!this.initialized || this.factory == null)
 			throw new InvalidOperationException("Model is not loaded. Check the model path in Settings.");
 
 		string? modelPath = null;
@@ -114,7 +100,7 @@ public sealed class WhisperService: IAsyncDisposable {
 			modelPath = App.SettingsService.Settings.ModelPath;
 		} catch { }
 
-		StateChanged?.Invoke(TranscriptionState.Transcribing, "Transcribing…");
+		this.StateChanged?.Invoke(TranscriptionState.Transcribing, "Transcribing…");
 
 		// Build processor with current settings.
 		// IMPORTANT: never call WithTranslate() – we want transcription only.
@@ -125,9 +111,9 @@ public sealed class WhisperService: IAsyncDisposable {
 			: "en";
 
 		try {
-			var builder = _factory.CreateBuilder()
+			var builder = this.factory.CreateBuilder()
 				.WithLanguage(effectiveLanguage)
-				.WithThreads(GetInferenceThreadCount());
+				.WithThreads(WhisperService.GetInferenceThreadCount());
 
 			if (!string.IsNullOrEmpty(prompt))
 				builder = builder.WithPrompt(prompt);
@@ -140,29 +126,37 @@ public sealed class WhisperService: IAsyncDisposable {
 				segments.Append(seg.Text);
 
 			var result = segments.ToString().Trim();
-			StateChanged?.Invoke(TranscriptionState.Done, result);
+			this.StateChanged?.Invoke(TranscriptionState.Done, result);
 			return result;
 		} catch (WhisperModelLoadException ex) {
 			// The factory accepted the file (only reads header) but the model is
 			// corrupted or truncated. Delete it so InitializeAsync re-downloads it
 			// on next startup, then surface a clear error to the user.
 			LogService.Error("Whisper model corrupted – deleting file for re-download", ex);
-			_initialized = false;
-			_factory.Dispose();
-			_factory = null;
+			this.initialized = false;
+			this.factory.Dispose();
+			this.factory = null;
 			if (modelPath != null && File.Exists(modelPath)) {
 				try { File.Delete(modelPath); } catch (Exception delEx) {
 					LogService.Warning($"Could not delete corrupted model file '{modelPath}'", delEx);
 				}
 			}
 			var userMsg = "Model file is corrupted and has been deleted. Restart the app to re-download it.";
-			StateChanged?.Invoke(TranscriptionState.Error, userMsg);
+			this.StateChanged?.Invoke(TranscriptionState.Error, userMsg);
 			throw new InvalidOperationException(userMsg, ex);
 		}
 	}
 
-	public async ValueTask DisposeAsync () {
-		_factory?.Dispose();
+	public async ValueTask DisposeAsync() {
+		this.factory?.Dispose();
 		await ValueTask.CompletedTask;
+	}
+
+	private static class NativeMethods {
+		internal const uint LOAD_LIBRARY_AS_DATAFILE = 0x00000002;
+		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+		internal static extern IntPtr LoadLibraryEx(string lpFileName, IntPtr hFile, uint dwFlags);
+		[DllImport("kernel32.dll", SetLastError = true)]
+		internal static extern bool FreeLibrary(IntPtr hModule);
 	}
 }

@@ -16,10 +16,8 @@ using WpfTextCompositionEventArgs = System.Windows.Input.TextCompositionEventArg
 namespace WhisperWriter.Views;
 
 public partial class SettingsWindow : Window {
-	private const string StartupKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
-	private const string StartupValueName = "WhisperWriter";
-
-	// ── Hotkey capture state ──────────────────────────────────────────────────
+	private const string _startupKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+	private const string _startupValueName = "WhisperWriter";
 
 	[DllImport("user32.dll")]
 	private static extern short GetAsyncKeyState (int vKey);
@@ -55,29 +53,29 @@ public partial class SettingsWindow : Window {
 	];
 
 	public SettingsWindow () {
-		InitializeComponent();
-		LoadSettings();
+		this.InitializeComponent();
+		this._loadSettings();
 	}
 
-	private static bool IsRegisteredAtStartup () {
-		using var key = Registry.CurrentUser.OpenSubKey(StartupKeyPath, false);
-		return key?.GetValue(StartupValueName) != null;
+	private static bool _isRegisteredAtStartup () {
+		using var key = Registry.CurrentUser.OpenSubKey(_startupKeyPath, false);
+		return key?.GetValue(_startupValueName) != null;
 	}
 
-	private static void SetStartupRegistry (bool enable) {
-		using var key = Registry.CurrentUser.OpenSubKey(StartupKeyPath, true);
+	private static void _setStartupRegistry (bool enable) {
+		using var key = Registry.CurrentUser.OpenSubKey(_startupKeyPath, true);
 		if (key == null)
 			return;
 		if (enable) {
 			var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
-			key.SetValue(StartupValueName, $"\"{exePath}\"");
+			key.SetValue(_startupValueName, $"\"{exePath}\"");
 		} else {
-			key.DeleteValue(StartupValueName, throwOnMissingValue: false);
+			key.DeleteValue(_startupValueName, throwOnMissingValue: false);
 		}
 	}
 
-	private void BuildModelItems () {
-		CmbModelPath.Items.Clear();
+	private void _buildModelItems () {
+		this.CmbModelPath.Items.Clear();
 		foreach (var (tag, name, details) in _models) {
 			var absolutePath = Path.Combine(AppContext.BaseDirectory, tag.Replace('/', Path.DirectorySeparatorChar));
 			var exists = File.Exists(absolutePath);
@@ -104,164 +102,160 @@ public partial class SettingsWindow : Window {
 				item.Opacity = 0.45;
 				item.IsEnabled = false;
 			}
-			CmbModelPath.Items.Add(item);
+			this.CmbModelPath.Items.Add(item);
 		}
 	}
 
-	private void LoadSettings () {
-		BuildModelItems();
+	private void _loadSettings () {
+		this._buildModelItems();
 		var s = App.SettingsService.Settings;
-		foreach (ComboBoxItem item in CmbModelPath.Items) {
+		foreach (ComboBoxItem item in this.CmbModelPath.Items) {
 			if (item.Tag as string == s.ModelPath) {
-				CmbModelPath.SelectedItem = item;
+				this.CmbModelPath.SelectedItem = item;
 				break;
 			}
 		}
-		if (CmbModelPath.SelectedItem == null) {
+		if (this.CmbModelPath.SelectedItem == null) {
 			// Fall back to the first downloaded model, or the first item if none downloaded
-			foreach (ComboBoxItem item in CmbModelPath.Items) {
+			foreach (ComboBoxItem item in this.CmbModelPath.Items) {
 				if (item.IsEnabled) {
-					CmbModelPath.SelectedItem = item;
+					this.CmbModelPath.SelectedItem = item;
 					break;
 				}
 			}
-			if (CmbModelPath.SelectedItem == null)
-				CmbModelPath.SelectedIndex = 0;
+			if (this.CmbModelPath.SelectedItem == null)
+				this.CmbModelPath.SelectedIndex = 0;
 		}
-		TxtPrompt.Text = s.Prompt;
-		TxtHistorySize.Text = s.HistorySize.ToString();
-		ChkCopyToClipboard.IsChecked = s.CopyToClipboard;
-		ChkRunAtStartup.IsChecked = IsRegisteredAtStartup();
+		this.TxtPrompt.Text = s.Prompt;
+		this.TxtHistorySize.Text = s.HistorySize.ToString();
+		this.ChkCopyToClipboard.IsChecked = s.CopyToClipboard;
+		this.ChkRunAtStartup.IsChecked = SettingsWindow._isRegisteredAtStartup();
 
-		foreach (ComboBoxItem item in CmbLanguage.Items) {
+		foreach (ComboBoxItem item in this.CmbLanguage.Items) {
 			if (item.Tag as string == s.Language) {
-				CmbLanguage.SelectedItem = item;
+				this.CmbLanguage.SelectedItem = item;
 				break;
 			}
 		}
-		if (CmbLanguage.SelectedItem == null)
-			CmbLanguage.SelectedIndex = 0;
+		if (this.CmbLanguage.SelectedItem == null)
+			this.CmbLanguage.SelectedIndex = 0;
 
 		// Hotkey
-		_currentVkCodes = new List<int>(s.HotkeyVkCodes);
-		_capturedVkCodes = new List<int>(_currentVkCodes);
-		TxtHotkeyDisplay.Text = VkCodeHelper.FormatCombo(_currentVkCodes);
+		this._currentVkCodes = new List<int>(s.HotkeyVkCodes);
+		this._capturedVkCodes = new List<int>(this._currentVkCodes);
+		this.TxtHotkeyDisplay.Text = VkCodeHelper.FormatCombo(this._currentVkCodes);
 	}
 
-	private void TxtHistorySize_PreviewTextInput (object sender, WpfTextCompositionEventArgs e) {
+	private void _handleTxtHistorySizePreviewTextInput (object sender, WpfTextCompositionEventArgs e) {
 		e.Handled = !Regex.IsMatch(e.Text, @"^\d+$");
 	}
 
-	// ── Hotkey capture ────────────────────────────────────────────────────────
-
-	private void BtnCaptureHotkey_Click (object sender, RoutedEventArgs e) {
-		if (_captureMode) {
-			ExitCaptureMode(accept: false);
+	private void _handleBtnCaptureHotkeyClick (object sender, RoutedEventArgs e) {
+		if (this._captureMode) {
+			this._exitCaptureMode(accept: false);
 			return;
 		}
-		EnterCaptureMode();
+		this._enterCaptureMode();
 	}
 
-	private void EnterCaptureMode () {
-		_captureMode = true;
-		_captureDown.Clear();
-		BtnCaptureHotkey.Content = "Cancel";
-		TxtCaptureHint.Visibility = Visibility.Visible;
-		TxtHotkeyDisplay.Text = "(press keys…)";
-		TxtHotkeyDisplay.Foreground = (System.Windows.Media.SolidColorBrush)
+	private void _enterCaptureMode () {
+		this._captureMode = true;
+		this._captureDown.Clear();
+		this.BtnCaptureHotkey.Content = "Cancel";
+		this.TxtCaptureHint.Visibility = Visibility.Visible;
+		this.TxtHotkeyDisplay.Text = "(press keys…)";
+		this.TxtHotkeyDisplay.Foreground = (System.Windows.Media.SolidColorBrush)
 			System.Windows.Application.Current.Resources["AccentBrush"];
 
 		// Hook window-level key events to capture ALL keys including modifiers.
-		PreviewKeyDown += Capture_PreviewKeyDown;
-		PreviewKeyUp   += Capture_PreviewKeyUp;
+		this.PreviewKeyDown += this._handleCapturePreviewKeyDown;
+		this.PreviewKeyUp   += this._handleCapturePreviewKeyUp;
 
 		// Suppress default key handling while capturing so e.g. Tab doesn't move focus.
-		KeyDown += Capture_SuppressKey;
-		KeyUp   += Capture_SuppressKey;
+		this.KeyDown += this._handleCaptureSuppressKey;
+		this.KeyUp   += this._handleCaptureSuppressKey;
 	}
 
-	private void ExitCaptureMode (bool accept) {
-		_captureMode = false;
-		PreviewKeyDown -= Capture_PreviewKeyDown;
-		PreviewKeyUp   -= Capture_PreviewKeyUp;
-		KeyDown -= Capture_SuppressKey;
-		KeyUp   -= Capture_SuppressKey;
+	private void _exitCaptureMode (bool accept) {
+		this._captureMode = false;
+		this.PreviewKeyDown -= this._handleCapturePreviewKeyDown;
+		this.PreviewKeyUp   -= this._handleCapturePreviewKeyUp;
+		this.KeyDown -= this._handleCaptureSuppressKey;
+		this.KeyUp   -= this._handleCaptureSuppressKey;
 
-		BtnCaptureHotkey.Content = "Change…";
-		TxtCaptureHint.Visibility = Visibility.Collapsed;
-		TxtHotkeyDisplay.Foreground = (System.Windows.Media.SolidColorBrush)
+		this.BtnCaptureHotkey.Content = "Change…";
+		this.TxtCaptureHint.Visibility = Visibility.Collapsed;
+		this.TxtHotkeyDisplay.Foreground = (System.Windows.Media.SolidColorBrush)
 			System.Windows.Application.Current.Resources["TextPrimaryBrush"];
 
-		if (accept && _capturedVkCodes.Count > 0) {
-			_currentVkCodes = new List<int>(_capturedVkCodes);
+		if (accept && this._capturedVkCodes.Count > 0) {
+			this._currentVkCodes = new List<int>(this._capturedVkCodes);
 		}
-		TxtHotkeyDisplay.Text = VkCodeHelper.FormatCombo(_currentVkCodes);
-		_capturedVkCodes = new List<int>(_currentVkCodes);
+		this.TxtHotkeyDisplay.Text = VkCodeHelper.FormatCombo(this._currentVkCodes);
+		this._capturedVkCodes = new List<int>(this._currentVkCodes);
 	}
 
-	private void Capture_PreviewKeyDown (object sender, WpfKeyEventArgs e) {
+	private void _handleCapturePreviewKeyDown (object sender, WpfKeyEventArgs e) {
 		e.Handled = true;
 		var vk = WpfKeyInterop.VirtualKeyFromKey(e.Key == WpfKey.System ? e.SystemKey : e.Key);
 
 		// Escape cancels without accepting.
 		if (vk == 0x1B) {
-			ExitCaptureMode(accept: false);
+			this._exitCaptureMode(accept: false);
 			return;
 		}
 
 		if (!_captureExcluded.Contains(vk)) {
-			_captureDown.Add(vk);
+			this._captureDown.Add(vk);
 			// Show live preview of currently held keys.
-			TxtHotkeyDisplay.Text = VkCodeHelper.FormatCombo(_captureDown.ToList());
+			this.TxtHotkeyDisplay.Text = VkCodeHelper.FormatCombo(this._captureDown.ToList());
 		}
 	}
 
-	private void Capture_PreviewKeyUp (object sender, WpfKeyEventArgs e) {
+	private void _handleCapturePreviewKeyUp (object sender, WpfKeyEventArgs e) {
 		e.Handled = true;
 
 		// On first key release: snapshot all keys that were down simultaneously.
-		if (_captureDown.Count > 0) {
-			_capturedVkCodes = [.._captureDown];
-			_captureDown.Clear();
+		if (this._captureDown.Count > 0) {
+			this._capturedVkCodes = [..this._captureDown];
+			this._captureDown.Clear();
 		}
-		ExitCaptureMode(accept: true);
+		this._exitCaptureMode(accept: true);
 	}
 
-	private void Capture_SuppressKey (object sender, WpfKeyEventArgs e) {
+	private void _handleCaptureSuppressKey (object sender, WpfKeyEventArgs e) {
 		e.Handled = true;
 	}
 
-	// ── Save / Cancel ─────────────────────────────────────────────────────────
-
-	private void TitleBar_MouseLeftButtonDown (object sender, WpfMouseButtonEventArgs e) {
+	private void _titleBar_MouseLeftButtonDown (object sender, WpfMouseButtonEventArgs e) {
 		if (e.ButtonState == WpfMouseButtonState.Pressed)
-			DragMove();
+			this.DragMove();
 	}
 
-	private void BtnSave_Click (object sender, RoutedEventArgs e) {
+	private void _btnSave_Click (object sender, RoutedEventArgs e) {
 		var s = App.SettingsService.Settings;
-		if (CmbModelPath.SelectedItem is ComboBoxItem selectedModel)
+		if (this.CmbModelPath.SelectedItem is ComboBoxItem selectedModel)
 			s.ModelPath = selectedModel.Tag as string ?? "models/ggml-large-v2.bin";
-		s.Prompt = TxtPrompt.Text;
-		s.HistorySize = int.TryParse(TxtHistorySize.Text, out int historySize) && historySize >= 1
+		s.Prompt = this.TxtPrompt.Text;
+		s.HistorySize = int.TryParse(this.TxtHistorySize.Text, out int historySize) && historySize >= 1
 			? historySize
 			: 1;
-		s.CopyToClipboard = ChkCopyToClipboard.IsChecked == true;
-		s.RunAtStartup = ChkRunAtStartup.IsChecked == true;
-		SetStartupRegistry(s.RunAtStartup);
+		s.CopyToClipboard = this.ChkCopyToClipboard.IsChecked == true;
+		s.RunAtStartup = this.ChkRunAtStartup.IsChecked == true;
+		_setStartupRegistry(s.RunAtStartup);
 
-		if (CmbLanguage.SelectedItem is ComboBoxItem selected)
+		if (this.CmbLanguage.SelectedItem is ComboBoxItem selected)
 			s.Language = selected.Tag as string ?? "auto";
 
 		// Persist hotkey VK codes
-		s.HotkeyVkCodes = new List<int>(_currentVkCodes);
+		s.HotkeyVkCodes = new List<int>(this._currentVkCodes);
 
-		DialogResult = true;
-		Close();
+		this.DialogResult = true;
+		this.Close();
 	}
 
-	private void BtnCancel_Click (object sender, RoutedEventArgs e) {
-		DialogResult = false;
-		Close();
+	private void _btnCancel_Click (object sender, RoutedEventArgs e) {
+		this.DialogResult = false;
+		this.Close();
 	}
 }

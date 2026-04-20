@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using WhisperWriter.Services.EtaStatsServices;
 
 namespace WhisperWriter.Services;
 
@@ -13,7 +14,7 @@ namespace WhisperWriter.Services;
 /// Persists environment-aware transcription timing statistics in a local SQLite database
 /// and provides an evidence-based ETA estimate for new recordings.
 ///
-/// Database location: <BaseDirectory>/models/eta-time-stats.db
+/// Database location: &lt;BaseDirectory&gt;/models/eta-time-stats.db
 ///
 /// Fresh schema (no migrations):
 ///   Versions     (value TEXT)
@@ -26,37 +27,119 @@ namespace WhisperWriter.Services;
 /// similar audio length (±30%), then widens to ±50%, then falls back to all rows for the same
 /// model/environment. ETA is shown only when at least two matching samples exist.
 /// </summary>
-public sealed class EtaStatsService : IDisposable {
-	private const int MaxRecordsPerModelEnvironment = 1000;
-	private const int MinimumSamplesForEta = 1;
-	private static string CurrentDatabaseVersion => typeof(App).Assembly.GetName().Version?.ToString()!;
+public class EtaService : IDisposable {
+	private static readonly int _maxRecordsPerModelEnvironment = 1000;
+	private static readonly int _minimumSamplesForEta = 1;
 
-	private readonly string _dbPath;
-	private SqliteConnection? _connection;
+	protected static string currentDatabaseVersion => typeof(App).Assembly.GetName().Version?.ToString()!;
 
-	public EtaStatsService () {
+	protected readonly string dbPath;
+	protected SqliteConnection? connection;
+
+	public EtaService () {
 		var dir = Path.Combine(AppContext.BaseDirectory, "models");
 		Directory.CreateDirectory(dir);
-		_dbPath = Path.Combine(dir, "eta-time-stats.db");
+		this.dbPath = Path.Combine(dir, "eta-time-stats.db");
 	}
-
-	// ── Initialisation ────────────────────────────────────────────────────────
 
 	public void Initialize () {
 		try {
-			_connection = new SqliteConnection($"Data Source={_dbPath}");
-			_connection.Open();
-			EnsureSchema();
-			LogService.Info($"EtaStatsService: database opened at {_dbPath}");
+			this.connection = new SqliteConnection($"Data Source={this.dbPath}");
+			this.connection.Open();
+			this.ensureSchema();
+			LogService.Info($"EtaService: database opened at {this.dbPath}");
 		} catch (Exception ex) {
-			LogService.Error("EtaStatsService: failed to open database", ex);
-			_connection?.Dispose();
-			_connection = null;
+			LogService.Error("EtaService: failed to open database", ex);
+			this.connection?.Dispose();
+			this.connection = null;
 		}
 	}
 
-	private void EnsureSchema () {
-		Execute(@"
+	public double? EstimateProcessingSeconds (string modelKey, double audioSeconds) {
+		if (this.connection == null || audioSeconds <= 0)
+			return null;
+
+		try {
+			var environmentId = this.findOrCreateEnvironmentId();
+			var modelId = this.findModelId(modelKey);
+			if (modelId == null)
+				return null;
+
+			var windows = new[] {
+				(minFactor: 0.70, maxFactor: 1.30),
+				(minFactor: 0.50, maxFactor: 1.50),
+			};
+
+			foreach (var window in windows) {
+				var estimate = this.estimateForWindow(modelId.Value, environmentId,
+					audioSeconds * window.minFactor, audioSeconds * window.maxFactor, audioSeconds);
+				if (estimate.HasValue)
+					return estimate.Value;
+			}
+
+			return this.estimateWithoutWindow(modelId.Value, environmentId, audioSeconds);
+		} catch (Exception ex) {
+			LogService.Error("EtaService: EstimateProcessingSeconds failed", ex);
+			return null;
+		}
+	}
+
+	public void Record (string modelKey, double audioSeconds, double processingSeconds) {
+		if (this.connection == null)
+			return;
+		if (audioSeconds <= 0 || processingSeconds <= 0)
+			return;
+
+		try {
+			var environmentId = this.findOrCreateEnvironmentId();
+			var modelId = this.findOrCreateModelId(modelKey);
+
+			using var tx = this.connection.BeginTransaction();
+
+			using var ins = this.connection.CreateCommand();
+			ins.Transaction = tx;
+			ins.CommandText = @"
+				INSERT INTO Stats (model_id, environment_id, audio_seconds, processing_seconds)
+				VALUES ($modelId, $environmentId, $audio, $proc);
+			";
+			ins.Parameters.AddWithValue("$modelId", modelId);
+			ins.Parameters.AddWithValue("$environmentId", environmentId);
+			ins.Parameters.AddWithValue("$audio", audioSeconds);
+			ins.Parameters.AddWithValue("$proc", processingSeconds);
+			ins.ExecuteNonQuery();
+
+			using var del = this.connection.CreateCommand();
+			del.Transaction = tx;
+			del.CommandText = @"
+				DELETE FROM Stats
+				WHERE model_id = $modelId
+				  AND environment_id = $environmentId
+				  AND id NOT IN (
+					SELECT id FROM Stats
+					WHERE model_id = $modelId
+					  AND environment_id = $environmentId
+					ORDER BY id DESC
+					LIMIT $maxRows
+				);
+			";
+			del.Parameters.AddWithValue("$modelId", modelId);
+			del.Parameters.AddWithValue("$environmentId", environmentId);
+			del.Parameters.AddWithValue("$maxRows", EtaService._maxRecordsPerModelEnvironment);
+			del.ExecuteNonQuery();
+
+			tx.Commit();
+		} catch (Exception ex) {
+			LogService.Error("EtaService: Record failed", ex);
+		}
+	}
+
+	public void Dispose () {
+		this.connection?.Dispose();
+		this.connection = null;
+	}
+
+	protected void ensureSchema() {
+		this.execute(@"
 			CREATE TABLE IF NOT EXISTS Versions (
 				value TEXT NOT NULL
 			);
@@ -76,114 +159,42 @@ public sealed class EtaStatsService : IDisposable {
 				audio_seconds       REAL    NOT NULL,
 				processing_seconds  REAL    NOT NULL
 			);
-			CREATE UNIQUE INDEX IF NOT EXISTS idx_environments_fingerprint ON Environments (fingerprint);
-			CREATE UNIQUE INDEX IF NOT EXISTS idx_environments_value ON Environments (value);
-			CREATE INDEX IF NOT EXISTS idx_stats_model_env_id ON Stats (model_id, environment_id, id DESC);
-			CREATE INDEX IF NOT EXISTS idx_stats_model_env_audio ON Stats (model_id, environment_id, audio_seconds);
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_environments_fingerprint 
+				ON Environments (fingerprint);
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_environments_value 
+				ON Environments (value);
+			CREATE INDEX IF NOT EXISTS idx_stats_model_env_id 
+				ON Stats (model_id, environment_id, id DESC);
+			CREATE INDEX IF NOT EXISTS idx_stats_model_env_audio 
+				ON Stats (model_id, environment_id, audio_seconds);
 		");
 
-		using var countCmd = _connection!.CreateCommand();
+		using var countCmd = this.connection!.CreateCommand();
 		countCmd.CommandText = "SELECT COUNT(*) FROM Versions;";
 		var rowCount = Convert.ToInt32(countCmd.ExecuteScalar(), CultureInfo.InvariantCulture);
 		if (rowCount == 0) {
-			using var insertCmd = _connection.CreateCommand();
+			using var insertCmd = this.connection.CreateCommand();
 			insertCmd.CommandText = "INSERT INTO Versions (value) VALUES ($value);";
-			insertCmd.Parameters.AddWithValue("$value", CurrentDatabaseVersion);
+			insertCmd.Parameters.AddWithValue("$value", EtaService.currentDatabaseVersion);
 			insertCmd.ExecuteNonQuery();
 		}
 	}
 
-	// ── Public API ────────────────────────────────────────────────────────────
-
-	public double? EstimateProcessingSeconds (string modelKey, double audioSeconds) {
-		if (_connection == null || audioSeconds <= 0)
-			return null;
-
-		try {
-			var environmentId = FindOrCreateEnvironmentId();
-			var modelId = FindModelId(modelKey);
-			if (modelId == null)
-				return null;
-
-			var windows = new[] {
-				(minFactor: 0.70, maxFactor: 1.30),
-				(minFactor: 0.50, maxFactor: 1.50),
-			};
-
-			foreach (var window in windows) {
-				var estimate = EstimateForWindow(modelId.Value, environmentId,
-					audioSeconds * window.minFactor, audioSeconds * window.maxFactor, audioSeconds);
-				if (estimate.HasValue)
-					return estimate.Value;
-			}
-
-			return EstimateWithoutWindow(modelId.Value, environmentId, audioSeconds);
-		} catch (Exception ex) {
-			LogService.Error("EtaStatsService: EstimateProcessingSeconds failed", ex);
-			return null;
-		}
-	}
-
-	public void Record (string modelKey, double audioSeconds, double processingSeconds) {
-		if (_connection == null)
-			return;
-		if (audioSeconds <= 0 || processingSeconds <= 0)
-			return;
-
-		try {
-			var environmentId = FindOrCreateEnvironmentId();
-			var modelId = FindOrCreateModelId(modelKey);
-
-			using var tx = _connection.BeginTransaction();
-
-			using var ins = _connection.CreateCommand();
-			ins.Transaction = tx;
-			ins.CommandText = @"
-				INSERT INTO Stats (model_id, environment_id, audio_seconds, processing_seconds)
-				VALUES ($modelId, $environmentId, $audio, $proc);
-			";
-			ins.Parameters.AddWithValue("$modelId", modelId);
-			ins.Parameters.AddWithValue("$environmentId", environmentId);
-			ins.Parameters.AddWithValue("$audio", audioSeconds);
-			ins.Parameters.AddWithValue("$proc", processingSeconds);
-			ins.ExecuteNonQuery();
-
-			using var del = _connection.CreateCommand();
-			del.Transaction = tx;
-			del.CommandText = @"
-				DELETE FROM Stats
-				WHERE model_id = $modelId
-				  AND environment_id = $environmentId
-				  AND id NOT IN (
-					SELECT id FROM Stats
-					WHERE model_id = $modelId
-					  AND environment_id = $environmentId
-					ORDER BY id DESC
-					LIMIT $maxRows
-				);
-			";
-			del.Parameters.AddWithValue("$modelId", modelId);
-			del.Parameters.AddWithValue("$environmentId", environmentId);
-			del.Parameters.AddWithValue("$maxRows", MaxRecordsPerModelEnvironment);
-			del.ExecuteNonQuery();
-
-			tx.Commit();
-		} catch (Exception ex) {
-			LogService.Error("EtaStatsService: Record failed", ex);
-		}
-	}
-
-	// ── ETA helpers ───────────────────────────────────────────────────────────
-
-	private double? EstimateForWindow (long modelId, long environmentId, double minAudioSeconds, double maxAudioSeconds, double currentAudioSeconds) {
-		using var cmd = _connection!.CreateCommand();
+	protected double? estimateForWindow (
+		long modelId, long environmentId, double minAudioSeconds, 
+		double maxAudioSeconds, double currentAudioSeconds
+	) {
+		using var cmd = this.connection!.CreateCommand();
 		cmd.CommandText = @"
-			SELECT COUNT(*), AVG(processing_seconds / audio_seconds)
-			FROM   Stats
-			WHERE  model_id = $modelId
-			  AND  environment_id = $environmentId
-			  AND  audio_seconds BETWEEN $minAudio AND $maxAudio
-			  AND  audio_seconds > 0;
+			SELECT 
+				COUNT(*), 
+				AVG(processing_seconds / audio_seconds)
+			FROM Stats
+			WHERE 
+				model_id = $modelId AND
+				environment_id = $environmentId AND
+				audio_seconds BETWEEN $minAudio AND $maxAudio AND
+				audio_seconds > 0;
 		";
 		cmd.Parameters.AddWithValue("$modelId", modelId);
 		cmd.Parameters.AddWithValue("$environmentId", environmentId);
@@ -194,20 +205,23 @@ public sealed class EtaStatsService : IDisposable {
 		if (!reader.Read())
 			return null;
 		var sampleCount = reader.GetInt32(0);
-		if (sampleCount < MinimumSamplesForEta || reader.IsDBNull(1))
+		if (sampleCount < EtaService._minimumSamplesForEta || reader.IsDBNull(1))
 			return null;
 		var ratio = reader.GetDouble(1);
 		return currentAudioSeconds * ratio;
 	}
 
-	private double? EstimateWithoutWindow (long modelId, long environmentId, double currentAudioSeconds) {
-		using var cmd = _connection!.CreateCommand();
+	protected double? estimateWithoutWindow (long modelId, long environmentId, double currentAudioSeconds) {
+		using var cmd = this.connection!.CreateCommand();
 		cmd.CommandText = @"
-			SELECT COUNT(*), AVG(processing_seconds / audio_seconds)
-			FROM   Stats
-			WHERE  model_id = $modelId
-			  AND  environment_id = $environmentId
-			  AND  audio_seconds > 0;
+			SELECT
+				COUNT(*),
+				AVG(processing_seconds / audio_seconds)
+			FROM Stats
+			WHERE
+				model_id = $modelId AND
+				environment_id = $environmentId AND
+				audio_seconds > 0;
 		";
 		cmd.Parameters.AddWithValue("$modelId", modelId);
 		cmd.Parameters.AddWithValue("$environmentId", environmentId);
@@ -216,42 +230,44 @@ public sealed class EtaStatsService : IDisposable {
 		if (!reader.Read())
 			return null;
 		var sampleCount = reader.GetInt32(0);
-		if (sampleCount < MinimumSamplesForEta || reader.IsDBNull(1))
+		if (sampleCount < EtaService._minimumSamplesForEta || reader.IsDBNull(1))
 			return null;
 		var ratio = reader.GetDouble(1);
 		return currentAudioSeconds * ratio;
 	}
 
-	// ── Environment discovery ────────────────────────────────────────────────
+	protected long findOrCreateEnvironmentId () {
+		var json = EtaService.buildEnvironmentJson();
+		var fingerprint = EtaService.computeFingerprint(json);
 
-	private long FindOrCreateEnvironmentId () {
-		var json = BuildEnvironmentJson();
-		var fingerprint = ComputeFingerprint(json);
-
-		using var cmd = _connection!.CreateCommand();
+		using var cmd = this.connection!.CreateCommand();
 		cmd.CommandText = @"
-			INSERT INTO Environments (fingerprint, value)
-			VALUES ($fingerprint, $value)
-			ON CONFLICT(fingerprint) DO NOTHING;
-			SELECT id FROM Environments WHERE fingerprint = $fingerprint;
+			INSERT INTO Environments (
+				fingerprint, value
+			) VALUES (
+				$fingerprint, $value
+			) ON CONFLICT (fingerprint) DO NOTHING;
+			SELECT id 
+			FROM Environments 
+			WHERE fingerprint = $fingerprint;
 		";
 		cmd.Parameters.AddWithValue("$fingerprint", fingerprint);
 		cmd.Parameters.AddWithValue("$value", json);
 		return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
 	}
 
-	private static string BuildEnvironmentJson () {
-		var cpuModel = ReadWmiString("Win32_Processor", "Name") ?? "Unknown CPU";
-		var cpuPhysicalCores = ReadWmiInt("Win32_Processor", "NumberOfCores") ?? Environment.ProcessorCount;
-		var gpus = ReadGpuModels();
+	protected static string buildEnvironmentJson () {
+		var cpuModel = EtaService.readWmiString("Win32_Processor", "Name") ?? "Unknown CPU";
+		var cpuPhysicalCores = EtaService.readWmiInt("Win32_Processor", "NumberOfCores") ?? Environment.ProcessorCount;
+		var gpus = EtaService.readGpuModels();
 		var cudaVersion = WhisperService.DetectCudaVersion();
 		var backend = cudaVersion.HasValue ? "GPU" : "CPU";
-		var ramBytes = ReadWmiLong("Win32_ComputerSystem", "TotalPhysicalMemory") ?? 0L;
+		var ramBytes = EtaService.readWmiLong("Win32_ComputerSystem", "TotalPhysicalMemory") ?? 0L;
 		var ramTotalGb = ramBytes > 0 ? Math.Round(ramBytes / 1024d / 1024d / 1024d, 2) : 0d;
 		var osVersion = Environment.OSVersion.VersionString;
 		var osBuild = Environment.OSVersion.Version.Build.ToString(CultureInfo.InvariantCulture);
 		var whisperThreads = WhisperService.GetInferenceThreadCount();
-		var power = ReadSystemPowerStatus();
+		var power = EtaService.readSystemPowerStatus();
 
 		var payload = new {
 			cpuModel,
@@ -272,101 +288,141 @@ public sealed class EtaStatsService : IDisposable {
 		return JsonSerializer.Serialize(payload);
 	}
 
-	private static string[] ReadGpuModels () {
-		var gpuNames = ReadWmiStrings("Win32_VideoController", "Name", skipMicrosoftBasicDisplayAdapter: true);
+	protected static string[] readGpuModels () {
+		var gpuNames = EtaService.readWmiStrings(
+			"Win32_VideoController", "Name", skipMicrosoftBasicDisplayAdapter: true
+		);
 		if (gpuNames.Count == 0)
-			gpuNames = ReadWmiStrings("Win32_VideoController", "Name");
+			gpuNames = EtaService.readWmiStrings("Win32_VideoController", "Name");
 		if (gpuNames.Count == 0)
 			gpuNames = ["Unknown GPU"];
-		return [..gpuNames
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.OrderBy(name => name, StringComparer.OrdinalIgnoreCase)];
+		return [
+			..gpuNames
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+		];
 	}
 
-	private static string? ReadWmiString (string className, string propertyName, bool skipMicrosoftBasicDisplayAdapter = false) {
+	protected static string? readWmiString (
+		string className, string propertyName, bool skipMicrosoftBasicDisplayAdapter = false
+	) {
 		try {
-			using var searcher = new ManagementObjectSearcher($"SELECT {propertyName} FROM {className}");
+			using var searcher = new ManagementObjectSearcher(
+				$"SELECT {propertyName} FROM {className}"
+			);
 			foreach (ManagementObject obj in searcher.Get()) {
 				var value = Convert.ToString(obj[propertyName], CultureInfo.InvariantCulture)?.Trim();
 				if (string.IsNullOrWhiteSpace(value))
 					continue;
-				if (skipMicrosoftBasicDisplayAdapter
-					&& value.Contains("Microsoft Basic Display Adapter", StringComparison.OrdinalIgnoreCase))
+				if (
+					skipMicrosoftBasicDisplayAdapter &&
+					value.Contains(
+						"Microsoft Basic Display Adapter", 
+						StringComparison.OrdinalIgnoreCase
+					)
+				) {
 					continue;
+				}
 				return value;
 			}
 		} catch (Exception ex) {
-			LogService.Warning($"EtaStatsService: WMI string read failed for {className}.{propertyName}", ex);
+			LogService.Warning(
+				$"EtaService: WMI string read failed for {className}.{propertyName}", ex
+			);
 		}
 		return null;
 	}
 
-	private static List<string> ReadWmiStrings (string className, string propertyName, bool skipMicrosoftBasicDisplayAdapter = false) {
+	protected static List<string> readWmiStrings (
+		string className, string propertyName, bool skipMicrosoftBasicDisplayAdapter = false
+	) {
 		var values = new List<string>();
 		try {
-			using var searcher = new ManagementObjectSearcher($"SELECT {propertyName} FROM {className}");
+			using var searcher = new ManagementObjectSearcher(
+				$"SELECT {propertyName} FROM {className}"
+			);
 			foreach (ManagementObject obj in searcher.Get()) {
-				var value = Convert.ToString(obj[propertyName], CultureInfo.InvariantCulture)?.Trim();
+				var value = Convert.ToString(
+					obj[propertyName], 
+					CultureInfo.InvariantCulture
+				)?.Trim();
 				if (string.IsNullOrWhiteSpace(value))
 					continue;
-				if (skipMicrosoftBasicDisplayAdapter
-					&& value.Contains("Microsoft Basic Display Adapter", StringComparison.OrdinalIgnoreCase))
+				if (
+					skipMicrosoftBasicDisplayAdapter &&
+					value.Contains(
+						"Microsoft Basic Display Adapter", 
+						StringComparison.OrdinalIgnoreCase
+					)
+				) {
 					continue;
+				}
 				values.Add(value);
 			}
 		} catch (Exception ex) {
-			LogService.Warning($"EtaStatsService: WMI string list read failed for {className}.{propertyName}", ex);
+			LogService.Warning(
+				$"EtaService: WMI string list read failed for {className}.{propertyName}", ex
+			);
 		}
 		return values;
 	}
 
-	private static int? ReadWmiInt (string className, string propertyName) {
+	protected static int? readWmiInt (string className, string propertyName) {
 		try {
-			using var searcher = new ManagementObjectSearcher($"SELECT {propertyName} FROM {className}");
+			using var searcher = new ManagementObjectSearcher(
+				$"SELECT {propertyName} FROM {className}"
+			);
 			foreach (ManagementObject obj in searcher.Get()) {
 				if (obj[propertyName] == null)
 					continue;
 				return Convert.ToInt32(obj[propertyName], CultureInfo.InvariantCulture);
 			}
 		} catch (Exception ex) {
-			LogService.Warning($"EtaStatsService: WMI int read failed for {className}.{propertyName}", ex);
+			LogService.Warning(
+				$"EtaService: WMI int read failed for {className}.{propertyName}", ex
+			);
 		}
 		return null;
 	}
 
-	private static long? ReadWmiLong (string className, string propertyName) {
+	protected static long? readWmiLong (string className, string propertyName) {
 		try {
-			using var searcher = new ManagementObjectSearcher($"SELECT {propertyName} FROM {className}");
+			using var searcher = new ManagementObjectSearcher(
+				$"SELECT {propertyName} FROM {className}"
+			);
 			foreach (ManagementObject obj in searcher.Get()) {
 				if (obj[propertyName] == null)
 					continue;
 				return Convert.ToInt64(obj[propertyName], CultureInfo.InvariantCulture);
 			}
 		} catch (Exception ex) {
-			LogService.Warning($"EtaStatsService: WMI long read failed for {className}.{propertyName}", ex);
+			LogService.Warning(
+				$"EtaService: WMI long read failed for {className}.{propertyName}", ex
+			);
 		}
 		return null;
 	}
 
-	private static string ComputeFingerprint (string json) {
+	protected static string computeFingerprint (string json) {
 		var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(json));
 		return Convert.ToHexString(bytes);
 	}
-
-	private static PowerStatusSnapshot ReadSystemPowerStatus () {
-		if (!NativeMethods.GetSystemPowerStatus(out var status))
-			return new PowerStatusSnapshot { OnAcPower = true, PowerSaverEnabled = false };
-
+	
+	protected static PowerStatusSnapshot readSystemPowerStatus () {
+		if (!NativeMethods.GetSystemPowerStatus(out var status)) {
+			return new PowerStatusSnapshot {
+				OnAcPower = true,
+				PowerSaverEnabled = false
+			};
+		}
 		return new PowerStatusSnapshot {
-			OnAcPower = status.ACLineStatus == 1,
-			PowerSaverEnabled = status.SystemStatusFlag == 1,
+			OnAcPower = status.ACLineStatus == 1u,
+			PowerSaverEnabled = status.SystemStatusFlag == 1u,
 		};
 	}
 
-	// ── Model helpers ────────────────────────────────────────────────────────
-
-	private long? FindModelId (string modelKey) {
-		using var cmd = _connection!.CreateCommand();
+	protected long? findModelId (string modelKey) {
+		using var cmd = this.connection!.CreateCommand();
 		cmd.CommandText = "SELECT id FROM Models WHERE model_key = $key;";
 		cmd.Parameters.AddWithValue("$key", modelKey);
 		var result = cmd.ExecuteScalar();
@@ -375,52 +431,30 @@ public sealed class EtaStatsService : IDisposable {
 		return Convert.ToInt64(result, CultureInfo.InvariantCulture);
 	}
 
-	private long FindOrCreateModelId (string modelKey) {
-		var existing = FindModelId(modelKey);
+	protected long findOrCreateModelId (string modelKey) {
+		var existing = this.findModelId(modelKey);
 		if (existing.HasValue)
 			return existing.Value;
 
-		using var cmd = _connection!.CreateCommand();
+		using var cmd = this.connection!.CreateCommand();
 		cmd.CommandText = @"
-			INSERT INTO Models (model_key) VALUES ($key)
-			ON CONFLICT(model_key) DO NOTHING;
-			SELECT id FROM Models WHERE model_key = $key;
+			INSERT INTO Models (
+				model_key
+			) VALUES (
+				$key
+			) ON CONFLICT (model_key) DO NOTHING;
+			SELECT id 
+			FROM Models 
+			WHERE model_key = $key;
 		";
 		cmd.Parameters.AddWithValue("$key", modelKey);
 		return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
 	}
 
-	private void Execute (string sql) {
-		using var cmd = _connection!.CreateCommand();
+	protected void execute (string sql) {
+		using var cmd = this.connection!.CreateCommand();
 		cmd.CommandText = sql;
 		cmd.ExecuteNonQuery();
 	}
 
-	// ── IDisposable ───────────────────────────────────────────────────────────
-
-	public void Dispose () {
-		_connection?.Dispose();
-		_connection = null;
-	}
-
-	private sealed class PowerStatusSnapshot {
-		public required bool OnAcPower { get; init; }
-		public required bool PowerSaverEnabled { get; init; }
-	}
-
-	private static class NativeMethods {
-		[StructLayout(LayoutKind.Sequential)]
-		internal struct SYSTEM_POWER_STATUS {
-			internal byte ACLineStatus;
-			internal byte BatteryFlag;
-			internal byte BatteryLifePercent;
-			internal byte SystemStatusFlag;
-			internal int BatteryLifeTime;
-			internal int BatteryFullLifeTime;
-		}
-
-		[DllImport("kernel32.dll")]
-		[return: MarshalAs(UnmanagedType.Bool)]
-		internal static extern bool GetSystemPowerStatus (out SYSTEM_POWER_STATUS lpSystemPowerStatus);
-	}
 }

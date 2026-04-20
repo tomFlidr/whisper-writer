@@ -6,19 +6,16 @@ namespace WhisperWriter.Views;
 
 public partial class HistoryWindow : Window {
 	public HistoryWindow () {
-		InitializeComponent();
-		HistoryList.ItemsSource = App.History.Entries;
+		this.InitializeComponent();
+		this.HistoryList.ItemsSource = App.History.Entries;
 	}
-
-	private void TitleBar_MouseLeftButtonDown (object sender, MouseButtonEventArgs e) {
+	private void _handleTitleBarMouseLeftButtonDown (object sender, MouseButtonEventArgs e) {
 		if (e.ButtonState == MouseButtonState.Pressed)
-			DragMove();
+			this.DragMove();
 	}
-
-	private void BtnClose_Click (object sender, RoutedEventArgs e) => Close();
-
-	private void BtnCopyEntry_Click (object sender, RoutedEventArgs e) {
+	private void _handleBtnCopyEntryClick (object sender, RoutedEventArgs e) {
 		if (sender is System.Windows.Controls.Button btn && btn.DataContext is TranscriptionEntry entry)
 			System.Windows.Clipboard.SetText(entry.Text);
 	}
+	private void _handleBtnCloseClick (object sender, RoutedEventArgs e) => this.Close();
 }

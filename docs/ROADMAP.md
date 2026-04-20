@@ -8,93 +8,15 @@ Každá hotová položka se přesouvá do sekce **Dokončeno** a zároveň se ak
 
 ---
 
-## Fáze 1 – Refaktoring a čistota kódu
+## Fáze 1 - dodělat refactoring
 
-> Největší vliv na codebase – dotýká se prakticky všech souborů. Musí proběhnout jako první,
-> protože výstupy tohoto kroku (rozhraní, přejmenování, extrakce) jsou předpokladem pro všechny pozdější fáze.
-
----
-
-### 1.1 Zavést rozhraní `ITranscriptionService`
-
-**Proč:** Aplikace aktuálně pracuje přímo s `WhisperService`. Jakmile přibyde `ParakeetService`
-(Fáze 4), bylo by nutné upravit `App.xaml.cs` a `MainWindow.xaml.cs` na dvou místech místo jednoho.
-Rozhraní to oddělí – `App` i `MainWindow` budou pracovat jen s abstrakcí a nevědí, jaký engine běží.
-
-**Co se změní:**
-- Vznikne nový soubor `Services/ITranscriptionService.cs`.
-- Rozhraní bude deklarovat: `Task InitializeAsync(string modelPath)`, `Task<string> TranscribeAsync(byte[] wav, string language, string prompt)`, `event Action<TranscriptionState, string>? StateChanged`, `ValueTask DisposeAsync()`.
-- `WhisperService` bude implementovat `ITranscriptionService`.
-- `App.WhisperService` změní typ ze `WhisperService` na `ITranscriptionService`.
-- Všechna místa v kódu, která volají metody přes `App.WhisperService`, zůstanou funkční – rozhraní pokrývá vše co se volá.
-
----
-
-### 1.2 Přejmenovat `EtaStatsService` → `EtaService`, `App.EtaStats` → `App.Eta`
-
-**Proč:** Název `EtaStatsService` je zbytečně dlouhý a nekonzistentní oproti `LogService`, `HotkeyService` apod.
-Zkrácení na `EtaService` a `App.Eta` zlepší čitelnost – název říká co objekt dělá, ne jak to dělá interně.
-
-**Co se změní:**
-- Soubor `Services/EtaStatsService.cs` → přejmenovat třídu uvnitř na `EtaService` (soubor může zůstat nebo se přejmenovat).
-- `App.EtaStats` → `App.Eta` – jeden statický property.
-- Aktualizovat všechny reference v `App.xaml.cs`, `MainWindow.xaml.cs` a v samotném souboru služby.
-
----
-
-### 1.3 Opravit `ContinueWith` + `Unwrap` v `WhisperService.InitializeAsync`
-
-**Proč:** Stávající kód pro stažení chybějícího modelu používá `ContinueWith(...).Unwrap()`,
-což je starý pattern z dob před `async/await`. V kontextu C# 12 je to zbytečně krkolomné, špatně čitelné
-a hůře laditelné – výjimky se mohou ztrácet ve vnořeném `Task`.
-
-**Co se změní:**
-- Příslušný blok v `WhisperService.InitializeAsync` se přepíše na čistý `await` s `async` lambda nebo
-  přímým `await` voláním v sekvenci.
-- Chování zůstane identické – jen kód bude čitelnější a správněji propaguje výjimky.
-
----
-
-### 1.4 Vyextrahovat logiku pozicování okna z `MainWindow.xaml.cs` do `Services/WindowPositioner.cs`
-
-**Proč:** `MainWindow.xaml.cs` aktuálně obsahuje přibližně 120 řádků kódu, které nemají nic
-společného s UI logikou (PTT, VU meter, stavové zprávy). Metody `PositionWindow`, `ApplyStoredPosition`,
-`PlaceAtDefaultPosition`, `SaveWindowPosition`, `ClampWindowToScreen` a `GetPrimaryScreenScale`
-jsou čistě stavové a pracují s `AppSettings` a souřadnicemi – žádný přístup k UI prvkům jako `StatusLabel`, `RecDot` apod.
-
-**Co se změní:**
-- Vznikne nový soubor `Services/WindowPositioner.cs`.
-- Třída bude `sealed`, konstruktor přijme `Window window` a `AppSettings settings` (nebo bude číst přímo `App.SettingsService.Settings`).
-- Všechny zmíněné metody se přesunou. `MainWindow.xaml.cs` bude mít instanci `WindowPositioner` a volat ji.
-- `MainWindow.xaml.cs` se zkrátí o těchto ~120 řádků a bude přehlednější.
-
----
-
-### 1.5 Zbavit `TextInjector` přímé závislosti na `App.SettingsService`
-
-**Proč:** `TextInjector.WaitForPhysicalRelease()` přímo čte `App.SettingsService.Settings.HotkeyVkCodes`.
-`TextInjector` je statická třída s P/Invoke logikou – neměla by mít závislost na globálním stavu aplikace.
-Je to porušení principu jedné odpovědnosti a zhoršuje to testovatelnost.
-
-**Co se změní:**
-- Signatura `InjectText` se změní na `InjectText(string text, IReadOnlyList<int> pttVkCodes)`.
-- Volající (`MainWindow.OnPttStopped`) předá `App.SettingsService.Settings.HotkeyVkCodes` jako argument při volání.
-- Uvnitř `TextInjector` zmizí veškerá reference na `App`.
-
----
-
-### 1.6 Nahradit magická čísla pojmenovanými konstantami
-
-**Proč:** Čísla jako `32000.0` (bytů za sekundu pro 16 kHz 16-bit mono) nebo `70 * 1024 * 1024`
-(minimální velikost GGML souboru) jsou v kódu bez vysvětlení, nebo jen s inline komentářem.
-Pojmenovaná konstanta je samopopisná, nedá se zapomenout aktualizovat na dvou místech a snižuje riziko chyb.
-
-**Co se změní:**
-- V `AudioRecorder.cs` (nebo novém `Util/AudioConstants.cs`) vznikne konstanta `BytesPerSecond = 32000` (16000 Hz × 2 bytes × 1 channel).
-- `WhisperService.MinModelFileSizeBytes` zůstane kde je, ale dostane `public` viditelnost, aby ji mohla použít i budoucí `ParakeetService`.
-- Projít celý projekt a dohledat další místa s inline čísly bez jasného kontextu.
-
----
+Je třeba do coding standards přidat pravidla:
+- nemají se vytvářet podmínky bez složených závorek, 
+  jen v případě, že jde o jednu podmínku bez `else` 
+  nebo bez `else if`, kde je kód větve jen jeden řádek,
+- pro definici metody by měla být mezi názvem a otevřenou 
+  kulatou závorkou mezera, aby se dalo vyhledáváním oddělit 
+  volání metody a definice metody nebo metody v interface,
 
 ## Fáze 2 – Sjednocení sekundárních oken do jednoho tabbed okna
 
@@ -343,4 +265,34 @@ dle `AppSettings.EngineType`. Při změně v Settings musí starý engine zlikvi
 
 ## Dokončeno
 
-*(Sem se přesunou položky po dokončení a úspěšném buildu.)*
+### ✅ Fáze 1 – Refaktoring a čistota kódu
+
+#### 1.1 Zavést rozhraní `ITranscriptionService`
+- Vznikl `Services/ITranscriptionService.cs`.
+- `WhisperService` implementuje `ITranscriptionService`.
+- `App.WhisperService` má typ `ITranscriptionService`.
+
+#### 1.2 Přejmenovat `EtaStatsService` → `EtaService`, `App.EtaStats` → `App.Eta`
+- Třída v `EtaStatsService.cs` přejmenována na `EtaService`.
+- `App.EtaStats` → `App.Eta` ve všech souborech.
+
+#### 1.3 Opravit `ContinueWith` + `Unwrap` v `WhisperService.InitializeAsync`
+- Blok přepsán na čistý `await`.
+
+#### 1.4 Vyextrahovat logiku pozicování okna do `Services/WindowPositioner.cs`
+- Vznikl `Services/WindowPositioner.cs` (~150 řádků).
+- `MainWindow.xaml.cs` zkrácen o ~130 řádků.
+
+#### 1.5 Zbavit `TextInjector` přímé závislosti na `App.SettingsService`
+- `InjectText` má signaturu `InjectText(string text, IReadOnlyList<int> pttVkCodes)`.
+- Volající `MainWindow.OnPttStopped` předává `HotkeyVkCodes` jako argument.
+
+#### 1.6 Nahradit magická čísla pojmenovanými konstantami
+- `MainWindow.WavBytesPerSecond = 32000` nahrazuje magic number.
+- `WhisperService.MinModelFileSizeBytes` je `public const`.
+
+#### Další opravy coding standards (součást Fáze 1)
+- `PowerStatusSnapshot` přesunuto do vlastního souboru `Services/PowerStatusSnapshot.cs` s `public` viditelností.
+- `AudioRecorder`, `HotkeyService`: odstraněno `sealed`, přidáno `this.`/`ClassName.`, opraveno pořadí členů.
+- `SettingsService`: přidáno `this.` pro instance property, `SettingsService.` pro statické členy.
+- `TranscriptionState` přesunuto do `Util/Enums/TranscriptionState.cs`.

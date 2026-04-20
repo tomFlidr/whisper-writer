@@ -16,7 +16,7 @@
 		Opacity="0.97"
 		BorderBrush="#66FFFFFF"
 		BorderThickness="1"
-		MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+		MouseLeftButtonDown="_titleBar_MouseLeftButtonDown">
 
 		<Grid Margin="20">
 			<Grid.RowDefinitions>
@@ -56,7 +56,7 @@
 				<Button Style="{StaticResource IconButton}"
 						Content="✕"
 						HorizontalAlignment="Right"
-						Click="BtnCancel_Click"/>
+						Click="_btnCancel_Click"/>
 			</Grid>
 
 			<!-- Model -->
@@ -180,7 +180,7 @@
 							Background="#33FFFFFF"
 							Foreground="{StaticResource TextPrimaryBrush}"
 							Content="Change…"
-							Click="BtnCaptureHotkey_Click"/>
+							Click="_handleBtnCaptureHotkeyClick"/>
 				</Grid>
 				<!-- Instruction shown only during capture -->
 				<TextBlock x:Name="TxtCaptureHint"
@@ -203,7 +203,7 @@
 				         FontFamily="Segoe UI" FontSize="13"
 				         Padding="8,5"
 				         CaretBrush="White"
-				         PreviewTextInput="TxtHistorySize_PreviewTextInput"/>
+				         PreviewTextInput="_handleTxtHistorySizePreviewTextInput"/>
 			</StackPanel>
 
 			<!-- Copy to clipboard -->
@@ -225,13 +225,13 @@
 				<Button Style="{StaticResource IconButton}"
 						Content="Cancel"
 						Margin="0,0,8,0"
-						Click="BtnCancel_Click"/>
+						Click="_btnCancel_Click"/>
 				<Button x:Name="BtnSave"
 						Style="{StaticResource IconButton}"
 						Content="Save"
 						Background="{StaticResource AccentBrush}"
 						Foreground="White"
-						Click="BtnSave_Click"/>
+						Click="_btnSave_Click"/>
 			</StackPanel>
 		</Grid>
 	</Border>

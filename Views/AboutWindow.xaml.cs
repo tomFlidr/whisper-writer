@@ -4,12 +4,10 @@ namespace WhisperWriter.Views;
 
 public partial class AboutWindow : Window {
 	public AboutWindow () {
-		InitializeComponent();
+		this.InitializeComponent();
 	}
 
-	private void TitleBar_MouseLeftButtonDown (object sender, System.Windows.Input.MouseButtonEventArgs e)
-		=> DragMove();
+	private void _handleTitleBarMouseLeftButtonDown (object sender, System.Windows.Input.MouseButtonEventArgs e) => this.DragMove();
 
-	private void BtnClose_Click (object sender, RoutedEventArgs e)
-		=> Close();
+	private void _handleBtnCloseClick (object sender, RoutedEventArgs e) => this.Close();
 }

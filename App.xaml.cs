@@ -9,12 +9,12 @@ namespace WhisperWriter;
 public partial class App : System.Windows.Application {
 	public static SettingsService SettingsService { get; } = new();
 	public static TranscriptionHistory History { get; } = new();
-	public static WhisperService WhisperService { get; } = new();
-	public static EtaStatsService EtaStats { get; } = new();
+	public static ITranscriptionService WhisperService { get; } = new WhisperService();
+	public static EtaService Eta { get; } = new();
 
-	private NotifyIcon? _trayIcon;
-	private MainWindow? _mainWindow;
-	private static Window? _secondaryWindow;
+	protected NotifyIcon? trayIcon;
+	protected MainWindow? mainWindow;
+	protected static Window? secondaryWindow;
 
 	protected override async void OnStartup (StartupEventArgs e) {
 		base.OnStartup(e);
@@ -23,7 +23,8 @@ public partial class App : System.Windows.Application {
 		// so the OS loader finds cudart64_13.dll / cublas64_13.dll without requiring
 		// a system-wide CUDA installation or changes to the user's environment.
 		var cudaRuntimeDir = System.IO.Path.Combine(
-			AppContext.BaseDirectory, "runtimes", "cuda", "win-x64");
+			AppContext.BaseDirectory, "runtimes", "cuda", "win-x64"
+		);
 		var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
 		if (!currentPath.Contains(cudaRuntimeDir, StringComparison.OrdinalIgnoreCase))
 			Environment.SetEnvironmentVariable("PATH", cudaRuntimeDir + ";" + currentPath);
@@ -31,7 +32,7 @@ public partial class App : System.Windows.Application {
 		LogService.Initialize();
 
 		// Catch any unhandled WPF dispatcher exceptions
-		DispatcherUnhandledException += (_, args) => {
+		this.DispatcherUnhandledException += (_, args) => {
 			LogService.Error("Unhandled dispatcher exception", args.Exception);
 			args.Handled = true;
 		};
@@ -42,91 +43,102 @@ public partial class App : System.Windows.Application {
 				LogService.Error("Unhandled background exception", ex);
 		};
 
-		SettingsService.Load();
-		History.MaxSize = SettingsService.Settings.HistorySize;
-		EtaStats.Initialize();
+		App.SettingsService.Load();
+		App.History.MaxSize = App.SettingsService.Settings.HistorySize;
+		App.Eta.Initialize();
 
 		// Create the floating widget
-		_mainWindow = new MainWindow();
-		_mainWindow.Show();
+		this.mainWindow = new MainWindow();
+		this.mainWindow.Show();
 
 		// Tray icon – right-click menu only
 		var icoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "app.ico");
 		var trayIcon = System.IO.File.Exists(icoPath)
 			? new System.Drawing.Icon(icoPath)
 			: SystemIcons.Application;
-		_trayIcon = new NotifyIcon {
+		this.trayIcon = new NotifyIcon {
 			Icon = trayIcon,
 			Text = "WhisperWriter",
 			Visible = true,
 		};
 
 		var menu = new ContextMenuStrip();
-		menu.Items.Add("About WhisperWriter", null, (_, _) => ShowAbout());
+		menu.Items.Add("About WhisperWriter", null, (_, _) => App.showAbout());
 		menu.Items.Add(new ToolStripSeparator());
-		menu.Items.Add("Transcriptions", null, (_, _) => ShowHistory());
-		menu.Items.Add("Settings", null, (_, _) => ShowSettings());
+		menu.Items.Add("Transcriptions", null, (_, _) => App.showHistory());
+		menu.Items.Add("Settings", null, (_, _) => App.showSettings());
 		menu.Items.Add(new ToolStripSeparator());
-		menu.Items.Add("Exit", null, (_, _) => ExitApp());
+		menu.Items.Add("Exit", null, (_, _) => this.exitApp());
 
-		_trayIcon.ContextMenuStrip = menu;
+		this.trayIcon.ContextMenuStrip = menu;
 
 		// Double-click shows / restores the widget
-		_trayIcon.DoubleClick += (_, _) => {
-			_mainWindow?.Show();
-			_mainWindow?.Activate();
+		this.trayIcon.DoubleClick += (_, _) => {
+			this.mainWindow?.Show();
+			this.mainWindow?.Activate();
 		};
 
 		// Initialize Whisper in background
 		var modelPath = System.IO.Path.Combine(AppContext.BaseDirectory,
-			SettingsService.Settings.ModelPath);
-		_ = WhisperService.InitializeAsync(modelPath);
+			App.SettingsService.Settings.ModelPath);
+		_ = App.WhisperService.InitializeAsync(modelPath);
+
+		await Task.Run(() => Thread.Sleep(0));
 	}
 
-	private static void CloseSecondaryWindow () {
-		_secondaryWindow?.Close();
-		_secondaryWindow = null;
+	protected static void closeSecondaryWindow () {
+		App.secondaryWindow?.Close();
+		App.secondaryWindow = null;
 	}
 
-	public static void ShowAbout () {
-		CloseSecondaryWindow();
+	protected static void showAbout () {
+		App.closeSecondaryWindow();
 		var win = new AboutWindow();
-		_secondaryWindow = win;
-		win.Closed += (_, _) => { if (_secondaryWindow == win) _secondaryWindow = null; };
+		App.secondaryWindow = win;
+		win.Closed += (_, _) => {
+			if (App.secondaryWindow == win) 
+				App.secondaryWindow = null;
+		};
 		win.Show();
 	}
 
-	public static void ShowHistory () {
-		CloseSecondaryWindow();
+	protected static void showHistory () {
+		App.closeSecondaryWindow();
 		var win = new HistoryWindow();
-		_secondaryWindow = win;
-		win.Closed += (_, _) => { if (_secondaryWindow == win) _secondaryWindow = null; };
+		App.secondaryWindow = win;
+		win.Closed += (_, _) => {
+			if (App.secondaryWindow == win) 
+				App.secondaryWindow = null;
+		};
 		win.Show();
 	}
 
-	public static void ShowSettings () {
-		CloseSecondaryWindow();
+	protected static void showSettings () {
+		App.closeSecondaryWindow();
 		var win = new SettingsWindow();
-		_secondaryWindow = win;
-		win.Closed += (_, _) => { if (_secondaryWindow == win) _secondaryWindow = null; };
+		App.secondaryWindow = win;
+		win.Closed += (_, _) => {
+			if (App.secondaryWindow == win) 
+				App.secondaryWindow = null;
+		};
 		if (win.ShowDialog() == true) {
-			SettingsService.Save();
-			History.MaxSize = SettingsService.Settings.HistorySize;
+			App.SettingsService.Save();
+			App.History.MaxSize = App.SettingsService.Settings.HistorySize;
 			// Apply new hotkey combination immediately, without restarting.
-			(Current as App)?._mainWindow?.ReloadHotkey();
+			(Current as App)?.mainWindow?.ReloadHotkey();
 		}
-		_secondaryWindow = null;
+		App.secondaryWindow = null;
 	}
 
-	private void ExitApp () {
-		_trayIcon?.Dispose();
-		_mainWindow?.ForceClose();
-		Shutdown();
+	protected void exitApp () {
+		this.trayIcon?.Dispose();
+		this.mainWindow?.ForceClose();
+		this.Shutdown();
 	}
 
 	protected override void OnExit (ExitEventArgs e) {
-		_trayIcon?.Dispose();
-		EtaStats.Dispose();
+		this.trayIcon?.Dispose();
+		App.Eta.Dispose();
 		LogService.CloseAndFlush();
 		base.OnExit(e);
 	}

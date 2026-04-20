@@ -67,14 +67,19 @@ D:\tec\cs\whisper-writer\
 ├── settings.json                      ← default configuration (copied to bin on build)
 ├── Services\
 │   ├── AudioRecorder.cs               ← NAudio, 16 kHz mono WAV, RMS amplitude event
-│   ├── EtaStatsService.cs             ← SQLite-backed ETA statistics (per-model timing history)
+│   ├── EtaStatsService.cs             ← SQLite-backed ETA statistics; class name: EtaService
 │   ├── HotkeyService.cs               ← polling GetAsyncKeyState, 20 ms interval
+│   ├── ITranscriptionService.cs       ← interface for transcription engines
 │   ├── LogService.cs                  ← Serilog facade, daily rolling log to logs/
+│   ├── PowerStatusSnapshot.cs         ← plain struct: AC power + power-saver state
 │   ├── SettingsService.cs             ← JSON load/save to BaseDirectory/settings.json
 │   ├── TextInjector.cs                ← SaveFocus() + SendInput Unicode
-│   └── WhisperService.cs              ← WhisperFactory, TranscribeAsync, CUDA
+│   ├── WhisperService.cs              ← WhisperFactory, TranscribeAsync, CUDA
+│   └── WindowPositioner.cs            ← window position logic extracted from MainWindow
 ├── Util\
 │   ├── AppSettings.cs                 ← POCO configuration (serialized to settings.json)
+│   ├── Enums\
+│   │   └── TranscriptionState.cs      ← enum: Loading, Transcribing, Done, Error
 │   ├── HotkeyModifiers.cs             ← [Flags] enum: None, Alt, Control, Shift, Win
 │   ├── TranscriptionEntry.cs          ← data record: Timestamp, Text, Duration
 │   ├── TranscriptionHistory.cs        ← ObservableCollection<TranscriptionEntry>, thread-safe Add()
@@ -100,9 +105,9 @@ D:\tec\cs\whisper-writer\
 - `ShutdownMode="OnExplicitShutdown"` – the app does not close when the window is closed.
 
 ### `App.xaml.cs`
-- Four static services: `App.SettingsService`, `App.History`, `App.WhisperService`, `App.EtaStats`.
-- `EtaStats.Initialize()` is called on startup (opens/creates `models/eta-time-stats.db`).
-- `EtaStats.Dispose()` is called in `OnExit` to cleanly close the SQLite connection.
+- Four static services: `App.SettingsService`, `App.History`, `App.WhisperService` (type `ITranscriptionService`), `App.Eta`.
+- `App.Eta.Initialize()` is called on startup (opens/creates `models/eta-time-stats.db`).
+- `App.Eta.Dispose()` is called in `OnExit` to cleanly close the SQLite connection.
 - Tray icon (`NotifyIcon` from WinForms) – **right-click** opens menu:
   ```
   About WhisperWriter
@@ -161,7 +166,7 @@ public class AppSettings
 - Saves to `AppContext.BaseDirectory + "settings.json"` (i.e. next to exe).
 - On deserialization error silently returns `new AppSettings()`.
 
-### `Services/EtaStatsService.cs`
+### `Services/EtaStatsService.cs` (class: `EtaService`)
 - Manages a SQLite database at `<BaseDirectory>/models/eta-time-stats.db` via `Microsoft.Data.Sqlite`.
 - **Schema**: two tables:
   - `Versions (value TEXT)` – single row seeded from the current assembly version (`typeof(App).Assembly.GetName().Version`).
@@ -194,13 +199,28 @@ public class AppSettings
 ### `Services/TextInjector.cs`
 - `SaveFocus()` – saves the `GetForegroundWindow()` handle before PTT steals focus.
 - `RestoreFocus()` – must be called from the **UI thread** (owns message pump). Uses `AttachThreadInput` + `SetForegroundWindow` + `BringWindowToTop`. `AttachThreadInput` requires a thread with a message queue – it fails silently on threadpool threads.
-- `InjectText(string)` – must be called from a **background thread** (via `Task.Run`), NOT from the UI/Dispatcher thread, so that `Thread.Sleep` in `WaitForPhysicalRelease` does not block the message pump:
-  1. `WaitForPhysicalRelease()` – polls `GetAsyncKeyState` up to 2 s until all currently configured PTT VK codes (read from `App.SettingsService.Settings.HotkeyVkCodes` at call time) plus both Win keys are physically released. **This is the critical step** – sending a synthetic keyup while the key is still physically held is silently ignored by Windows, leaving the Win shell hook active and permanently breaking mouse input.
+- `InjectText(string text, IReadOnlyList<int> pttVkCodes)` – must be called from a **background thread** (via `Task.Run`), NOT from the UI/Dispatcher thread, so that `Thread.Sleep` in `WaitForPhysicalRelease` does not block the message pump:
+  1. `WaitForPhysicalRelease()` – polls `GetAsyncKeyState` up to 2 s until all currently configured PTT VK codes (from the `pttVkCodes` parameter) plus both Win keys are physically released.
   2. `ReleaseModifierKeys()` – sends synthetic `KEYEVENTF_KEYUP` for all 8 modifier VKs (LWin, RWin, LCtrl, RCtrl, LAlt, RAlt, LShift, RShift). This is **critical**: without it, the physically-held Win+Ctrl keys interfere with `SendInput` (text arrives as shortcuts) and Win key permanently breaks mouse buttons until reboot. **Win keys (`VK_LWIN`, `VK_RWIN`) additionally require `KEYEVENTF_EXTENDEDKEY` flag** – without it the keyup event is silently ignored by Windows and the Win shell hook stays active.
   3. `Thread.Sleep(80)` – gives the target window time to process the focus change from `RestoreFocus()`.
   4. `SendInput` Unicode (each char as keydown+keyup with `KEYEVENTF_UNICODE`, `wVk=0`).
 - **`INPUT` struct layout**: On 64-bit Windows `sizeof(INPUT)` = 40 bytes. The union field (`ki`/`mi`) must be at **`[FieldOffset(8)]`**, NOT `[FieldOffset(4)]`. With `FieldOffset(4)`, `SendInput` receives misaligned data and silently processes 0 events – text is never injected and modifier keyups are never sent, permanently breaking mouse input. `SaveFocus()` logs an error at startup if the struct size does not match the expected 40 bytes.
-- Call order in `MainWindow.OnPttStopped`: `TextInjector.RestoreFocus()` on UI thread → `Task.Run(() => TextInjector.InjectText(text))` on background thread.
+- Call order in `MainWindow.OnPttStopped`: `TextInjector.RestoreFocus()` on UI thread → `Task.Run(() => TextInjector.InjectText(text, vkCodes))` on background thread.
+
+### `Services/ITranscriptionService.cs`
+- Interface for all transcription engines.
+- Declares: `Task InitializeAsync(string modelPath)`, `Task<string> TranscribeAsync(byte[] wav, string language, string prompt)`, `event Action<TranscriptionState, string>? StateChanged`, `ValueTask DisposeAsync()`.
+- `App.WhisperService` has type `ITranscriptionService`.
+
+### `Services/WindowPositioner.cs`
+- Extracted from `MainWindow.xaml.cs` — handles all window positioning logic (~150 lines).
+- Constructor takes `Window window`; reads `App.SettingsService.Settings` directly.
+- Public methods: `PositionWindow()`, `SaveWindowPosition()`, `OnDisplayChange()`, `ClampWindowToScreen()`.
+- Called from `MainWindow` via `_positioner` field.
+
+### `Services/PowerStatusSnapshot.cs`
+- Plain `public` struct: `bool OnAcPower`, `bool PowerSaverEnabled`.
+- Used by `EtaService.BuildEnvironmentJson()` to capture power state in the environment fingerprint.
 
 ### `Services/WhisperService.cs`
 - `DetectCudaVersion()` – static method that probes CUDA runtime DLLs (`cudart64_N.dll` + `cublas64_N.dll`) for major versions **13, 12, 11** in order using `LoadLibraryEx`. Returns the first available major version as `int?`, or `null` if no CUDA runtime is found. Replaces the old `IsCudaAvailable()` bool method.
@@ -226,8 +246,8 @@ public class AppSettings
 - `ReloadHotkey()` – public method called by `App.ShowSettings()` after settings are saved; calls `_hotkey.UpdateKeys()` with the new VK list from settings for instant live reload without restart.
 
 ### `Views/MainWindow.xaml.cs`
-- **ETA countdown**: statistics-based and environment-aware. After releasing PTT, calls `App.EtaStats.EstimateProcessingSeconds(modelKey, audioSeconds)`. The query uses only the same model and the same runtime environment, preferring similar audio lengths (±30%, then ±50%, then all rows for the same model/environment). ETA appears from the **second matching transcription onward**; until then the UI shows only "Transcribing…".
-- After `InjectText` completes on the background thread, calls `App.EtaStats.Record(modelKey, audioSeconds, sw.Elapsed.TotalSeconds)` to persist the actual processing time for the current environment. Over time, estimates converge to real values and remain separated across different hardware/power states.
+- **ETA countdown**: statistics-based and environment-aware. After releasing PTT, calls `App.Eta.EstimateProcessingSeconds(modelKey, audioSeconds)`. The query uses only the same model and the same runtime environment, preferring similar audio lengths (±30%, then ±50%, then all rows for the same model/environment). ETA appears from the **second matching transcription onward**; until then the UI shows only "Transcribing…".
+- After `InjectText` completes on the background thread, calls `App.Eta.Record(modelKey, audioSeconds, sw.Elapsed.TotalSeconds)` to persist the actual processing time for the current environment. Over time, estimates converge to real values and remain separated across different hardware/power states.
 - `GetModelKey()` – static helper, returns `Path.GetFileNameWithoutExtension(Settings.ModelPath)` for use as the DB model key.
 - PTT flow: `SaveFocus` → `StartRecording` → (release) → `StopRecording` → (if stats available) `StartEtaCountdown` → `TranscribeAsync` → `StopEtaCountdown` → (if `CopyToClipboard`) `Clipboard.SetText` → `RestoreFocus` → `Task.Run(InjectText + Record)`.
 - **Window positioning architecture**:
@@ -377,6 +397,7 @@ Start-Process "D:\tec\cs\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.e
 
 ### Resolved issues (for context)
 
+- **Phase 1 refactoring completed**: introduced `ITranscriptionService` interface, renamed `EtaStatsService` class to `EtaService` / `App.EtaStats` to `App.Eta`, replaced `ContinueWith+Unwrap` with clean `await` in `WhisperService`, extracted `WindowPositioner` from `MainWindow`, removed `App.SettingsService` dependency from `TextInjector` (new signature `InjectText(string, IReadOnlyList<int>)`), added `WavBytesPerSecond` constant, moved `TranscriptionState` to `Util/Enums/`, added `ITranscriptionService.cs`, `WindowPositioner.cs`, `PowerStatusSnapshot.cs`. All coding-standards fixes applied (`sealed` removed, `this.`/`ClassName.` prefixes, member order).
 - **Environment-aware adaptive ETA**: replaced the old hardcoded per-model ETA factor approach with `EtaStatsService` backed by `models\eta-time-stats.db`. The DB now stores `Versions`, `Environments`, `Models`, and `Stats`. Each completed transcription records `(model_id, environment_id, audio_seconds, processing_seconds)`, where `environment_id` is derived from a fingerprinted JSON of CPU/GPUs/RAM/OS/backend/CUDA/thread-count/power state. ETA is estimated only from the same model + same environment, preferring similar recording lengths (±30%, then ±50%, then all rows). ETA appears from the second matching transcription onward; otherwise the UI shows only "Transcribing…".
 - **`Models/` folder renamed to `Util/`, classes split into separate files**: C# source files (`AppSettings.cs`, `HotkeyModifiers.cs`, `TranscriptionEntry.cs`, `TranscriptionHistory.cs`) moved from `Models\` to `Util\`. Each class is now in its own file. All namespaces updated from `WhisperWriter.Models` to `WhisperWriter.Util`. All `using WhisperWriter.Models` directives updated accordingly in `SettingsService.cs`, `HotkeyService.cs`, and `MainWindow.xaml.cs`. The `models\` directory (lowercase) remains as the data folder for Whisper `.bin` weight files only.
 - **`IsCudaAvailable()` replaced by `DetectCudaVersion()`**: the old boolean probe hardcoded CUDA 13. Replaced with `DetectCudaVersion()` (returns `int?`) that probes major versions 13, 12, 11 in order and returns the first that has both `cudart64_N.dll` and `cublas64_N.dll` loadable. `MainWindow.xaml.cs` updated at both call sites to use the new method (startup status message and `OnWhisperState` backend label).
