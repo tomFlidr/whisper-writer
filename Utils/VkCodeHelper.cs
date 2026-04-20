@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace WhisperWriter.Util;
+namespace WhisperWriter.Utils;
 
 /// <summary>
 /// Helpers for working with Windows virtual-key codes:

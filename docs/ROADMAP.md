@@ -198,12 +198,12 @@ a přejmenovat soubor – je třeba přidat rozbalování archivu.
 - Soubor se stáhne jako `.tar.gz.tmp`, po ověření SHA256 se přejmenuje na `.tar.gz`.
 - Rozbalení `.tar.gz` v PowerShell:
   - Primární cesta: `tar.exe` (nativně dostupný ve Windows 10 build 17063+).
-    Volání: `& tar -xzf "models\parakeet-v3-int8.tar.gz" -C "models\"`.
+    Volání: `& tar -xzf "llms\parakeet-v3-int8.tar.gz" -C "llms\"`.
   - Fallback pro starší Windows: inline C# přes `Add-Type` s `System.IO.Compression.GZipStream`
     a `System.IO.Compression.TarFile` (dostupné v .NET 7+, ale PS 5.1 běží na .NET Framework –
     proto se zde použije `tar.exe` jako jediná spolehlivá cesta na Windows 10+).
 - Po rozbalení se `.tar.gz` soubor smaže (šetří místo).
-- Výsledek: adresář `models\parakeet-tdt-0.6b-v3-int8\` s ONNX soubory.
+- Výsledek: adresář `llms\parakeet-tdt-0.6b-v3-int8\` s ONNX soubory.
 
 ---
 
@@ -214,7 +214,7 @@ Po přidání Parakeet je třeba detekovat modely dynamicky a rozlišovat Whispe
 
 **Co se změní:**
 - Do `AppSettings` se přidá vlastnost `EngineType` s hodnotami `Whisper` a `Parakeet`. Výchozí: `Whisper`.
-- `BuildModelItems()` v `SettingsPanel` bude skenovat adresář `models/`:
+- `BuildModelItems()` v `SettingsPanel` bude skenovat adresář `llms/`:
   - Soubory s příponou `.bin` → Whisper model.
   - Adresáře, jejichž jméno začíná `parakeet-` a obsahují soubor `encoder-model*.onnx` → Parakeet model.
 - Každá položka v ComboBoxu bude vizuálně označena typem: `[Whisper]` nebo `[Parakeet]`.

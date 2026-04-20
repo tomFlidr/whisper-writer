@@ -1,14 +1,18 @@
+using Serilog;
 using System.Windows;
 using System.Windows.Forms;
 using WhisperWriter.Services;
-using WhisperWriter.Util;
+using WhisperWriter.Utils;
+using WhisperWriter.Utils.Interfaces;
 using WhisperWriter.Views;
 
 namespace WhisperWriter;
 
-public partial class App : System.Windows.Application {
+public partial class App : System.Windows.Application, IService, ISingleton {
+	
 	public static SettingsService SettingsService { get; } = new();
-	public static TranscriptionHistory History { get; } = new();
+	//public static TranscriptionHistory History { get; } = new();
+	public required TranscriptionHistory History { get; set; }
 	public static ITranscriptionService WhisperService { get; } = new WhisperService();
 	public static EtaService Eta { get; } = new();
 
@@ -44,7 +48,7 @@ public partial class App : System.Windows.Application {
 		};
 
 		App.SettingsService.Load();
-		App.History.MaxSize = App.SettingsService.Settings.HistorySize;
+		this.History.MaxSize = App.SettingsService.Settings.HistorySize;
 		App.Eta.Initialize();
 
 		// Create the floating widget
@@ -123,7 +127,7 @@ public partial class App : System.Windows.Application {
 		};
 		if (win.ShowDialog() == true) {
 			App.SettingsService.Save();
-			App.History.MaxSize = App.SettingsService.Settings.HistorySize;
+			Program.App.History.MaxSize = App.SettingsService.Settings.HistorySize;
 			// Apply new hotkey combination immediately, without restarting.
 			(Current as App)?.mainWindow?.ReloadHotkey();
 		}

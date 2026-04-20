@@ -56,7 +56,7 @@ Start-Process "D:\tec\cs\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.e
 
 ### ETA never appears
 - ETA is shown only from the **second** matching transcription onward (same model + same environment).
-- Database: `models\eta-time-stats.db` – open with any SQLite viewer to inspect `Stats` rows.
+- Database: `llms\eta-time-stats.db` – open with any SQLite viewer to inspect `Stats` rows.
 - Environment fingerprint is in `Environments.value` (JSON) – check if hardware/power state changed.
 
 ### Window off-screen after monitor change

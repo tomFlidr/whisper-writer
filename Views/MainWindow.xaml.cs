@@ -5,8 +5,8 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
-using WhisperWriter.Util;
-using WhisperWriter.Util.Enums;
+using WhisperWriter.Utils;
+using WhisperWriter.Utils.Enums;
 using WhisperWriter.Services;
 
 
@@ -159,7 +159,7 @@ public partial class MainWindow : Window {
 				this._stopEtaCountdown();
 
 				if (!string.IsNullOrWhiteSpace(text)) {
-					App.History.Add(new TranscriptionEntry {
+					Program.App.History.Add(new TranscriptionEntry {
 						Text = text,
 						Duration = sw.Elapsed,
 					});

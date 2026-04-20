@@ -1,8 +1,9 @@
 using System.Collections.ObjectModel;
+using WhisperWriter.Utils.Interfaces;
 
-namespace WhisperWriter.Util;
+namespace WhisperWriter.Utils;
 
-public class TranscriptionHistory {
+public class TranscriptionHistory: IService, ISingleton {
 	public ObservableCollection<TranscriptionEntry> Entries { get; } = new();
 
 	public int MaxSize { get; set; } = 30;

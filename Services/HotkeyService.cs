@@ -1,5 +1,5 @@
 using System.Runtime.InteropServices;
-using WhisperWriter.Util;
+using WhisperWriter.Utils;
 
 namespace WhisperWriter.Services;
 

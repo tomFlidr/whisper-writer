@@ -1,8 +1,8 @@
-namespace WhisperWriter.Util;
+namespace WhisperWriter.Models;
 
 public class AppSettings {
 	// Path to the ggml model file
-	public string ModelPath { get; set; } = "models/ggml-large-v2.bin";
+	public string ModelPath { get; set; } = "llms/ggml-large-v2.bin";
 
 	// Language hint passed to Whisper ("cs", "en", or "auto")
 	public string Language { get; set; } = "auto";

@@ -26,15 +26,16 @@
 		<PublishSingleFile>true</PublishSingleFile>
 		<SelfContained>false</SelfContained>
 		<IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
+		<StartupObject>WhisperWriter.Program</StartupObject>
 	</PropertyGroup>
 
 	<!-- Copy models folder to output -->
 	<ItemGroup>
-		<Content Include="models\**\*">
+		<Content Include="llms\**\*">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
 		</Content>
-		<Content Remove="models\TranscriptionHistory.cs" />
+		<Content Remove="llms\TranscriptionHistory.cs" />
 		<!-- Default settings – copied only if not already present in output -->
 		<Content Include="settings.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -95,6 +96,7 @@
 
 	<ItemGroup>
 		<!-- Whisper inference via whisper.cpp bindings -->
+		<PackageReference Include="Autofac" Version="9.1.0" />
 		<PackageReference Include="Serilog" Version="4.3.0" />
 		<PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
 		<PackageReference Include="Whisper.net" Version="1.9.0" />
@@ -110,16 +112,17 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Compile Update="Util\AppSettings.cs">
+	  <Compile Update="Models\AppSettings.cs">
 	    <CopyToOutputDirectory>Never</CopyToOutputDirectory>
 	  </Compile>
-	  <Compile Update="Util\TranscriptionHistory.cs">
+	  <Compile Update="Utils\TranscriptionHistory.cs">
 	    <CopyToOutputDirectory>Never</CopyToOutputDirectory>
 	  </Compile>
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="Util\Structs\" />
+	  <Folder Include="Repository\" />
+	  <Folder Include="Utils\Structs\" />
 	</ItemGroup>
 
 </Project>

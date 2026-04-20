@@ -5,7 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Microsoft.Win32;
-using WhisperWriter.Util;
+using WhisperWriter.Utils;
 using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
 using WpfKeyInterop = System.Windows.Input.KeyInterop;
 using WpfKey = System.Windows.Input.Key;
@@ -38,18 +38,18 @@ public partial class SettingsWindow : Window {
 	private List<int> _currentVkCodes = [];
 
 	private static readonly (string Tag, string Name, string Details)[] _models = [
-		("models/ggml-large-v3-turbo.bin", "large-v3-turbo  (best speed/accuracy tradeoff)", "~3 GB VRAM · 1.6 GB disk · CUDA GPU recommended"),
-		("models/ggml-large-v3.bin",       "large-v3  (most accurate, latest)",              "~10 GB VRAM · 3 GB disk · CUDA GPU strongly recommended"),
-		("models/ggml-large-v2.bin",       "large-v2  (most accurate, recommended)",         "~10 GB VRAM · 3 GB disk · CUDA GPU strongly recommended"),
-		("models/ggml-large-v1.bin",       "large-v1  (accurate, older generation)",         "~10 GB VRAM · 3 GB disk · CUDA GPU strongly recommended"),
-		("models/ggml-medium.bin",         "medium  (good balance, multilingual)",           "~5 GB VRAM · 1.5 GB disk · runs on CPU"),
-		("models/ggml-medium.en.bin",      "medium.en  (good balance, English only)",        "~5 GB VRAM · 1.5 GB disk · runs on CPU"),
-		("models/ggml-small.bin",          "small  (fast, multilingual)",                    "~2 GB VRAM · 488 MB disk · runs on CPU"),
-		("models/ggml-small.en.bin",       "small.en  (fast, English only)",                 "~2 GB VRAM · 488 MB disk · runs on CPU"),
-		("models/ggml-base.bin",           "base  (very fast, multilingual)",                "~1 GB VRAM · 148 MB disk · runs on CPU"),
-		("models/ggml-base.en.bin",        "base.en  (very fast, English only)",             "~1 GB VRAM · 148 MB disk · runs on CPU"),
-		("models/ggml-tiny.bin",           "tiny  (fastest, multilingual, least accurate)",  "~390 MB VRAM · 78 MB disk · runs on CPU"),
-		("models/ggml-tiny.en.bin",        "tiny.en  (fastest, English only, least accurate)", "~390 MB VRAM · 78 MB disk · runs on CPU"),
+		("llms/ggml-large-v3-turbo.bin", "large-v3-turbo  (best speed/accuracy tradeoff)", "~3 GB VRAM · 1.6 GB disk · CUDA GPU recommended"),
+		("llms/ggml-large-v3.bin",       "large-v3  (most accurate, latest)",              "~10 GB VRAM · 3 GB disk · CUDA GPU strongly recommended"),
+		("llms/ggml-large-v2.bin",       "large-v2  (most accurate, recommended)",         "~10 GB VRAM · 3 GB disk · CUDA GPU strongly recommended"),
+		("llms/ggml-large-v1.bin",       "large-v1  (accurate, older generation)",         "~10 GB VRAM · 3 GB disk · CUDA GPU strongly recommended"),
+		("llms/ggml-medium.bin",         "medium  (good balance, multilingual)",           "~5 GB VRAM · 1.5 GB disk · runs on CPU"),
+		("llms/ggml-medium.en.bin",      "medium.en  (good balance, English only)",        "~5 GB VRAM · 1.5 GB disk · runs on CPU"),
+		("llms/ggml-small.bin",          "small  (fast, multilingual)",                    "~2 GB VRAM · 488 MB disk · runs on CPU"),
+		("llms/ggml-small.en.bin",       "small.en  (fast, English only)",                 "~2 GB VRAM · 488 MB disk · runs on CPU"),
+		("llms/ggml-base.bin",           "base  (very fast, multilingual)",                "~1 GB VRAM · 148 MB disk · runs on CPU"),
+		("llms/ggml-base.en.bin",        "base.en  (very fast, English only)",             "~1 GB VRAM · 148 MB disk · runs on CPU"),
+		("llms/ggml-tiny.bin",           "tiny  (fastest, multilingual, least accurate)",  "~390 MB VRAM · 78 MB disk · runs on CPU"),
+		("llms/ggml-tiny.en.bin",        "tiny.en  (fastest, English only, least accurate)", "~390 MB VRAM · 78 MB disk · runs on CPU"),
 	];
 
 	public SettingsWindow () {
@@ -235,7 +235,7 @@ public partial class SettingsWindow : Window {
 	private void _btnSave_Click (object sender, RoutedEventArgs e) {
 		var s = App.SettingsService.Settings;
 		if (this.CmbModelPath.SelectedItem is ComboBoxItem selectedModel)
-			s.ModelPath = selectedModel.Tag as string ?? "models/ggml-large-v2.bin";
+			s.ModelPath = selectedModel.Tag as string ?? "llms/ggml-large-v2.bin";
 		s.Prompt = this.TxtPrompt.Text;
 		s.HistorySize = int.TryParse(this.TxtHistorySize.Text, out int historySize) && historySize >= 1
 			? historySize

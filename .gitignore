@@ -54,7 +54,7 @@ TestResult.xml
 nunit-*.xml
 
 .vs/
-Models/ggml-*
+llms/ggml-*
 
 # Code signing keys (contain private keys)
 *.pfx

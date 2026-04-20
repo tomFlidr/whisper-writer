@@ -14,7 +14,7 @@ namespace WhisperWriter.Services;
 /// Persists environment-aware transcription timing statistics in a local SQLite database
 /// and provides an evidence-based ETA estimate for new recordings.
 ///
-/// Database location: &lt;BaseDirectory&gt;/models/eta-time-stats.db
+/// Database location: &lt;BaseDirectory&gt;/llms/eta-time-stats.db
 ///
 /// Fresh schema (no migrations):
 ///   Versions     (value TEXT)
@@ -37,7 +37,7 @@ public class EtaService : IDisposable {
 	protected SqliteConnection? connection;
 
 	public EtaService () {
-		var dir = Path.Combine(AppContext.BaseDirectory, "models");
+		var dir = Path.Combine(AppContext.BaseDirectory, "llms");
 		Directory.CreateDirectory(dir);
 		this.dbPath = Path.Combine(dir, "eta-time-stats.db");
 	}

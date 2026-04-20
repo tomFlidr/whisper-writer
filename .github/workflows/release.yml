@@ -98,16 +98,16 @@ jobs:
           --self-contained false
           -o publish/${{ matrix.rid }}
 
-      # ── 7. Create models\ placeholder ────────────────────────────────────────
+      # ── 7. Create llms\ placeholder ────────────────────────────────────────
       # download-models.ps1 and download-models.bat are already copied by the
       # .csproj Content items (CopyToOutputDirectory=PreserveNewest).
-      # We only need to ensure the models\ folder exists with a README.
-      # The ZIP must contain an empty models\ folder so the download script
+      # We only need to ensure the llms\ folder exists with a README.
+      # The ZIP must contain an empty llms\ folder so the download script
       # knows where to put the files, and so WhisperWriter.exe can find them.
-      - name: Create models folder placeholder
+      - name: Create llms folder placeholder
         shell: pwsh
         run: |
-          $modelsDir = "publish/${{ matrix.rid }}/models"
+          $modelsDir = "publish/${{ matrix.rid }}/llms"
           New-Item -ItemType Directory -Path $modelsDir -Force | Out-Null
           # Drop a README so the folder is not ignored by git-archive / zip tools
           Set-Content "$modelsDir/README.txt" @"
@@ -115,7 +115,7 @@ jobs:
           Run download-models.bat (or download-models.ps1) to download them automatically.
           See https://github.com/tomFlidr/whisper-writer for details.
           "@
-          Write-Host "models\ placeholder created."
+          Write-Host "llms\ placeholder created."
 
       # ── 8. Strip debug symbols and unneeded files ─────────────────────────────
       - name: Clean publish output

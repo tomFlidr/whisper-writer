@@ -218,7 +218,7 @@ if ($cudaFound) {
 # ---------------------------------------------------------------------------
 Write-Step "Checking Whisper models..."
 
-$modelsDir   = Join-Path $root "models"
+$modelsDir   = Join-Path $root "llms"
 $defaultModel = "ggml-medium.bin"
 $defaultPath  = Join-Path $modelsDir $defaultModel
 

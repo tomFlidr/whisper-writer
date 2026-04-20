@@ -3,7 +3,7 @@
 # Downloads selected Whisper GGML models from HuggingFace into the models\ folder.
 
 $ErrorActionPreference = "Stop"
-$modelsDir = Join-Path $PSScriptRoot "models"
+$modelsDir = Join-Path $PSScriptRoot "llms"
 $baseUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main"
 
 $models = @(

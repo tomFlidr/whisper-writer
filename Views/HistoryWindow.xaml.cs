@@ -1,13 +1,13 @@
 using System.Windows;
 using System.Windows.Input;
-using WhisperWriter.Util;
+using WhisperWriter.Utils;
 
 namespace WhisperWriter.Views;
 
 public partial class HistoryWindow : Window {
 	public HistoryWindow () {
 		this.InitializeComponent();
-		this.HistoryList.ItemsSource = App.History.Entries;
+		this.HistoryList.ItemsSource = Program.App.History.Entries;
 	}
 	private void _handleTitleBarMouseLeftButtonDown (object sender, MouseButtonEventArgs e) {
 		if (e.ButtonState == MouseButtonState.Pressed)

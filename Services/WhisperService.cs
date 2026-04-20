@@ -2,7 +2,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using Whisper.net;
 using Whisper.net.Ggml;
-using WhisperWriter.Util.Enums;
+using WhisperWriter.Utils.Enums;
 
 namespace WhisperWriter.Services;
 

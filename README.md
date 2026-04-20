@@ -91,7 +91,7 @@ Simply double-click **`download-models.bat`** in the WhisperWriter folder. No se
 2. Already-downloaded models are marked **[downloaded]** in green.
 3. You type the numbers of the models you want (comma-separated, spaces, or ranges like `1-3,7`).
 4. After confirming, missing models are downloaded one by one with a live progress indicator.
-5. Files are saved directly into the `models\` folder next to the script.
+5. Files are saved directly into the `llms\` folder next to the script.
 
 **Example session:**
 
@@ -112,9 +112,9 @@ Simply double-click **`download-models.bat`** in the WhisperWriter folder. No se
 
 On the very first launch:
 
-1. The app checks for `models\ggml-large-v2.bin` by default.
+1. The app checks for `llms\ggml-large-v2.bin` by default.
 2. If the model file is **not found**, it automatically downloads `ggml-medium` (~1.5 GB) from the official Hugging Face repository. This may take a few minutes depending on your connection.
-3. The app also creates a local SQLite database `models\eta-time-stats.db` for ETA timing statistics.
+3. The app also creates a local SQLite database `llms\eta-time-stats.db` for ETA timing statistics.
 4. The floating pill widget appears at the bottom-center of your screen showing **"Loading…"** while the model is being loaded into memory (or downloaded).
 5. Once it shows **"Ready"**, you can start transcribing.
 
@@ -158,7 +158,7 @@ Click **Save** to apply changes. The model is reloaded automatically if you chan
 
 ## Whisper Models
 
-Models must be placed in the `models\` folder next to `WhisperWriter.exe`. File names must match exactly.
+Models must be placed in the `llms\` folder next to `WhisperWriter.exe`. File names must match exactly.
 
 | Model | File name | Disk | VRAM | Notes |
 |---|---|---|---|---|
@@ -187,7 +187,7 @@ Download GGML model files from the official Whisper.net / whisper.cpp model repo
 
 👉 **https://huggingface.co/ggerganov/whisper.cpp**
 
-Download the `.bin` file for your chosen model and place it in the `models\` folder.
+Download the `.bin` file for your chosen model and place it in the `llms\` folder.
 
 ### Which model should I choose?
 
@@ -243,7 +243,7 @@ If the app behaves unexpectedly, check the latest log file for details.
 
 WhisperWriter stores ETA timing data in a local SQLite database:
 
-- File: `models\eta-time-stats.db`
+- File: `llms\eta-time-stats.db`
 - The database is used only to improve the ETA countdown.
 - It stores timing samples per **model** and per detected **runtime environment**.
 - The environment fingerprint includes CPU, all detected GPUs (stored as a sorted array), RAM, OS version, whether Whisper is running on CPU or GPU, CUDA version, Whisper thread count, AC/battery power, and power-saver state.
@@ -291,7 +291,7 @@ The script performs all first-time setup steps automatically:
 3. Runs `dotnet restore`.
 4. Copies the CUDA runtime DLLs (`cudart64_N.dll`, `cublas64_N.dll`, `cublasLt64_N.dll`) to `bin\Debug\runtimes\cuda\win-x64`.
 5. If the detected CUDA path differs from the one stored in `WhisperWriter.csproj`, offers to update it.
-6. Checks for a Whisper model in `models\` and offers to launch `download-models.ps1` if none is found.
+6. Checks for a Whisper model in `llms\` and offers to launch `download-models.ps1` if none is found.
 
 If CUDA is not installed the script skips steps 4–5 and continues — the app will run on CPU.
 

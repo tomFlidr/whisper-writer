@@ -1,4 +1,4 @@
-using WhisperWriter.Util.Enums;
+using WhisperWriter.Utils.Enums;
 
 namespace WhisperWriter.Services;
 

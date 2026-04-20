@@ -1,4 +1,4 @@
-namespace WhisperWriter.Util.Enums;
+namespace WhisperWriter.Utils.Enums;
 
 public enum TranscriptionState {
 	Idle,

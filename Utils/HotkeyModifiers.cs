@@ -1,4 +1,4 @@
-namespace WhisperWriter.Util;
+namespace WhisperWriter.Utils;
 
 [Flags]
 public enum HotkeyModifiers {
