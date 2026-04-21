@@ -51,12 +51,16 @@ D:\tec\cs\whisper-writer\
 │       └── release.yml               ← GitHub Actions: build & publish release ZIPs on tag push
 ├── docs\
 │   ├── ROADMAP.md                    ← prioritized plan of all planned changes (Czech, sorted by code impact)
-│   ├── skills\coding-standards.md    ← mandatory coding conventions for this project (English)
+│   ├── skills\
+│   │   ├── coding-standards.md
+│   │   ├── commit.md
+│   │   ├── debugging.md
+│   │   ├── new-feature.md
+│   │   ├── refactoring.md
+│   │   └── release.md
 │   └── SKILLS.md                     ← discovered knowledge, gotchas, hard-won insights (English)
 ├── README.md                          ← user-facing documentation (EN)
 ├── WhisperWriter.csproj
-├── WhisperWriter.pfx                  ← Authenticode certificate (self-signed, password 1234, in .gitignore)
-├── WhisperWriter.snk                  ← Strong Name key (in .gitignore)
 ├── setup-dev.ps1                      ← one-time developer setup: checks .NET SDK + CUDA, restores NuGet, copies CUDA DLLs, optional model download
 ├── setup-dev.bat                      ← launcher for setup-dev.ps1, bypasses execution policy
 ├── download-models.ps1                ← interactive PowerShell script: download GGML models to models\
@@ -67,32 +71,43 @@ D:\tec\cs\whisper-writer\
 ├── settings.json                      ← default configuration (copied to bin on build)
 ├── Services\
 │   ├── AudioRecorder.cs               ← NAudio, 16 kHz mono WAV, RMS amplitude event
+│   ├── DI.cs                          ← simple DI helpers / service registrations
 │   ├── EtaStatsService.cs             ← SQLite-backed ETA statistics; class name: EtaService
 │   ├── HotkeyService.cs               ← polling GetAsyncKeyState, 20 ms interval
 │   ├── ITranscriptionService.cs       ← interface for transcription engines
 │   ├── LogService.cs                  ← Serilog facade, daily rolling log to logs/
-│   ├── PowerStatusSnapshot.cs         ← plain struct: AC power + power-saver state
 │   ├── SettingsService.cs             ← JSON load/save to BaseDirectory/settings.json
 │   ├── TextInjector.cs                ← SaveFocus() + SendInput Unicode
 │   ├── WhisperService.cs              ← WhisperFactory, TranscribeAsync, CUDA
-│   └── WindowPositioner.cs            ← window position logic extracted from MainWindow
-├── Util\
-│   ├── AppSettings.cs                 ← POCO configuration (serialized to settings.json)
-│   ├── Enums\
-│   │   └── TranscriptionState.cs      ← enum: Loading, Transcribing, Done, Error
+│   ├── WindowPositioner.cs            ← window position logic extracted from MainWindow
+│   ├── EtaStatsServices\             ← helpers and P/Invoke for ETA DB / environment fingerprinting
+│   │   ├── NativeMethods.cs
+│   │   ├── PowerStatusSnapshot.cs
+│   │   └── SystemPowerStatus.cs
+│   └── TextInjectors\                ← low-level input providers used by TextInjector
+│       ├── Input.cs
+│       ├── InputKeyboard.cs
+│       └── InputMouse.cs
+├── Utils\
 │   ├── HotkeyModifiers.cs             ← [Flags] enum: None, Alt, Control, Shift, Win
 │   ├── TranscriptionEntry.cs          ← data record: Timestamp, Text, Duration
 │   ├── TranscriptionHistory.cs        ← ObservableCollection<TranscriptionEntry>, thread-safe Add()
-│   └── VkCodeHelper.cs                ← static helper: VK code → display name, FormatCombo()
+│   ├── VkCodeHelper.cs                ← static helper: VK code → display name, FormatCombo()
+│   ├── Enums\
+│   │   └── TranscriptionState.cs      ← enum: Loading, Transcribing, Done, Error
+│   └── Interfaces\
+│       ├── IService.cs
+│       ├── ISingleton.cs
+│       └── ITransient.cs
 ├── Views\
 │   ├── MainWindow.xaml/.cs            ← floating pill widget, PTT logic, VU meter, ETA
 │   ├── HistoryWindow.xaml/.cs         ← transcription list, copy to clipboard
 │   ├── SettingsWindow.xaml/.cs        ← settings form
 │   └── AboutWindow.xaml/.cs           ← about window
-└── models\
-    ├── eta-time-stats.db          ← SQLite database with per-model ETA timing statistics
-    ├── ggml-large-v2.bin          ← 2.95 GB, default model
-    └── ggml-medium.bin            ← 1.46 GB, fallback model
+└── models\ (not fully committed to repo - large model files kept out of VCS)
+    ├── eta-time-stats.db              ← SQLite database with per-model ETA timing statistics
+    ├── ggml-large-v2.bin              ← usually downloaded by the user (not in repo)
+    └── ggml-medium.bin                ← fallback model (not in repo)
 ```
 
 ---
@@ -493,6 +508,13 @@ Line endings in C# files are **LF** – do not fix them manually, `replace_strin
 
 These files together form the primary source of context for future AI sessions – keep them accurate and up to date.
 
+## Instruction integrity / commit hash
+
+- The basic instructions in this file must always be signed on the very last line with the hash of the latest commit (prefix the hash with `#`).
+- On every commit you make to the repository, update this file so the last line contains the current commit hash.
+- Whenever you read these basic instructions and the commit hash stored here differs from the repository's HEAD commit, perform a full review of everything you know about the project (project structure, key files, docs/skills, and any inferred assumptions). If you find any discrepancy, correct the instructions so they match the actual project state and update the commit hash to the current HEAD.
+
+
 ---
 
 ## 9. Settings and Configuration
@@ -513,3 +535,5 @@ Ideas mentioned during development, not yet implemented:
 - **Dark/light theme** – the color palette base is in App.xaml, just add a second ResourceDictionary.
 - **Multiple microphones** – `WaveInEvent.DeviceNumber`, selection in Settings.
 - **Silent recording discard** – RMS threshold below which the recording is discarded (anti-click).
+
+#2b201b37837dad14bf19ae56375228c3ad29de9a

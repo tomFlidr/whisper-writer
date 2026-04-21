@@ -128,7 +128,68 @@ public sealed class AudioRecorder {
 
 ---
 
-## 6. Nullable and Implicit Usings
+## 6. Braces for conditions
+
+- Always use braces for `if` / `else if` / `else` branches. A branch must have an opening and closing brace even if it contains a single statement.
+- Exception: a single-line `if` with no `else` and no `else if` is allowed, but the statement of the branch must be placed on a new indented line and still use the K&R brace style for the `if` itself.
+
+Examples:
+
+```csharp
+// CORRECT – single-line branch allowed (no else/else if)
+public void MaybeLog() {
+    if (condition)
+        this.Log();
+}
+
+// CORRECT – braces always allowed and preferred
+public void DoWork() {
+    if (condition) {
+        DoSomething();
+    } else {
+        DoOther();
+    }
+}
+
+// WRONG – branch without braces when else exists
+public void Bad() {
+    if (condition)
+        DoSomething();
+    else
+        DoOther();    // NOT allowed: else must have braces
+}
+```
+
+---
+
+## 7. Method-declaration spacing
+
+- Method declaration spacing: in method (and delegate/interface method) declarations there MUST be a single space between the method name and the opening parenthesis. This rule applies to declarations/definitions only, not to call sites.
+
+Examples:
+
+```csharp
+// CORRECT – method definition with space before '('
+public void SaveSettings () {
+    // ...
+}
+
+public interface IWriter {
+    void WriteLine (string text);
+}
+
+// WRONG – no space before '(' in definition
+public void SaveSettings() {
+    // ...
+}
+
+// NOTE: method calls keep their usual form without enforced space
+// call: writer.WriteLine("hi");
+```
+
+---
+
+## 8. Nullable and Implicit Usings
 
 - `<Nullable>enable</Nullable>` is on. All reference types must explicitly declare nullability.
 - `<ImplicitUsings>enable</ImplicitUsings>` is on. Do not add `using System;`, `using System.Collections.Generic;` etc. unless not included by default.
@@ -136,7 +197,7 @@ public sealed class AudioRecorder {
 
 ---
 
-## 7. Class Design
+## 9. Class Design
 
 - **Do not use `sealed`** – every class must remain inheritable. Sealing a class removes future flexibility without meaningful benefit at this scale.
 - Prefer **`protected`** over `private` for fields and methods. Private visibility should be used only when there is a specific, justified reason (e.g., a backing field that must never be touched directly). When in doubt, choose `protected` so that subclasses can extend behaviour without copy-pasting.
@@ -147,7 +208,7 @@ public sealed class AudioRecorder {
 
 ---
 
-## 8. Member Order Within a Class
+## 10. Member Order Within a Class
 
 Members must appear in the following order. Within each section, **static members come before instance members**, and within each group the access order is **public → protected → private**.
 
@@ -196,7 +257,7 @@ public class MyService {
 
 ---
 
-## 9. Async / Await
+## 11. Async / Await
 
 - Use `async/await` for every I/O operation: file access, model loading, transcription, HTTP downloads.
 - Never use `.Result` or `.Wait()` on a `Task` from a synchronous context – risks deadlock on the UI thread.
@@ -213,7 +274,7 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 
 ---
 
-## 10. Thread Safety and UI Access
+## 12. Thread Safety and UI Access
 
 - All WPF UI property changes must happen on the UI thread. Use `Dispatcher.Invoke` (sync) or `Dispatcher.BeginInvoke` (async) from background threads.
 - `TextInjector.InjectText()` **must** run on a **background thread** (`Task.Run`) – it calls `Thread.Sleep`.
@@ -222,7 +283,7 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 
 ---
 
-## 11. Win32 P/Invoke
+## 13. Win32 P/Invoke
 
 - All P/Invoke declarations must be **private**, grouped in a `#region Win32` block or a nested `private static class NativeMethods`.
 - P/Invoke must not leak outside the class that owns it. `TextInjector` owns `SendInput`/`GetAsyncKeyState`; `HotkeyService` owns its own polling copy; `MainWindow` owns window-style calls.
@@ -231,7 +292,7 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 
 ---
 
-## 12. Error Handling
+## 14. Error Handling
 
 - All `catch` blocks must log via `LogService.Error(message, exception)` or `LogService.Warning(...)`.
 - Never swallow exceptions silently – empty `catch` blocks are forbidden.
@@ -240,7 +301,7 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 
 ---
 
-## 13. Logging
+## 15. Logging
 
 - `LogService` is a static facade over Serilog.
 - **All logging is DEBUG-only.** In Release, all methods are no-ops (`#if DEBUG`).
@@ -250,7 +311,7 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 
 ---
 
-## 14. One Type Per File
+## 16. One Type Per File
 
 - Every file contains exactly **one** top-level type: one class, one interface, one enum, or one struct. Never put multiple types in a single file.
 - If a file currently contains more than one type, refactor it – split each type into its own file.
@@ -272,7 +333,7 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 
 ---
 
-## 15. Editing Files
+## 17. Editing Files
 - **Always** use `replace_string_in_file` or `multi_replace_string_in_file` to edit existing files.
 - Never use PowerShell or Node.js to **write or overwrite** C# source files.
 - Exception: non-source files (`.md`, `.editorconfig`, `.ps1`) may be written via terminal.
@@ -281,7 +342,7 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 
 ---
 
-## 16. No Section-Separator Comments
+## 18. No Section-Separator Comments
 
 Do **not** use visual separator comments of any form to divide members into sections within a class. Examples of **forbidden** patterns:
 

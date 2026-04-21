@@ -10,13 +10,7 @@ Každá hotová položka se přesouvá do sekce **Dokončeno** a zároveň se ak
 
 ## Fáze 1 - dodělat hrubý refactoring
 
-Je třeba do coding standards přidat pravidla:
-- nemají se vytvářet podmínky bez složených závorek, 
-  jen v případě, že jde o jednu podmínku bez `else` 
-  nebo bez `else if`, kde je kód větve jen jeden řádek,
-- pro definici metody by měla být mezi názvem a otevřenou 
-  kulatou závorkou mezera, aby se dalo vyhledáváním oddělit 
-  volání metody a definice metody nebo metody v interface,
+Implementovat dependency injection.
 
 ## Fáze 2 – Sjednocení sekundárních oken do jednoho tabbed okna
 

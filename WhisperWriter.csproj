@@ -56,7 +56,7 @@
 	  <Content Include="app.ico">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
-	  <None Include=".github\AGENTS.md" />
+	  <None Include=".github\copilot-instructions.md" />
 	  <None Include=".github\workflows\release.yml" />
 	  <None Include="WhisperWriter.sln" />
 	  <None Include="WhisperWriter.pfx" />
