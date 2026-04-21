@@ -16,7 +16,7 @@ public class AppSettings {
 	// VK codes that must all be held simultaneously to trigger push-to-talk.
 	// Default: Left Alt (0xA4) + Left Win (0x5B).
 	// An empty list means "use HotkeyModifiers bitmask" (legacy fallback).
-	public List<int> HotkeyVkCodes { get; set; } = [0xA4, 0x5B]; // VK_LMENU + _VK_LWIN
+	public List<int> HotkeyCodes { get; set; } = [0xA4, 0x5B]; // VK_LMENU + _VK_LWIN
 
 	// How many transcriptions to keep in history
 	public int HistorySize { get; set; } = 30;

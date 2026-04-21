@@ -2,7 +2,10 @@ using System.IO;
 using System.Runtime.InteropServices;
 using Whisper.net;
 using Whisper.net.Ggml;
+using WhisperWriter.DI;
+using WhisperWriter.Services.WhisperServices;
 using WhisperWriter.Utils.Enums;
+using WhisperWriter.Utils.Interfaces;
 
 namespace WhisperWriter.Services;
 
@@ -10,12 +13,17 @@ namespace WhisperWriter.Services;
 /// Whisper.net-backed transcription engine.
 /// Implements ITranscriptionService; prefers CUDA, falls back to CPU automatically.
 /// </summary>
-public class WhisperService : ITranscriptionService {
+public class WhisperService : ITranscriptionService, IService, ISingleton {
 	// Minimum acceptable file size for any GGML model (tiny.en ≈ 78 MB).
 	// A file smaller than this is certainly truncated or corrupted.
 	public const long MinModelFileSizeBytes = 70 * 1024 * 1024; // 70 MB
 
 	public event Action<TranscriptionState, string>? StateChanged;
+
+	[Inject]
+	protected SettingsService settingsService { get; set; } = null!;
+	[Inject]
+	protected LogService logService { get; set; } = null!;
 
 	protected WhisperFactory? factory;
 	protected bool initialized;
@@ -53,14 +61,14 @@ public class WhisperService : ITranscriptionService {
 		this.StateChanged?.Invoke(TranscriptionState.Loading, "Loading model…");
 
 		var cudaVersion = WhisperService.DetectCudaVersion();
-		LogService.Info(cudaVersion.HasValue
+		this.logService.Info(cudaVersion.HasValue
 			? $"CUDA probe: cudart64_{cudaVersion}.dll + cublas64_{cudaVersion}.dll found — GPU will be used (CUDA {cudaVersion})"
 			: "CUDA probe: no CUDA runtime found (tried versions 13, 12, 11) — falling back to CPU");
 
 		try {
 			// Delete and re-download if the file exists but is clearly truncated.
 			if (File.Exists(modelPath) && new FileInfo(modelPath).Length < WhisperService.MinModelFileSizeBytes) {
-				LogService.Warning($"Model file '{modelPath}' is too small ({new FileInfo(modelPath).Length / 1024 / 1024} MB) — deleting and re-downloading.");
+				this.logService.Warning($"Model file '{modelPath}' is too small ({new FileInfo(modelPath).Length / 1024 / 1024} MB) — deleting and re-downloading.");
 				File.Delete(modelPath);
 			}
 
@@ -82,7 +90,7 @@ public class WhisperService : ITranscriptionService {
 		} catch (Exception ex) {
 			this.initialized = false;
 			this.factory = null;
-			LogService.Error("Failed to load Whisper model", ex);
+			this.logService.Error("Failed to load Whisper model", ex);
 			this.StateChanged?.Invoke(TranscriptionState.Error, $"Model load failed: {ex.Message}");
 		}
 	}
@@ -97,7 +105,7 @@ public class WhisperService : ITranscriptionService {
 
 		string? modelPath = null;
 		try {
-			modelPath = App.SettingsService.Settings.ModelPath;
+			modelPath = this.settingsService.Settings.ModelPath;
 		} catch { }
 
 		this.StateChanged?.Invoke(TranscriptionState.Transcribing, "Transcribing…");
@@ -132,13 +140,13 @@ public class WhisperService : ITranscriptionService {
 			// The factory accepted the file (only reads header) but the model is
 			// corrupted or truncated. Delete it so InitializeAsync re-downloads it
 			// on next startup, then surface a clear error to the user.
-			LogService.Error("Whisper model corrupted – deleting file for re-download", ex);
+			this.logService.Error("Whisper model corrupted – deleting file for re-download", ex);
 			this.initialized = false;
 			this.factory.Dispose();
 			this.factory = null;
 			if (modelPath != null && File.Exists(modelPath)) {
 				try { File.Delete(modelPath); } catch (Exception delEx) {
-					LogService.Warning($"Could not delete corrupted model file '{modelPath}'", delEx);
+					this.logService.Warning($"Could not delete corrupted model file '{modelPath}'", delEx);
 				}
 			}
 			var userMsg = "Model file is corrupted and has been deleted. Restart the app to re-download it.";
@@ -150,13 +158,5 @@ public class WhisperService : ITranscriptionService {
 	public async ValueTask DisposeAsync() {
 		this.factory?.Dispose();
 		await ValueTask.CompletedTask;
-	}
-
-	private static class NativeMethods {
-		internal const uint LOAD_LIBRARY_AS_DATAFILE = 0x00000002;
-		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-		internal static extern IntPtr LoadLibraryEx(string lpFileName, IntPtr hFile, uint dwFlags);
-		[DllImport("kernel32.dll", SetLastError = true)]
-		internal static extern bool FreeLibrary(IntPtr hModule);
 	}
 }

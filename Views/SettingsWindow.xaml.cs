@@ -1,21 +1,27 @@
+using Microsoft.Win32;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using Microsoft.Win32;
+using WhisperWriter.DI;
+using WhisperWriter.Services;
 using WhisperWriter.Utils;
+using WhisperWriter.Utils.Interfaces;
+using WpfKey = System.Windows.Input.Key;
 using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
 using WpfKeyInterop = System.Windows.Input.KeyInterop;
-using WpfKey = System.Windows.Input.Key;
 using WpfMouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
 using WpfMouseButtonState = System.Windows.Input.MouseButtonState;
 using WpfTextCompositionEventArgs = System.Windows.Input.TextCompositionEventArgs;
 
 namespace WhisperWriter.Views;
 
-public partial class SettingsWindow : Window {
+public partial class SettingsWindow : Window, IService, ITransient {
+	[Inject]
+	protected SettingsService settingsService { get; set; } = null!;
+
 	private const string _startupKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
 	private const string _startupValueName = "WhisperWriter";
 
@@ -54,6 +60,9 @@ public partial class SettingsWindow : Window {
 
 	public SettingsWindow () {
 		this.InitializeComponent();
+	}
+	protected override void OnActivated (EventArgs e) {
+		base.OnActivated(e);
 		this._loadSettings();
 	}
 
@@ -108,7 +117,7 @@ public partial class SettingsWindow : Window {
 
 	private void _loadSettings () {
 		this._buildModelItems();
-		var s = App.SettingsService.Settings;
+		var s = this.settingsService.Settings;
 		foreach (ComboBoxItem item in this.CmbModelPath.Items) {
 			if (item.Tag as string == s.ModelPath) {
 				this.CmbModelPath.SelectedItem = item;
@@ -141,9 +150,9 @@ public partial class SettingsWindow : Window {
 			this.CmbLanguage.SelectedIndex = 0;
 
 		// Hotkey
-		this._currentVkCodes = new List<int>(s.HotkeyVkCodes);
+		this._currentVkCodes = new List<int>(s.HotkeyCodes);
 		this._capturedVkCodes = new List<int>(this._currentVkCodes);
-		this.TxtHotkeyDisplay.Text = VkCodeHelper.FormatCombo(this._currentVkCodes);
+		this.TxtHotkeyDisplay.Text = VirtualKeyCodeHelper.FormatCombo(this._currentVkCodes);
 	}
 
 	private void _handleTxtHistorySizePreviewTextInput (object sender, WpfTextCompositionEventArgs e) {
@@ -191,7 +200,7 @@ public partial class SettingsWindow : Window {
 		if (accept && this._capturedVkCodes.Count > 0) {
 			this._currentVkCodes = new List<int>(this._capturedVkCodes);
 		}
-		this.TxtHotkeyDisplay.Text = VkCodeHelper.FormatCombo(this._currentVkCodes);
+		this.TxtHotkeyDisplay.Text = VirtualKeyCodeHelper.FormatCombo(this._currentVkCodes);
 		this._capturedVkCodes = new List<int>(this._currentVkCodes);
 	}
 
@@ -208,7 +217,7 @@ public partial class SettingsWindow : Window {
 		if (!_captureExcluded.Contains(vk)) {
 			this._captureDown.Add(vk);
 			// Show live preview of currently held keys.
-			this.TxtHotkeyDisplay.Text = VkCodeHelper.FormatCombo(this._captureDown.ToList());
+			this.TxtHotkeyDisplay.Text = VirtualKeyCodeHelper.FormatCombo(this._captureDown.ToList());
 		}
 	}
 
@@ -233,7 +242,7 @@ public partial class SettingsWindow : Window {
 	}
 
 	private void _btnSave_Click (object sender, RoutedEventArgs e) {
-		var s = App.SettingsService.Settings;
+		var s = this.settingsService.Settings;
 		if (this.CmbModelPath.SelectedItem is ComboBoxItem selectedModel)
 			s.ModelPath = selectedModel.Tag as string ?? "llms/ggml-large-v2.bin";
 		s.Prompt = this.TxtPrompt.Text;
@@ -248,7 +257,7 @@ public partial class SettingsWindow : Window {
 			s.Language = selected.Tag as string ?? "auto";
 
 		// Persist hotkey VK codes
-		s.HotkeyVkCodes = new List<int>(this._currentVkCodes);
+		s.HotkeyCodes = new List<int>(this._currentVkCodes);
 
 		this.DialogResult = true;
 		this.Close();

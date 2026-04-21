@@ -6,7 +6,9 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using WhisperWriter.DI;
 using WhisperWriter.Services.EtaStatsServices;
+using WhisperWriter.Utils.Interfaces;
 
 namespace WhisperWriter.Services;
 
@@ -27,7 +29,10 @@ namespace WhisperWriter.Services;
 /// similar audio length (±30%), then widens to ±50%, then falls back to all rows for the same
 /// model/environment. ETA is shown only when at least two matching samples exist.
 /// </summary>
-public class EtaService : IDisposable {
+public class EtaService : IDisposable, IService, ISingleton {
+	[Inject]
+	protected LogService logService { get; set; } = null!;
+
 	private static readonly int _maxRecordsPerModelEnvironment = 1000;
 	private static readonly int _minimumSamplesForEta = 1;
 
@@ -42,21 +47,26 @@ public class EtaService : IDisposable {
 		this.dbPath = Path.Combine(dir, "eta-time-stats.db");
 	}
 
-	public void Initialize () {
+	protected bool initConnection () {
+		if (this.connection != null)
+			return true;
+		bool result = false;
 		try {
 			this.connection = new SqliteConnection($"Data Source={this.dbPath}");
 			this.connection.Open();
 			this.ensureSchema();
-			LogService.Info($"EtaService: database opened at {this.dbPath}");
+			this.logService.Info($"EtaService: database opened at {this.dbPath}");
+			result = true;
 		} catch (Exception ex) {
-			LogService.Error("EtaService: failed to open database", ex);
+			this.logService.Error("EtaService: failed to open database", ex);
 			this.connection?.Dispose();
 			this.connection = null;
 		}
+		return result;
 	}
 
 	public double? EstimateProcessingSeconds (string modelKey, double audioSeconds) {
-		if (this.connection == null || audioSeconds <= 0)
+		if (!this.initConnection() || audioSeconds <= 0)
 			return null;
 
 		try {
@@ -79,13 +89,13 @@ public class EtaService : IDisposable {
 
 			return this.estimateWithoutWindow(modelId.Value, environmentId, audioSeconds);
 		} catch (Exception ex) {
-			LogService.Error("EtaService: EstimateProcessingSeconds failed", ex);
+			this.logService.Error("EtaService: EstimateProcessingSeconds failed", ex);
 			return null;
 		}
 	}
 
 	public void Record (string modelKey, double audioSeconds, double processingSeconds) {
-		if (this.connection == null)
+		if (!this.initConnection())
 			return;
 		if (audioSeconds <= 0 || processingSeconds <= 0)
 			return;
@@ -129,7 +139,7 @@ public class EtaService : IDisposable {
 
 			tx.Commit();
 		} catch (Exception ex) {
-			LogService.Error("EtaService: Record failed", ex);
+			this.logService.Error("EtaService: Record failed", ex);
 		}
 	}
 
@@ -138,7 +148,7 @@ public class EtaService : IDisposable {
 		this.connection = null;
 	}
 
-	protected void ensureSchema() {
+	protected void ensureSchema () {
 		this.execute(@"
 			CREATE TABLE IF NOT EXISTS Versions (
 				value TEXT NOT NULL
@@ -237,8 +247,8 @@ public class EtaService : IDisposable {
 	}
 
 	protected long findOrCreateEnvironmentId () {
-		var json = EtaService.buildEnvironmentJson();
-		var fingerprint = EtaService.computeFingerprint(json);
+		var json = this.buildEnvironmentJson();
+		var fingerprint = this.computeFingerprint(json);
 
 		using var cmd = this.connection!.CreateCommand();
 		cmd.CommandText = @"
@@ -256,18 +266,18 @@ public class EtaService : IDisposable {
 		return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
 	}
 
-	protected static string buildEnvironmentJson () {
-		var cpuModel = EtaService.readWmiString("Win32_Processor", "Name") ?? "Unknown CPU";
-		var cpuPhysicalCores = EtaService.readWmiInt("Win32_Processor", "NumberOfCores") ?? Environment.ProcessorCount;
-		var gpus = EtaService.readGpuModels();
+	protected string buildEnvironmentJson () {
+		var cpuModel = this.readWmiString("Win32_Processor", "Name") ?? "Unknown CPU";
+		var cpuPhysicalCores = this.readWmiInt("Win32_Processor", "NumberOfCores") ?? Environment.ProcessorCount;
+		var gpus = this.readGpuModels();
 		var cudaVersion = WhisperService.DetectCudaVersion();
 		var backend = cudaVersion.HasValue ? "GPU" : "CPU";
-		var ramBytes = EtaService.readWmiLong("Win32_ComputerSystem", "TotalPhysicalMemory") ?? 0L;
+		var ramBytes = this.readWmiLong("Win32_ComputerSystem", "TotalPhysicalMemory") ?? 0L;
 		var ramTotalGb = ramBytes > 0 ? Math.Round(ramBytes / 1024d / 1024d / 1024d, 2) : 0d;
 		var osVersion = Environment.OSVersion.VersionString;
 		var osBuild = Environment.OSVersion.Version.Build.ToString(CultureInfo.InvariantCulture);
 		var whisperThreads = WhisperService.GetInferenceThreadCount();
-		var power = EtaService.readSystemPowerStatus();
+		var power = this.readSystemPowerStatus();
 
 		var payload = new {
 			cpuModel,
@@ -288,12 +298,12 @@ public class EtaService : IDisposable {
 		return JsonSerializer.Serialize(payload);
 	}
 
-	protected static string[] readGpuModels () {
-		var gpuNames = EtaService.readWmiStrings(
+	protected string[] readGpuModels () {
+		var gpuNames = this.readWmiStrings(
 			"Win32_VideoController", "Name", skipMicrosoftBasicDisplayAdapter: true
 		);
 		if (gpuNames.Count == 0)
-			gpuNames = EtaService.readWmiStrings("Win32_VideoController", "Name");
+			gpuNames = this.readWmiStrings("Win32_VideoController", "Name");
 		if (gpuNames.Count == 0)
 			gpuNames = ["Unknown GPU"];
 		return [
@@ -303,7 +313,7 @@ public class EtaService : IDisposable {
 		];
 	}
 
-	protected static string? readWmiString (
+	protected string? readWmiString (
 		string className, string propertyName, bool skipMicrosoftBasicDisplayAdapter = false
 	) {
 		try {
@@ -326,14 +336,14 @@ public class EtaService : IDisposable {
 				return value;
 			}
 		} catch (Exception ex) {
-			LogService.Warning(
+			this.logService.Warning(
 				$"EtaService: WMI string read failed for {className}.{propertyName}", ex
 			);
 		}
 		return null;
 	}
 
-	protected static List<string> readWmiStrings (
+	protected List<string> readWmiStrings (
 		string className, string propertyName, bool skipMicrosoftBasicDisplayAdapter = false
 	) {
 		var values = new List<string>();
@@ -360,14 +370,14 @@ public class EtaService : IDisposable {
 				values.Add(value);
 			}
 		} catch (Exception ex) {
-			LogService.Warning(
+			this.logService.Warning(
 				$"EtaService: WMI string list read failed for {className}.{propertyName}", ex
 			);
 		}
 		return values;
 	}
 
-	protected static int? readWmiInt (string className, string propertyName) {
+	protected int? readWmiInt (string className, string propertyName) {
 		try {
 			using var searcher = new ManagementObjectSearcher(
 				$"SELECT {propertyName} FROM {className}"
@@ -378,14 +388,14 @@ public class EtaService : IDisposable {
 				return Convert.ToInt32(obj[propertyName], CultureInfo.InvariantCulture);
 			}
 		} catch (Exception ex) {
-			LogService.Warning(
+			this.logService.Warning(
 				$"EtaService: WMI int read failed for {className}.{propertyName}", ex
 			);
 		}
 		return null;
 	}
 
-	protected static long? readWmiLong (string className, string propertyName) {
+	protected long? readWmiLong (string className, string propertyName) {
 		try {
 			using var searcher = new ManagementObjectSearcher(
 				$"SELECT {propertyName} FROM {className}"
@@ -396,19 +406,19 @@ public class EtaService : IDisposable {
 				return Convert.ToInt64(obj[propertyName], CultureInfo.InvariantCulture);
 			}
 		} catch (Exception ex) {
-			LogService.Warning(
+			this.logService.Warning(
 				$"EtaService: WMI long read failed for {className}.{propertyName}", ex
 			);
 		}
 		return null;
 	}
 
-	protected static string computeFingerprint (string json) {
+	protected string computeFingerprint (string json) {
 		var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(json));
 		return Convert.ToHexString(bytes);
 	}
 	
-	protected static PowerStatusSnapshot readSystemPowerStatus () {
+	protected PowerStatusSnapshot readSystemPowerStatus () {
 		if (!NativeMethods.GetSystemPowerStatus(out var status)) {
 			return new PowerStatusSnapshot {
 				OnAcPower = true,

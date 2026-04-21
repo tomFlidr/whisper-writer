@@ -1,10 +1,15 @@
 using System.IO;
 using System.Text.Json;
+using WhisperWriter.DI;
 using WhisperWriter.Models;
+using WhisperWriter.Utils.Interfaces;
 
 namespace WhisperWriter.Services;
 
-public class SettingsService {
+public class SettingsService: IService, ISingleton {
+	[Inject]
+	protected LogService logService { get; set; } = null!;
+
 	private static readonly string _settingsPath = Path.Combine(
 		AppContext.BaseDirectory, "settings.json");
 
@@ -27,7 +32,7 @@ public class SettingsService {
 				json, SettingsService._jsonOptions
 			) ?? new AppSettings();
 		} catch (Exception ex) {
-			LogService.Error("Failed to load settings, using defaults", ex);
+			this.logService.Error("Failed to load settings, using defaults", ex);
 			this.Settings = new AppSettings();
 		}
 	}
@@ -37,7 +42,7 @@ public class SettingsService {
 			var json = JsonSerializer.Serialize(this.Settings, SettingsService._jsonOptions);
 			File.WriteAllText(SettingsService._settingsPath, json);
 		} catch (Exception ex) {
-			LogService.Error("Failed to save settings", ex);
+			this.logService.Error("Failed to save settings", ex);
 		}
 	}
 }

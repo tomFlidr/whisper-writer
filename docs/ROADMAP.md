@@ -10,7 +10,7 @@ Každá hotová položka se přesouvá do sekce **Dokončeno** a zároveň se ak
 
 ## Fáze 1 - dodělat hrubý refactoring
 
-Implementovat dependency injection.
+Zrefaktorovat MainWindow a App, projít vše ve složce services a podívat se, zda je vše injectovatelné a co ne tak injectovat.
 
 ## Fáze 2 – Sjednocení sekundárních oken do jednoho tabbed okna
 

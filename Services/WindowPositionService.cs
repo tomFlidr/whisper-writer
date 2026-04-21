@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Media;
+using WhisperWriter.DI;
+using WhisperWriter.Utils.Interfaces;
 
 namespace WhisperWriter.Services;
 
@@ -9,11 +11,19 @@ namespace WhisperWriter.Services;
 /// Encapsulates all screen-placement, clamping, and persistence logic
 /// so that MainWindow stays focused on UI behaviour.
 /// </summary>
-public class WindowPositioner {
-	protected readonly Window window;
+public class WindowPositionService: IService, ITransient {
 
-	public WindowPositioner(Window window) {
+	protected SettingsService settingsService { get; set; } = null!;
+
+	protected Window window = null!;
+	
+	public WindowPositionService (SettingsService settingsService) {
+		this.settingsService = settingsService;
+	}
+
+	public WindowPositionService SetWindow (Window window) {
 		this.window = window;
+		return this;
 	}
 
 	/// <summary>
@@ -22,7 +32,7 @@ public class WindowPositioner {
 	/// Returns true if a stored position was found, false if default was used.
 	/// </summary>
 	public bool InitialPosition(Action onPositionApplied) {
-		var s = App.SettingsService.Settings;
+		var s = this.settingsService.Settings;
 		if (s.WindowLeft >= 0 && s.WindowBottom >= 0) {
 			this.window.Loaded += (_, _) => { this.ApplyStoredPosition(); onPositionApplied(); };
 			return true;
@@ -33,7 +43,7 @@ public class WindowPositioner {
 
 	/// <summary>Positions the window using the stored Left and WindowBottom values.</summary>
 	public void ApplyStoredPosition() {
-		var s = App.SettingsService.Settings;
+		var s = this.settingsService.Settings;
 		var primary = Screen.PrimaryScreen;
 		if (primary == null) { this.PlaceAtDefaultPosition(); return; }
 
@@ -126,7 +136,7 @@ public class WindowPositioner {
 	/// </summary>
 	public void SaveWindowPosition() {
 		var primary = Screen.PrimaryScreen;
-		var s = App.SettingsService.Settings;
+		var s = this.settingsService.Settings;
 		if (primary != null) {
 			var (scaleX, scaleY) = this.getPrimaryScreenScale();
 			var wa = primary.WorkingArea;
@@ -142,7 +152,7 @@ public class WindowPositioner {
 				this.window.Top + this.window.ActualHeight / 2
 			);
 		}
-		App.SettingsService.Save();
+		this.settingsService.Save();
 	}
 
 	/// <summary>

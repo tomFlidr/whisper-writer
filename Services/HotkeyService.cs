@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using WhisperWriter.Utils;
+using WhisperWriter.Utils.Interfaces;
 
 namespace WhisperWriter.Services;
 
@@ -8,7 +9,7 @@ namespace WhisperWriter.Services;
 /// Using polling instead of RegisterHotKey because Win key combinations behave
 /// unreliably with RegisterHotKey on Windows 10/11.
 /// </summary>
-public class HotkeyService: IDisposable {
+public class HotkeyService: IDisposable/*, IService, ISingleton*/ {
 	[DllImport("user32.dll")]
 	private static extern short GetAsyncKeyState(int vKey);
 

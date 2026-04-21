@@ -7,7 +7,7 @@ namespace WhisperWriter.Utils;
 /// Helpers for working with Windows virtual-key codes:
 /// human-readable display names and WPF Key ↔ VK conversion.
 /// </summary>
-public static class VkCodeHelper {
+public static class VirtualKeyCodeHelper {
 	[DllImport("user32.dll")]
 	private static extern uint MapVirtualKey (uint uCode, uint uMapType);
 
@@ -67,20 +67,20 @@ public static class VkCodeHelper {
 
 	/// <summary>Returns a short, human-readable name for a virtual-key code.</summary>
 	public static string GetName (int vk) {
-		if (VkCodeHelper._overrides.TryGetValue(vk, out var name))
+		if (VirtualKeyCodeHelper._overrides.TryGetValue(vk, out var name))
 			return name;
 
 		// Ask Windows for a name via the scan code.
-		uint scanCode = VkCodeHelper.MapVirtualKey((uint)vk, 0); // MAPVK_VK_TO_VSC
+		uint scanCode = VirtualKeyCodeHelper.MapVirtualKey((uint)vk, 0); // MAPVK_VK_TO_VSC
 		if (scanCode == 0)
 			return $"0x{vk:X2}";
 
 		int lParam = (int)(scanCode << 16);
-		if (VkCodeHelper._extendedKeys.Contains(vk))
+		if (VirtualKeyCodeHelper._extendedKeys.Contains(vk))
 			lParam |= (1 << 24); // extended-key flag
 
 		var sb = new StringBuilder(64);
-		int len = VkCodeHelper.GetKeyNameText(lParam, sb, sb.Capacity);
+		int len = VirtualKeyCodeHelper.GetKeyNameText(lParam, sb, sb.Capacity);
 		if (len > 0) {
 			// Title-case (GetKeyNameText may return "SPACE", "ENTER" etc.)
 			var raw = sb.ToString();

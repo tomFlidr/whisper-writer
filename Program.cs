@@ -2,7 +2,6 @@ using Autofac;
 using System;
 using System.Threading.Tasks;
 using System.Windows;
-using WhisperWriter.Services;
 
 namespace WhisperWriter {
 	/// <summary>
@@ -13,7 +12,7 @@ namespace WhisperWriter {
 		/// <summary>
 		/// DI container singleton instance.
 		/// </summary>
-		public static DI DI { get; protected set; } = null!;
+		public static DI.Container DI { get; protected set; } = null!;
 
 		/// <summary>
 		/// DI container singleton instance.
@@ -28,12 +27,9 @@ namespace WhisperWriter {
 		[System.Diagnostics.DebuggerNonUserCodeAttribute()]
 		[System.CodeDom.Compiler.GeneratedCodeAttribute("PresentationBuildTasks", "10.0.6.0")]
 		public static void Main (string[] args) {
-			Program.DI = WhisperWriter.Services.DI.GetInstance();
-			Program.App = Program.DI.Container.Resolve<App>();
+			Program.DI = WhisperWriter.DI.Container.GetInstance();
+			Program.App = Program.DI.Provider.Resolve<App>();
 			Program.App.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-			Program.App.Exit += (_, __) => {
-				// TODO
-			};
 			Program.App.InitializeComponent();
 			Program.App.Run();
 		}

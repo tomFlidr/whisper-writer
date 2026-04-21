@@ -1,8 +1,9 @@
 using System.Windows;
+using WhisperWriter.Utils.Interfaces;
 
 namespace WhisperWriter.Views;
 
-public partial class AboutWindow : Window {
+public partial class AboutWindow : Window, IService, ITransient {
 	public AboutWindow () {
 		this.InitializeComponent();
 	}

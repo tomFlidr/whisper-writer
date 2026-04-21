@@ -1,6 +1,8 @@
+using Autofac;
 using Serilog;
 using System.Windows;
 using System.Windows.Forms;
+using WhisperWriter.DI;
 using WhisperWriter.Services;
 using WhisperWriter.Utils;
 using WhisperWriter.Utils.Interfaces;
@@ -9,12 +11,16 @@ using WhisperWriter.Views;
 namespace WhisperWriter;
 
 public partial class App : System.Windows.Application, IService, ISingleton {
-	
-	public static SettingsService SettingsService { get; } = new();
-	//public static TranscriptionHistory History { get; } = new();
-	public required TranscriptionHistory History { get; set; }
-	public static ITranscriptionService WhisperService { get; } = new WhisperService();
-	public static EtaService Eta { get; } = new();
+	[Inject]
+	protected SettingsService settingsService { get; set; } = null!;
+	[Inject]
+	protected TranscriptionHistory historyService { get; set; } = null!;
+	[Inject]
+	protected WhisperService whisperService { get; set; } = null!;
+	[Inject]
+	protected EtaService etaService { get; set; } = null!;
+	[Inject]
+	protected LogService logService { get; set; } = null!;
 
 	protected NotifyIcon? trayIcon;
 	protected MainWindow? mainWindow;
@@ -33,26 +39,23 @@ public partial class App : System.Windows.Application, IService, ISingleton {
 		if (!currentPath.Contains(cudaRuntimeDir, StringComparison.OrdinalIgnoreCase))
 			Environment.SetEnvironmentVariable("PATH", cudaRuntimeDir + ";" + currentPath);
 
-		LogService.Initialize();
-
 		// Catch any unhandled WPF dispatcher exceptions
 		this.DispatcherUnhandledException += (_, args) => {
-			LogService.Error("Unhandled dispatcher exception", args.Exception);
+			this.logService.Error("Unhandled dispatcher exception", args.Exception);
 			args.Handled = true;
 		};
 
 		// Catch unhandled exceptions from non-UI threads
 		AppDomain.CurrentDomain.UnhandledException += (_, args) => {
 			if (args.ExceptionObject is Exception ex)
-				LogService.Error("Unhandled background exception", ex);
+				this.logService.Error("Unhandled background exception", ex);
 		};
 
-		App.SettingsService.Load();
-		this.History.MaxSize = App.SettingsService.Settings.HistorySize;
-		App.Eta.Initialize();
-
+		this.settingsService.Load();
+		this.historyService.MaxSize = this.settingsService.Settings.HistorySize;
+		
 		// Create the floating widget
-		this.mainWindow = new MainWindow();
+		this.mainWindow = Program.DI.Provider.Resolve<MainWindow>();
 		this.mainWindow.Show();
 
 		// Tray icon – right-click menu only
@@ -84,8 +87,8 @@ public partial class App : System.Windows.Application, IService, ISingleton {
 
 		// Initialize Whisper in background
 		var modelPath = System.IO.Path.Combine(AppContext.BaseDirectory,
-			App.SettingsService.Settings.ModelPath);
-		_ = App.WhisperService.InitializeAsync(modelPath);
+			this.settingsService.Settings.ModelPath);
+		_ = this.whisperService.InitializeAsync(modelPath);
 
 		await Task.Run(() => Thread.Sleep(0));
 	}
@@ -97,7 +100,7 @@ public partial class App : System.Windows.Application, IService, ISingleton {
 
 	protected static void showAbout () {
 		App.closeSecondaryWindow();
-		var win = new AboutWindow();
+		var win = Program.DI.Provider.Resolve<AboutWindow>();
 		App.secondaryWindow = win;
 		win.Closed += (_, _) => {
 			if (App.secondaryWindow == win) 
@@ -108,7 +111,7 @@ public partial class App : System.Windows.Application, IService, ISingleton {
 
 	protected static void showHistory () {
 		App.closeSecondaryWindow();
-		var win = new HistoryWindow();
+		var win = Program.DI.Provider.Resolve<HistoryWindow>();
 		App.secondaryWindow = win;
 		win.Closed += (_, _) => {
 			if (App.secondaryWindow == win) 
@@ -119,15 +122,15 @@ public partial class App : System.Windows.Application, IService, ISingleton {
 
 	protected static void showSettings () {
 		App.closeSecondaryWindow();
-		var win = new SettingsWindow();
+		var win = Program.DI.Provider.Resolve<SettingsWindow>();
 		App.secondaryWindow = win;
 		win.Closed += (_, _) => {
 			if (App.secondaryWindow == win) 
 				App.secondaryWindow = null;
 		};
 		if (win.ShowDialog() == true) {
-			App.SettingsService.Save();
-			Program.App.History.MaxSize = App.SettingsService.Settings.HistorySize;
+			Program.App.settingsService.Save();
+			Program.App.historyService.MaxSize = Program.App.settingsService.Settings.HistorySize;
 			// Apply new hotkey combination immediately, without restarting.
 			(Current as App)?.mainWindow?.ReloadHotkey();
 		}
@@ -142,8 +145,8 @@ public partial class App : System.Windows.Application, IService, ISingleton {
 
 	protected override void OnExit (ExitEventArgs e) {
 		this.trayIcon?.Dispose();
-		App.Eta.Dispose();
-		LogService.CloseAndFlush();
+		this.etaService.Dispose();
+		this.logService.CloseAndFlush();
 		base.OnExit(e);
 	}
 }

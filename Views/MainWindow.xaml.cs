@@ -5,21 +5,38 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using WhisperWriter.DI;
+using WhisperWriter.Services;
 using WhisperWriter.Utils;
 using WhisperWriter.Utils.Enums;
-using WhisperWriter.Services;
-
-
+using WhisperWriter.Utils.Interfaces;
 // Alias to avoid ambiguity with System.Windows.Forms.Application
 using WpfApp = System.Windows.Application;
 using WpfColor = System.Windows.Media.Color;
 
 namespace WhisperWriter.Views;
 
-public partial class MainWindow : Window {
+public partial class MainWindow : Window, IService, ISingleton {
+	
+	[Inject]
+	protected TranscriptionHistory historyService { get; set; } = null!;
+	[Inject]
+	protected WhisperService whisperService { get; set; } = null!;
+	[Inject]
+	protected EtaService etaService { get; set; } = null!;
+	[Inject]
+	protected LogService logService { get; set; } = null!;
+	[Inject]
+	protected TextInjectorService textInjectorService { get; set; } = null!;
+	[Inject]
+	protected SettingsService settingsService { get; set; } = null!;
+	//[Inject]
+	// HotkeyService hotkeyService { get; set; } = null!;
+
+	protected WindowPositionService windowPositionService { get; set; } = null!;
+
 	private readonly AudioRecorder _recorder = new();
-	private readonly HotkeyService _hotkey;
-	private readonly WindowPositioner _positioner;
+	private HotkeyService _hotkey;
 	private bool _allowClose;
 
 	// ETA countdown
@@ -31,15 +48,14 @@ public partial class MainWindow : Window {
 	private bool _positionApplied;
 
 	/// <summary>Returns the model key used for ETA stats lookups (filename without extension).</summary>
-	private static string GetModelKey () =>
-		System.IO.Path.GetFileNameWithoutExtension(App.SettingsService.Settings.ModelPath);
+	private string _getModelKey () => System.IO.Path.GetFileNameWithoutExtension(this.settingsService.Settings.ModelPath);
 
-	private const int GWL_EXSTYLE = -20;
-	private const int WS_EX_TOOLWINDOW = 0x00000080;
-	private const int WS_EX_APPWINDOW = 0x00040000;
-	private const int WM_DISPLAYCHANGE = 0x007E;
+	private static readonly int _gwlExStyle = -20;
+	private static readonly int _wsExToolWindow = 0x00000080;
+	private static readonly int _wsExAppWindow = 0x00040000;
+	private static readonly int _wmDisplayChange = 0x007E;
 	// WAV PCM 16-bit mono 16000 Hz: 16000 samples/s × 2 bytes/sample = 32000 bytes/s
-	private const double WavBytesPerSecond = 32000.0;
+	private static readonly double _wavBytesPerSecond = 32000.0;
 
 	[DllImport("user32.dll")]
 	private static extern int GetWindowLong (IntPtr hwnd, int index);
@@ -47,19 +63,52 @@ public partial class MainWindow : Window {
 	[DllImport("user32.dll")]
 	private static extern int SetWindowLong (IntPtr hwnd, int index, int newStyle);
 
-	public MainWindow () {
+	public MainWindow (
+		WindowPositionService windowPositionService
+	) {
+		this.windowPositionService = windowPositionService;
+
 		this.InitializeComponent();
-		this._positioner = new WindowPositioner(this);
-		this._positioner.InitialPosition(() => this._positionApplied = true);
+		
+		this.windowPositionService.SetWindow(this);
+		this.windowPositionService.InitialPosition(() => this._positionApplied = true);
 		this.SourceInitialized += this._onSourceInitialized;
 
-		var settings = App.SettingsService.Settings;
-		this._hotkey = new HotkeyService(settings.HotkeyVkCodes);
+		//var settings = this.settingsService.Settings;
+		//this._hotkey = new HotkeyService(settings.HotkeyCodes);
+		//this._hotkey.PushToTalkStarted += this._onPttStarted;
+		//this._hotkey.PushToTalkStopped += this._onPttStopped;
+		//this._recorder.AmplitudeChanged += this._onAmplitude;
+
+		//this.whisperService.StateChanged += this._onWhisperState;
+
+		//this._etaTimer.Tick += this._onEtaTick;
+
+		//._hotkey.Start();
+
+		// // Show GPU/CPU backend info in status during startup
+		// var cudaVersion = WhisperService.DetectCudaVersion();
+		// this._setStatus(cudaVersion.HasValue
+		// 	? $"Loading model… (GPU)"
+		// 	: "Loading model… (CPU)");
+		// 
+		// // Fade in
+		// var anim = (Storyboard)this.Resources["FadeIn"];
+		// anim.Begin(this);
+	}
+
+	protected override void OnActivated (EventArgs e) {
+		base.OnActivated(e);
+		
+		this.whisperService.StateChanged += this._onWhisperState;
+		
+		var settings = this.settingsService.Settings;
+		this._hotkey = new HotkeyService(settings.HotkeyCodes);
 		this._hotkey.PushToTalkStarted += this._onPttStarted;
 		this._hotkey.PushToTalkStopped += this._onPttStopped;
 		this._recorder.AmplitudeChanged += this._onAmplitude;
 
-		App.WhisperService.StateChanged += this._onWhisperState;
+		this.whisperService.StateChanged += this._onWhisperState;
 
 		this._etaTimer.Tick += this._onEtaTick;
 
@@ -78,15 +127,15 @@ public partial class MainWindow : Window {
 
 	private void _onSourceInitialized (object? sender, EventArgs e) {
 		var hwnd = new WindowInteropHelper(this).Handle;
-		int style = GetWindowLong(hwnd, GWL_EXSTYLE);
-		style = (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW;
-		SetWindowLong(hwnd, GWL_EXSTYLE, style);
-		HwndSource.FromHwnd(hwnd)?.AddHook(this.WndProc);
-		SizeChanged += (_, _) => this._onWindowSizeChanged();
+		int style = MainWindow.GetWindowLong(hwnd, MainWindow._gwlExStyle);
+		style = (style | MainWindow._wsExToolWindow) & ~MainWindow._wsExAppWindow;
+		MainWindow.SetWindowLong(hwnd, MainWindow._gwlExStyle, style);
+		HwndSource.FromHwnd(hwnd)?.AddHook(this._wndProc);
+		this.SizeChanged += (_, _) => this._onWindowSizeChanged();
 	}
 
-	private IntPtr WndProc (IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) {
-		if (msg == WM_DISPLAYCHANGE)
+	private IntPtr _wndProc (IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) {
+		if (msg == MainWindow._wmDisplayChange)
 			this.Dispatcher.BeginInvoke(this._onDisplayChange);
 		return IntPtr.Zero;
 	}
@@ -99,11 +148,12 @@ public partial class MainWindow : Window {
 	private void _onWindowSizeChanged () {
 		if (!this._positionApplied)
 			return;
-		var s = App.SettingsService.Settings;
-		if (s.WindowLeft >= 0 && s.WindowBottom >= 0)
-			this._positioner.ApplyStoredPosition();
-		else
-			this._positioner.ClampWindowToScreen();
+		var s = this.settingsService.Settings;
+		if (s.WindowLeft >= 0 && s.WindowBottom >= 0) {
+			this.windowPositionService.ApplyStoredPosition();
+		} else {
+			this.windowPositionService.ClampWindowToScreen();
+		}
 	}
 
 	/// <summary>
@@ -112,23 +162,23 @@ public partial class MainWindow : Window {
 	/// always appears on the primary monitor after docking.
 	/// </summary>
 	private void _onDisplayChange () {
-		var s = App.SettingsService.Settings;
-		if (s.WindowLeft >= 0 && s.WindowBottom >= 0)
-			this._positioner.ApplyStoredPosition();
-		else
-			this._positioner.PlaceAtDefaultPosition();
+		var s = this.settingsService.Settings;
+		if (s.WindowLeft >= 0 && s.WindowBottom >= 0) {
+			this.windowPositionService.ApplyStoredPosition();
+		} else {
+			this.windowPositionService.PlaceAtDefaultPosition();
+		}
 		// Clamp in case the restored position is still outside all screens.
-		this._positioner.ClampWindowToScreen();
+		this.windowPositionService.ClampWindowToScreen();
 	}
 
 	private void _border_MouseLeftButtonDown (object sender, System.Windows.Input.MouseButtonEventArgs e) {
 		this.DragMove();
-		this._positioner.SaveWindowPosition();
+		this.windowPositionService.SaveWindowPosition();
 	}
 
 	private void _onPttStarted () {
-		TextInjector.SaveFocus();
-
+		this.textInjectorService.SaveFocus();
 		this.Dispatcher.Invoke(() => {
 			this._setRecordingState(true);
 			this._recorder.StartRecording();
@@ -144,44 +194,44 @@ public partial class MainWindow : Window {
 				return;
 
 			// WAV bytes: 16000 samples/s × 2 bytes = 32000 bytes/s
-			double recordedSeconds = wav.Length / MainWindow.WavBytesPerSecond;
-			var modelKey = GetModelKey();
-			var estimatedSeconds = App.Eta.EstimateProcessingSeconds(modelKey, recordedSeconds);
+			double recordedSeconds = wav.Length / MainWindow._wavBytesPerSecond;
+			var modelKey = this._getModelKey();
+			var estimatedSeconds = this.etaService.EstimateProcessingSeconds(modelKey, recordedSeconds);
 			if (estimatedSeconds.HasValue)
 				this._startEtaCountdown(estimatedSeconds.Value);
 
-			var settings = App.SettingsService.Settings;
+			var settings = this.settingsService.Settings;
 			try {
 				var sw = System.Diagnostics.Stopwatch.StartNew();
-				var text = await App.WhisperService.TranscribeAsync(
+				var text = await this.whisperService.TranscribeAsync(
 					wav, settings.Language, settings.Prompt);
 
 				this._stopEtaCountdown();
 
 				if (!string.IsNullOrWhiteSpace(text)) {
-					Program.App.History.Add(new TranscriptionEntry {
+					this.historyService.Add(new TranscriptionEntry {
 						Text = text,
 						Duration = sw.Elapsed,
 					});
-					LogService.Transcription(text, sw.Elapsed);
+					this.logService.Transcription(text, sw.Elapsed);
 					if (settings.CopyToClipboard)
 						System.Windows.Clipboard.SetText(text);
 					// RestoreFocus must be called on the UI thread (owns message pump).
 					// InjectText (_waitForPhysicalRelease + SendInput) runs on a background
 					// thread so Thread.Sleep does not block the UI.
-					TextInjector.RestoreFocus();
+					this.textInjectorService.RestoreFocus();
 					_ = Task.Run(() => {
-						TextInjector.InjectText(text, App.SettingsService.Settings.HotkeyVkCodes);
+						this.textInjectorService.InjectText(text, this.settingsService.Settings.HotkeyCodes);
 						// Record total time from recording stop to injection complete.
-						App.Eta.Record(modelKey, recordedSeconds, sw.Elapsed.TotalSeconds);
+						this.etaService.Record(modelKey, recordedSeconds, sw.Elapsed.TotalSeconds);
 					}).ContinueWith(t => {
 						if (t.IsFaulted)
-							LogService.Error("InjectText failed", t.Exception?.InnerException);
+							this.logService.Error("InjectText failed", t.Exception?.InnerException);
 					});
 				}
 			} catch (Exception ex) {
 				this._stopEtaCountdown();
-				LogService.Error("Transcription failed", ex);
+				this.logService.Error("Transcription failed", ex);
 				this._setStatus($"Error: {ex.Message}", isError: true);
 			}
 		});
@@ -294,7 +344,7 @@ public partial class MainWindow : Window {
 	/// Called by App after settings are saved.
 	/// </summary>
 	public void ReloadHotkey () {
-		this._hotkey.UpdateKeys(App.SettingsService.Settings.HotkeyVkCodes);
+		this._hotkey.UpdateKeys(this.settingsService.Settings.HotkeyCodes);
 	}
 
 	protected override void OnClosing (System.ComponentModel.CancelEventArgs e) {
