@@ -9,7 +9,7 @@ namespace WhisperWriter.Services;
 /// Using polling instead of RegisterHotKey because Win key combinations behave
 /// unreliably with RegisterHotKey on Windows 10/11.
 /// </summary>
-public class HotkeyService: IDisposable/*, IService, ISingleton*/ {
+public class HotkeyService: IDisposable, IService, ISingleton {
 	[DllImport("user32.dll")]
 	private static extern short GetAsyncKeyState(int vKey);
 
@@ -23,22 +23,11 @@ public class HotkeyService: IDisposable/*, IService, ISingleton*/ {
 
 	// Guarded by _keysLock; replaced atomically by UpdateKeys().
 	private readonly object _keysLock = new();
-	private int[] _virtualKeyCodes;
-
-	/// <summary>
-	/// Initialises the service with an explicit list of VK codes.
-	/// All listed keys must be held simultaneously to trigger PTT.
-	/// </summary>
-	public HotkeyService (IReadOnlyList<int> virtualKeyCodes) {
+	private int[] _virtualKeyCodes = null!;
+	
+	public HotkeyService SetVirtualKeyCodes (IReadOnlyList<int> virtualKeyCodes) {
 		this._virtualKeyCodes = [..virtualKeyCodes];
-	}
-
-	/// <summary>
-	/// Legacy constructor – derives VK codes from a HotkeyModifiers bitmask.
-	/// Kept for code paths that have not been migrated yet.
-	/// </summary>
-	public HotkeyService (HotkeyModifiers modifiers) {
-		this._virtualKeyCodes = HotkeyService._modifiersToVirtualKeyCodes(modifiers);
+		return this;
 	}
 
 	/// <summary>
@@ -80,14 +69,14 @@ public class HotkeyService: IDisposable/*, IService, ISingleton*/ {
 	/// Derives a minimal set of VK codes from a HotkeyModifiers bitmask.
 	/// Uses the left-hand variant of each modifier key.
 	/// </summary>
-	private static int[] _modifiersToVirtualKeyCodes (HotkeyModifiers modifiers) {
+	/*private static int[] _modifiersToVirtualKeyCodes (HotkeyModifiers modifiers) {
 		var list = new List<int>();
 		if ((modifiers & HotkeyModifiers.Alt) != 0) list.Add(0xA4);		// VK_LMENU
 		if ((modifiers & HotkeyModifiers.Control) != 0) list.Add(0xA2);	// VK_LCONTROL
 		if ((modifiers & HotkeyModifiers.Shift) != 0) list.Add(0xA0);	// VK_LSHIFT
 		if ((modifiers & HotkeyModifiers.Win) != 0) list.Add(0x5B);		// _VK_LWIN
 		return [..list];
-	}
+	}*/
 
 	private void _pollLoop (object? obj) {
 		var ct = (CancellationToken)obj!;

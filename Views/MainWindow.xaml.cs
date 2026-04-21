@@ -30,15 +30,15 @@ public partial class MainWindow : Window, IService, ISingleton {
 	protected TextInjectorService textInjectorService { get; set; } = null!;
 	[Inject]
 	protected SettingsService settingsService { get; set; } = null!;
-	//[Inject]
-	// HotkeyService hotkeyService { get; set; } = null!;
+	[Inject]
+	protected AudioRecorder recorderService { get; set; } = null!;
+	[Inject]
+	protected HotkeyService hotkeyService { get; set; } = null!;
 
 	protected WindowPositionService windowPositionService { get; set; } = null!;
 
-	private readonly AudioRecorder _recorder = new();
-	private HotkeyService _hotkey;
-	private bool _allowClose;
-
+	private bool _allowClose = false;
+	
 	// ETA countdown
 	private readonly DispatcherTimer _etaTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
 	private DateTime _transcribeStarted;
@@ -73,28 +73,6 @@ public partial class MainWindow : Window, IService, ISingleton {
 		this.windowPositionService.SetWindow(this);
 		this.windowPositionService.InitialPosition(() => this._positionApplied = true);
 		this.SourceInitialized += this._onSourceInitialized;
-
-		//var settings = this.settingsService.Settings;
-		//this._hotkey = new HotkeyService(settings.HotkeyCodes);
-		//this._hotkey.PushToTalkStarted += this._onPttStarted;
-		//this._hotkey.PushToTalkStopped += this._onPttStopped;
-		//this._recorder.AmplitudeChanged += this._onAmplitude;
-
-		//this.whisperService.StateChanged += this._onWhisperState;
-
-		//this._etaTimer.Tick += this._onEtaTick;
-
-		//._hotkey.Start();
-
-		// // Show GPU/CPU backend info in status during startup
-		// var cudaVersion = WhisperService.DetectCudaVersion();
-		// this._setStatus(cudaVersion.HasValue
-		// 	? $"Loading model… (GPU)"
-		// 	: "Loading model… (CPU)");
-		// 
-		// // Fade in
-		// var anim = (Storyboard)this.Resources["FadeIn"];
-		// anim.Begin(this);
 	}
 
 	protected override void OnActivated (EventArgs e) {
@@ -103,16 +81,17 @@ public partial class MainWindow : Window, IService, ISingleton {
 		this.whisperService.StateChanged += this._onWhisperState;
 		
 		var settings = this.settingsService.Settings;
-		this._hotkey = new HotkeyService(settings.HotkeyCodes);
-		this._hotkey.PushToTalkStarted += this._onPttStarted;
-		this._hotkey.PushToTalkStopped += this._onPttStopped;
-		this._recorder.AmplitudeChanged += this._onAmplitude;
+		this.hotkeyService.SetVirtualKeyCodes(settings.HotkeyCodes);
+		this.hotkeyService.PushToTalkStarted += this._onPttStarted;
+		this.hotkeyService.PushToTalkStopped += this._onPttStopped;
+
+		this.recorderService.AmplitudeChanged += this._onAmplitude;
 
 		this.whisperService.StateChanged += this._onWhisperState;
 
 		this._etaTimer.Tick += this._onEtaTick;
 
-		this._hotkey.Start();
+		this.hotkeyService.Start();
 
 		// Show GPU/CPU backend info in status during startup
 		var cudaVersion = WhisperService.DetectCudaVersion();
@@ -181,13 +160,13 @@ public partial class MainWindow : Window, IService, ISingleton {
 		this.textInjectorService.SaveFocus();
 		this.Dispatcher.Invoke(() => {
 			this._setRecordingState(true);
-			this._recorder.StartRecording();
+			this.recorderService.StartRecording();
 		});
 	}
 
 	private void _onPttStopped () {
 		this.Dispatcher.Invoke(async () => {
-			var wav = this._recorder.StopRecording();
+			var wav = this.recorderService.StopRecording();
 			this._setRecordingState(false);
 
 			if (wav == null || wav.Length < 1000)
@@ -344,7 +323,7 @@ public partial class MainWindow : Window, IService, ISingleton {
 	/// Called by App after settings are saved.
 	/// </summary>
 	public void ReloadHotkey () {
-		this._hotkey.UpdateKeys(this.settingsService.Settings.HotkeyCodes);
+		this.hotkeyService.UpdateKeys(this.settingsService.Settings.HotkeyCodes);
 	}
 
 	protected override void OnClosing (System.ComponentModel.CancelEventArgs e) {
@@ -358,8 +337,8 @@ public partial class MainWindow : Window, IService, ISingleton {
 	public void ForceClose () {
 		this._allowClose = true;
 		this._etaTimer.Stop();
-		this._hotkey.Dispose();
-		this._recorder.Dispose();
+		this.hotkeyService.Dispose();
+		this.recorderService.Dispose();
 		this.Close();
 	}
 }

@@ -1,5 +1,6 @@
 using NAudio.Wave;
 using System.IO;
+using WhisperWriter.Utils.Interfaces;
 
 namespace WhisperWriter.Services;
 
@@ -8,7 +9,7 @@ namespace WhisperWriter.Services;
 /// Call StartRecording() / StopRecording() around the push-to-talk period.
 /// GetWavBytes() returns the complete 16 kHz mono WAV suitable for Whisper.
 /// </summary>
-public class AudioRecorder : IDisposable {
+public class AudioRecorder : IDisposable, IService, ISingleton {
 	private static readonly int _sampleRate = 16000;
 	private static readonly int _channels = 1;
 	private static readonly int _bitsPerSample = 16;
