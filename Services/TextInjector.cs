@@ -9,7 +9,7 @@ namespace WhisperWriter.Services;
 /// Injects text into the previously focused window using SendInput (Unicode).
 /// Records the focused HWND before we show the widget so we can restore it.
 /// </summary>
-public class TextInjectorService: IService, ISingleton {
+public class TextInjector: IService, ISingleton {
 	#region Win32
 
 	[DllImport("user32.dll")]
@@ -58,16 +58,16 @@ public class TextInjectorService: IService, ISingleton {
 	private static IntPtr _savedHwnd = IntPtr.Zero;
 
 	[Inject]
-	protected LogService logService { get; set; } = null!;
+	protected Log log { get; set; } = null!;
 
 	/// <summary>Call this just before we steal focus (when PTT key is pressed).</summary>
 	public void SaveFocus () {
-		TextInjectorService._savedHwnd = TextInjectorService.GetForegroundWindow();
+		TextInjector._savedHwnd = TextInjector.GetForegroundWindow();
 		// Verify struct layout matches Win32 at runtime (40 bytes on 64-bit, 28 on 32-bit).
 		int expected = IntPtr.Size == 8 ? 40 : 28;
 		int actual = Marshal.SizeOf<Input>();
 		if (actual != expected)
-			this.logService.Error(
+			this.log.Error(
 				$"Input struct size mismatch: got {actual}, expected {expected}. Text injection will fail."
 			);
 	}
@@ -78,19 +78,19 @@ public class TextInjectorService: IService, ISingleton {
 	/// AttachThreadInput requires the calling thread to have a message queue.
 	/// </summary>
 	public void RestoreFocus () {
-		if (TextInjectorService._savedHwnd == IntPtr.Zero) return;
-		uint targetThread = TextInjectorService.GetWindowThreadProcessId(TextInjectorService._savedHwnd, out _);
-		uint currentThread = TextInjectorService.GetCurrentThreadId();
+		if (TextInjector._savedHwnd == IntPtr.Zero) return;
+		uint targetThread = TextInjector.GetWindowThreadProcessId(TextInjector._savedHwnd, out _);
+		uint currentThread = TextInjector.GetCurrentThreadId();
 		bool attached = (
 			targetThread != currentThread &&
-			TextInjectorService.AttachThreadInput(
+			TextInjector.AttachThreadInput(
 				currentThread, targetThread, true
 			)
 		);
-		TextInjectorService.SetForegroundWindow(TextInjectorService._savedHwnd);
-		TextInjectorService.BringWindowToTop(TextInjectorService._savedHwnd);
+		TextInjector.SetForegroundWindow(TextInjector._savedHwnd);
+		TextInjector.BringWindowToTop(TextInjector._savedHwnd);
 		if (attached)
-			TextInjectorService.AttachThreadInput(currentThread, targetThread, false);
+			TextInjector.AttachThreadInput(currentThread, targetThread, false);
 	}
 
 	/// <summary>
@@ -124,17 +124,17 @@ public class TextInjectorService: IService, ISingleton {
 			inputs.Add(this._makeUnicodeKeyInput(c, true));
 		}
 
-		uint sent = TextInjectorService.SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<Input>());
+		uint sent = TextInjector.SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<Input>());
 		if (sent != (uint)inputs.Count) {
-			this.logService.Warning($"SendInput: sent {sent}/{inputs.Count} events. LastError={Marshal.GetLastWin32Error()}");
+			this.log.Warning($"SendInput: sent {sent}/{inputs.Count} events. LastError={Marshal.GetLastWin32Error()}");
 		} else {
-			this.logService.Info($"SendInput: OK, {sent} events for {text.Length} chars");
+			this.log.Info($"SendInput: OK, {sent} events for {text.Length} chars");
 		}
 	}
 
 	/// <summary>
 	/// Blocks (max 2 s) until all PTT hotkey VK codes are physically released.
-	/// This is necessary because HotkeyService polling fires PushToTalkStopped
+	/// This is necessary because Hotkey polling fires Push2TalkStopped
 	/// the moment it sees the combo released, but the Win key kernel shell hook may
 	/// still register them as held for a few milliseconds. Sending a keyup via
 	/// SendInput while a key is still physically down is silently ignored by
@@ -148,13 +148,13 @@ public class TextInjectorService: IService, ISingleton {
 			bool anyHeld = false;
 			// Check all configured PTT keys
 			foreach (var vk in hotkeyVks) {
-				if ((TextInjectorService.GetAsyncKeyState(vk) & 0x8000) != 0) { anyHeld = true; break; }
+				if ((TextInjector.GetAsyncKeyState(vk) & 0x8000) != 0) { anyHeld = true; break; }
 			}
 			// Always check both Win keys – the shell hook specifically reacts to them
 			if (!anyHeld) {
 				anyHeld = (
-					(TextInjectorService.GetAsyncKeyState(TextInjectorService._virtualKeyWinLeft) & 0x8000) != 0 ||
-					(TextInjectorService.GetAsyncKeyState(TextInjectorService._virtualKeyWinRight) & 0x8000) != 0
+					(TextInjector.GetAsyncKeyState(TextInjector._virtualKeyWinLeft) & 0x8000) != 0 ||
+					(TextInjector.GetAsyncKeyState(TextInjector._virtualKeyWinRight) & 0x8000) != 0
 				);
 			}
 			if (!anyHeld)
@@ -162,7 +162,7 @@ public class TextInjectorService: IService, ISingleton {
 			Thread.Sleep(stepMs);
 			elapsed += stepMs;
 		}
-		this.logService.Warning("_waitForPhysicalRelease: timed out after 2s, keys still held");
+		this.log.Warning("_waitForPhysicalRelease: timed out after 2s, keys still held");
 	}
 
 	/// <summary>
@@ -174,51 +174,51 @@ public class TextInjectorService: IService, ISingleton {
 	private void _releaseModifierKeys () {
 		// (vk, needsExtendedKey)
 		(ushort vk, bool ext)[] modifiers = [
-			(TextInjectorService._virtualKeyWinLeft,		true),
-			(TextInjectorService._virtualKeyWinRight,		true),
-			(TextInjectorService._virtualKeyCtrlLeft,		false),
-			(TextInjectorService._virtualKeyCtrlRight,		false),
-			(TextInjectorService._virtualKeyMenuLeft,		false),
-			(TextInjectorService._virtualKeyMenuRight,		false),
-			(TextInjectorService._virtualKeyShiftLeft,		false),
-			(TextInjectorService._virtualKeyShiftRight,	false),
+			(TextInjector._virtualKeyWinLeft,		true),
+			(TextInjector._virtualKeyWinRight,		true),
+			(TextInjector._virtualKeyCtrlLeft,		false),
+			(TextInjector._virtualKeyCtrlRight,		false),
+			(TextInjector._virtualKeyMenuLeft,		false),
+			(TextInjector._virtualKeyMenuRight,		false),
+			(TextInjector._virtualKeyShiftLeft,		false),
+			(TextInjector._virtualKeyShiftRight,	false),
 		];
 		var inputs = modifiers
 			.Select(m => this._makeVirtualKeyUp(m.vk, m.ext))
 			.ToArray();
-		TextInjectorService.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Input>());
+		TextInjector.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Input>());
 	}
 
 	private Input _makeVirtualKeyUp (ushort vk, bool extendedKey = false) {
 		return new Input {
-			type = TextInjectorService._inputKeyboard,
+			type = TextInjector._inputKeyboard,
 			ki = new InputKeyboard {
 				wVk = vk,
 				wScan = 0,
-				dwFlags = TextInjectorService._keyEventFKeyUp | (
+				dwFlags = TextInjector._keyEventFKeyUp | (
 					extendedKey
-						? TextInjectorService._keyEventFExtendKey
+						? TextInjector._keyEventFExtendKey
 						: 0u
 				),
 				time = 0,
-				dwExtraInfo = TextInjectorService.GetMessageExtraInfo(),
+				dwExtraInfo = TextInjector.GetMessageExtraInfo(),
 			},
 		};
 	}
 
 	private Input _makeUnicodeKeyInput (char c, bool keyUp) {
 		return new Input {
-			type = TextInjectorService._inputKeyboard,
+			type = TextInjector._inputKeyboard,
 			ki = new InputKeyboard {
 				wVk = 0,
 				wScan = c,
-				dwFlags = TextInjectorService._keyEventFUnicode | (
+				dwFlags = TextInjector._keyEventFUnicode | (
 					keyUp
-						? TextInjectorService._keyEventFKeyUp
+						? TextInjector._keyEventFKeyUp
 						: 0u
 				),
 				time = 0,
-				dwExtraInfo = TextInjectorService.GetMessageExtraInfo(),
+				dwExtraInfo = TextInjector.GetMessageExtraInfo(),
 			},
 		};
 	}

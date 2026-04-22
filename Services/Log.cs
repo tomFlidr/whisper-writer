@@ -11,7 +11,7 @@ namespace WhisperWriter.Services;
 /// Application-wide logging facade backed by Serilog.
 /// All logging is active in DEBUG builds only; Release builds are no-ops.
 /// </summary>
-public class LogService: IService, ISingleton {
+public class Log: IService, ISingleton {
 	/// <summary>Directory where log files are written.</summary>
 	public string LogDirectory { get; } = Path.Combine(AppContext.BaseDirectory, "logs");
 
@@ -19,26 +19,26 @@ public class LogService: IService, ISingleton {
 	private Logger _provider;
 #endif
 
-	public LogService () {
+	public Log () {
 #if DEBUG
 		Directory.CreateDirectory(this.LogDirectory);
 
-		Log.Logger = new LoggerConfiguration()
+		Serilog.Log.Logger = new Serilog.LoggerConfiguration()
 			.MinimumLevel.Debug()
 			.WriteTo.File(
 				path: Path.Combine(this.LogDirectory, "whisperwriter-.log"),
-				rollingInterval: RollingInterval.Day,
+				rollingInterval: Serilog.RollingInterval.Day,
 				retainedFileCountLimit: 14,
 				outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
 			.CreateLogger();
 
-		Log.Information("WhisperWriter starting up");
+		Serilog.Log.Information("WhisperWriter starting up");
 
-		this._provider = new LoggerConfiguration()
+		this._provider = new Serilog.LoggerConfiguration()
 			.MinimumLevel.Information()
 			.WriteTo.File(
 				path: Path.Combine(this.LogDirectory, "transcriptions.log"),
-				rollingInterval: RollingInterval.Infinite,
+				rollingInterval: Serilog.RollingInterval.Infinite,
 				outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Duration}] {Message:lj}{NewLine}")
 			.CreateLogger();
 #endif
@@ -46,14 +46,14 @@ public class LogService: IService, ISingleton {
 
 	public void Info (string message) {
 #if DEBUG
-		Log.Information(message);
+		Serilog.Log.Information(message);
 #endif
 	}
 
 	public void Warning (string message, Exception? ex = null) {
 #if DEBUG
-		if (ex is null) Log.Warning(message);
-		else Log.Warning(ex, message);
+		if (ex is null) Serilog.Log.Warning(message);
+		else Serilog.Log.Warning(ex, message);
 #endif
 	}
 
@@ -79,7 +79,7 @@ public class LogService: IService, ISingleton {
 
 	public void CloseAndFlush () {
 #if DEBUG
-		Log.CloseAndFlush();
+		Serilog.Log.CloseAndFlush();
 		this._provider?.Dispose();
 #endif
 	}

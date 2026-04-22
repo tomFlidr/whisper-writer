@@ -7,7 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using WhisperWriter.DI;
-using WhisperWriter.Services.EtaStatsServices;
+using WhisperWriter.Services.EtaCalcs;
 using WhisperWriter.Utils.Interfaces;
 
 namespace WhisperWriter.Services;
@@ -16,7 +16,7 @@ namespace WhisperWriter.Services;
 /// Persists environment-aware transcription timing statistics in a local SQLite database
 /// and provides an evidence-based ETA estimate for new recordings.
 ///
-/// Database location: &lt;BaseDirectory&gt;/llms/eta-time-stats.db
+/// Database location: &lt;BaseDirectory&gt;/llms/etaCalc-time-stats.db
 ///
 /// Fresh schema (no migrations):
 ///   Versions     (value TEXT)
@@ -29,9 +29,9 @@ namespace WhisperWriter.Services;
 /// similar audio length (±30%), then widens to ±50%, then falls back to all rows for the same
 /// model/environment. ETA is shown only when at least two matching samples exist.
 /// </summary>
-public class EtaService : IDisposable, IService, ISingleton {
+public class EtaCalc : IDisposable, IService, ISingleton {
 	[Inject]
-	protected LogService logService { get; set; } = null!;
+	protected Log log { get; set; } = null!;
 
 	private static readonly int _maxRecordsPerModelEnvironment = 1000;
 	private static readonly int _minimumSamplesForEta = 1;
@@ -41,10 +41,10 @@ public class EtaService : IDisposable, IService, ISingleton {
 	protected readonly string dbPath;
 	protected SqliteConnection? connection;
 
-	public EtaService () {
+	public EtaCalc () {
 		var dir = Path.Combine(AppContext.BaseDirectory, "llms");
 		Directory.CreateDirectory(dir);
-		this.dbPath = Path.Combine(dir, "eta-time-stats.db");
+		this.dbPath = Path.Combine(dir, "etaCalc-time-stats.db");
 	}
 
 	protected bool initConnection () {
@@ -55,10 +55,10 @@ public class EtaService : IDisposable, IService, ISingleton {
 			this.connection = new SqliteConnection($"Data Source={this.dbPath}");
 			this.connection.Open();
 			this.ensureSchema();
-			this.logService.Info($"EtaService: database opened at {this.dbPath}");
+			this.log.Info($"EtaCalcs: database opened at {this.dbPath}");
 			result = true;
 		} catch (Exception ex) {
-			this.logService.Error("EtaService: failed to open database", ex);
+			this.log.Error("EtaCalcs: failed to open database", ex);
 			this.connection?.Dispose();
 			this.connection = null;
 		}
@@ -89,7 +89,7 @@ public class EtaService : IDisposable, IService, ISingleton {
 
 			return this.estimateWithoutWindow(modelId.Value, environmentId, audioSeconds);
 		} catch (Exception ex) {
-			this.logService.Error("EtaService: EstimateProcessingSeconds failed", ex);
+			this.log.Error("EtaCalcs: EstimateProcessingSeconds failed", ex);
 			return null;
 		}
 	}
@@ -104,9 +104,9 @@ public class EtaService : IDisposable, IService, ISingleton {
 			var environmentId = this.findOrCreateEnvironmentId();
 			var modelId = this.findOrCreateModelId(modelKey);
 
-			using var tx = this.connection.BeginTransaction();
+			using var tx = this.connection!.BeginTransaction();
 
-			using var ins = this.connection.CreateCommand();
+			using var ins = this.connection!.CreateCommand();
 			ins.Transaction = tx;
 			ins.CommandText = @"
 				INSERT INTO Stats (model_id, environment_id, audio_seconds, processing_seconds)
@@ -134,12 +134,12 @@ public class EtaService : IDisposable, IService, ISingleton {
 			";
 			del.Parameters.AddWithValue("$modelId", modelId);
 			del.Parameters.AddWithValue("$environmentId", environmentId);
-			del.Parameters.AddWithValue("$maxRows", EtaService._maxRecordsPerModelEnvironment);
+			del.Parameters.AddWithValue("$maxRows", EtaCalc._maxRecordsPerModelEnvironment);
 			del.ExecuteNonQuery();
 
 			tx.Commit();
 		} catch (Exception ex) {
-			this.logService.Error("EtaService: Record failed", ex);
+			this.log.Error("EtaCalcs: Record failed", ex);
 		}
 	}
 
@@ -185,7 +185,7 @@ public class EtaService : IDisposable, IService, ISingleton {
 		if (rowCount == 0) {
 			using var insertCmd = this.connection.CreateCommand();
 			insertCmd.CommandText = "INSERT INTO Versions (value) VALUES ($value);";
-			insertCmd.Parameters.AddWithValue("$value", EtaService.currentDatabaseVersion);
+			insertCmd.Parameters.AddWithValue("$value", EtaCalc.currentDatabaseVersion);
 			insertCmd.ExecuteNonQuery();
 		}
 	}
@@ -215,7 +215,7 @@ public class EtaService : IDisposable, IService, ISingleton {
 		if (!reader.Read())
 			return null;
 		var sampleCount = reader.GetInt32(0);
-		if (sampleCount < EtaService._minimumSamplesForEta || reader.IsDBNull(1))
+		if (sampleCount < EtaCalc._minimumSamplesForEta || reader.IsDBNull(1))
 			return null;
 		var ratio = reader.GetDouble(1);
 		return currentAudioSeconds * ratio;
@@ -240,7 +240,7 @@ public class EtaService : IDisposable, IService, ISingleton {
 		if (!reader.Read())
 			return null;
 		var sampleCount = reader.GetInt32(0);
-		if (sampleCount < EtaService._minimumSamplesForEta || reader.IsDBNull(1))
+		if (sampleCount < EtaCalc._minimumSamplesForEta || reader.IsDBNull(1))
 			return null;
 		var ratio = reader.GetDouble(1);
 		return currentAudioSeconds * ratio;
@@ -270,13 +270,13 @@ public class EtaService : IDisposable, IService, ISingleton {
 		var cpuModel = this.readWmiString("Win32_Processor", "Name") ?? "Unknown CPU";
 		var cpuPhysicalCores = this.readWmiInt("Win32_Processor", "NumberOfCores") ?? Environment.ProcessorCount;
 		var gpus = this.readGpuModels();
-		var cudaVersion = WhisperService.DetectCudaVersion();
+		var cudaVersion = Whisper.DetectCudaVersion();
 		var backend = cudaVersion.HasValue ? "GPU" : "CPU";
 		var ramBytes = this.readWmiLong("Win32_ComputerSystem", "TotalPhysicalMemory") ?? 0L;
 		var ramTotalGb = ramBytes > 0 ? Math.Round(ramBytes / 1024d / 1024d / 1024d, 2) : 0d;
 		var osVersion = Environment.OSVersion.VersionString;
 		var osBuild = Environment.OSVersion.Version.Build.ToString(CultureInfo.InvariantCulture);
-		var whisperThreads = WhisperService.GetInferenceThreadCount();
+		var whisperThreads = Whisper.GetInferenceThreadCount();
 		var power = this.readSystemPowerStatus();
 
 		var payload = new {
@@ -336,8 +336,8 @@ public class EtaService : IDisposable, IService, ISingleton {
 				return value;
 			}
 		} catch (Exception ex) {
-			this.logService.Warning(
-				$"EtaService: WMI string read failed for {className}.{propertyName}", ex
+			this.log.Warning(
+				$"EtaCalcs: WMI string read failed for {className}.{propertyName}", ex
 			);
 		}
 		return null;
@@ -370,8 +370,8 @@ public class EtaService : IDisposable, IService, ISingleton {
 				values.Add(value);
 			}
 		} catch (Exception ex) {
-			this.logService.Warning(
-				$"EtaService: WMI string list read failed for {className}.{propertyName}", ex
+			this.log.Warning(
+				$"EtaCalcs: WMI string list read failed for {className}.{propertyName}", ex
 			);
 		}
 		return values;
@@ -388,8 +388,8 @@ public class EtaService : IDisposable, IService, ISingleton {
 				return Convert.ToInt32(obj[propertyName], CultureInfo.InvariantCulture);
 			}
 		} catch (Exception ex) {
-			this.logService.Warning(
-				$"EtaService: WMI int read failed for {className}.{propertyName}", ex
+			this.log.Warning(
+				$"EtaCalcs: WMI int read failed for {className}.{propertyName}", ex
 			);
 		}
 		return null;
@@ -406,8 +406,8 @@ public class EtaService : IDisposable, IService, ISingleton {
 				return Convert.ToInt64(obj[propertyName], CultureInfo.InvariantCulture);
 			}
 		} catch (Exception ex) {
-			this.logService.Warning(
-				$"EtaService: WMI long read failed for {className}.{propertyName}", ex
+			this.log.Warning(
+				$"EtaCalcs: WMI long read failed for {className}.{propertyName}", ex
 			);
 		}
 		return null;

@@ -20,7 +20,7 @@ namespace WhisperWriter.Views;
 
 public partial class SettingsWindow : Window, IService, ITransient {
 	[Inject]
-	protected SettingsService settingsService { get; set; } = null!;
+	protected Settings settings { get; set; } = null!;
 
 	private const string _startupKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
 	private const string _startupValueName = "WhisperWriter";
@@ -117,7 +117,7 @@ public partial class SettingsWindow : Window, IService, ITransient {
 
 	private void _loadSettings () {
 		this._buildModelItems();
-		var s = this.settingsService.Settings;
+		var s = this.settings.Data;
 		foreach (ComboBoxItem item in this.CmbModelPath.Items) {
 			if (item.Tag as string == s.ModelPath) {
 				this.CmbModelPath.SelectedItem = item;
@@ -242,7 +242,7 @@ public partial class SettingsWindow : Window, IService, ITransient {
 	}
 
 	private void _btnSave_Click (object sender, RoutedEventArgs e) {
-		var s = this.settingsService.Settings;
+		var s = this.settings.Data;
 		if (this.CmbModelPath.SelectedItem is ComboBoxItem selectedModel)
 			s.ModelPath = selectedModel.Tag as string ?? "llms/ggml-large-v2.bin";
 		s.Prompt = this.TxtPrompt.Text;

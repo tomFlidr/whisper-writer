@@ -18,7 +18,7 @@ public class AppSettings {
 	// An empty list means "use HotkeyModifiers bitmask" (legacy fallback).
 	public List<int> HotkeyCodes { get; set; } = [0xA4, 0x5B]; // VK_LMENU + _VK_LWIN
 
-	// How many transcriptions to keep in history
+	// How many transcriptions to keep in transcriptionHistory
 	public int HistorySize { get; set; } = 30;
 
 	// If true, every transcription result is also copied to the clipboard

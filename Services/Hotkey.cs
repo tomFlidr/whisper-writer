@@ -9,12 +9,12 @@ namespace WhisperWriter.Services;
 /// Using polling instead of RegisterHotKey because Win key combinations behave
 /// unreliably with RegisterHotKey on Windows 10/11.
 /// </summary>
-public class HotkeyService: IDisposable, IService, ISingleton {
+public class Hotkey: IDisposable, IService, ISingleton {
 	[DllImport("user32.dll")]
 	private static extern short GetAsyncKeyState(int vKey);
 
-	public event Action? PushToTalkStarted;
-	public event Action? PushToTalkStopped;
+	public event Action? Push2TalkStarted;
+	public event Action? Push2TalkStopped;
 
 	private bool _disposed;
 	private bool _isHeld;
@@ -25,7 +25,7 @@ public class HotkeyService: IDisposable, IService, ISingleton {
 	private readonly object _keysLock = new();
 	private int[] _virtualKeyCodes = null!;
 	
-	public HotkeyService SetVirtualKeyCodes (IReadOnlyList<int> virtualKeyCodes) {
+	public Hotkey SetVirtualKeyCodes (IReadOnlyList<int> virtualKeyCodes) {
 		this._virtualKeyCodes = [..virtualKeyCodes];
 		return this;
 	}
@@ -41,7 +41,7 @@ public class HotkeyService: IDisposable, IService, ISingleton {
 		// If the old combo was being held, synthesise a release so recording stops cleanly.
 		if (this._isHeld) {
 			this._isHeld = false;
-			this.PushToTalkStopped?.Invoke();
+			this.Push2TalkStopped?.Invoke();
 		}
 	}
 
@@ -84,10 +84,10 @@ public class HotkeyService: IDisposable, IService, ISingleton {
 			bool held = this._isComboHeld();
 			if (held && !this._isHeld) {
 				this._isHeld = true;
-				this.PushToTalkStarted?.Invoke();
+				this.Push2TalkStarted?.Invoke();
 			} else if (!held && this._isHeld) {
 				this._isHeld = false;
-				this.PushToTalkStopped?.Invoke();
+				this.Push2TalkStopped?.Invoke();
 			}
 			Thread.Sleep(20);
 		}
@@ -101,7 +101,7 @@ public class HotkeyService: IDisposable, IService, ISingleton {
 		if (codes.Length == 0)
 			return false;
 		foreach (var vk in codes) {
-			if ((HotkeyService.GetAsyncKeyState(vk) & 0x8000) == 0)
+			if ((Hotkey.GetAsyncKeyState(vk) & 0x8000) == 0)
 				return false;
 		}
 		return true;

@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace WhisperWriter.Utils;
+namespace WhisperWriter.Models;
 
 public class TranscriptionEntry {
 	public DateTime Timestamp { get; init; } = DateTime.Now;

@@ -1,4 +1,4 @@
-namespace WhisperWriter.Services.EtaStatsServices;
+namespace WhisperWriter.Services.EtaCalcs;
 
 /// <summary>Snapshot of the system power state captured during environment fingerprinting.</summary>
 public struct PowerStatusSnapshot {

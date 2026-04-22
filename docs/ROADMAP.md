@@ -10,8 +10,9 @@ Každá hotová položka se přesouvá do sekce **Dokončeno** a zároveň se ak
 
 ## Fáze 1 - dodělat hrubý refactoring
 
-Zrefaktorovat MainWindow a App - rozdělit funkcionalitu do více tříd,
-aby byla apliakce připravena na větší změny v dalších fázích (nové transkripční engine, sjednocení sekundárních oken).
+Zrefaktorovat MainWindow - rozdělit funkcionalitu do více tříd,
+aby byla apliakce připravena na větší změny v dalších fázích 
+(nové transkripční engine, sjednocení sekundárních oken).
 
 ## Fáze 2 – Sjednocení sekundárních oken do jednoho tabbed okna
 

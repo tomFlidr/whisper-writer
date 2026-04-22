@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using Whisper.net;
 using Whisper.net.Ggml;
 using WhisperWriter.DI;
-using WhisperWriter.Services.WhisperServices;
+using WhisperWriter.Services.Whispers;
 using WhisperWriter.Utils.Enums;
 using WhisperWriter.Utils.Interfaces;
 
@@ -11,9 +11,9 @@ namespace WhisperWriter.Services;
 
 /// <summary>
 /// Whisper.net-backed transcription engine.
-/// Implements ITranscriptionService; prefers CUDA, falls back to CPU automatically.
+/// Implements ITranscription; prefers CUDA, falls back to CPU automatically.
 /// </summary>
-public class WhisperService : ITranscriptionService, IService, ISingleton {
+public class Whisper : ITranscription, IService, ISingleton {
 	// Minimum acceptable file size for any GGML model (tiny.en ≈ 78 MB).
 	// A file smaller than this is certainly truncated or corrupted.
 	public const long MinModelFileSizeBytes = 70 * 1024 * 1024; // 70 MB
@@ -21,9 +21,9 @@ public class WhisperService : ITranscriptionService, IService, ISingleton {
 	public event Action<TranscriptionState, string>? StateChanged;
 
 	[Inject]
-	protected SettingsService settingsService { get; set; } = null!;
+	protected Settings settings { get; set; } = null!;
 	[Inject]
-	protected LogService logService { get; set; } = null!;
+	protected Log log { get; set; } = null!;
 
 	protected WhisperFactory? factory;
 	protected bool initialized;
@@ -60,15 +60,15 @@ public class WhisperService : ITranscriptionService, IService, ISingleton {
 	public async Task InitializeAsync(string modelPath) {
 		this.StateChanged?.Invoke(TranscriptionState.Loading, "Loading model…");
 
-		var cudaVersion = WhisperService.DetectCudaVersion();
-		this.logService.Info(cudaVersion.HasValue
+		var cudaVersion = Whisper.DetectCudaVersion();
+		this.log.Info(cudaVersion.HasValue
 			? $"CUDA probe: cudart64_{cudaVersion}.dll + cublas64_{cudaVersion}.dll found — GPU will be used (CUDA {cudaVersion})"
 			: "CUDA probe: no CUDA runtime found (tried versions 13, 12, 11) — falling back to CPU");
 
 		try {
 			// Delete and re-download if the file exists but is clearly truncated.
-			if (File.Exists(modelPath) && new FileInfo(modelPath).Length < WhisperService.MinModelFileSizeBytes) {
-				this.logService.Warning($"Model file '{modelPath}' is too small ({new FileInfo(modelPath).Length / 1024 / 1024} MB) — deleting and re-downloading.");
+			if (File.Exists(modelPath) && new FileInfo(modelPath).Length < Whisper.MinModelFileSizeBytes) {
+				this.log.Warning($"Data file '{modelPath}' is too small ({new FileInfo(modelPath).Length / 1024 / 1024} MB) — deleting and re-downloading.");
 				File.Delete(modelPath);
 			}
 
@@ -90,8 +90,8 @@ public class WhisperService : ITranscriptionService, IService, ISingleton {
 		} catch (Exception ex) {
 			this.initialized = false;
 			this.factory = null;
-			this.logService.Error("Failed to load Whisper model", ex);
-			this.StateChanged?.Invoke(TranscriptionState.Error, $"Model load failed: {ex.Message}");
+			this.log.Error("Failed to load Whisper model", ex);
+			this.StateChanged?.Invoke(TranscriptionState.Error, $"Data load failed: {ex.Message}");
 		}
 	}
 
@@ -99,13 +99,13 @@ public class WhisperService : ITranscriptionService, IService, ISingleton {
 	/// Transcribes the given WAV bytes (16 kHz mono PCM).
 	/// Returns the transcribed text, or throws on error.
 	/// </summary>
-	public async Task<string> TranscribeAsync(byte[] wavBytes, string language, string prompt) {
+	public async Task<string> TranscribeAsync (byte[] wavBytes, string language, string prompt) {
 		if (!this.initialized || this.factory == null)
-			throw new InvalidOperationException("Model is not loaded. Check the model path in Settings.");
+			throw new InvalidOperationException("Data is not loaded. Check the model path in Data.");
 
 		string? modelPath = null;
 		try {
-			modelPath = this.settingsService.Settings.ModelPath;
+			modelPath = this.settings.Data.ModelPath;
 		} catch { }
 
 		this.StateChanged?.Invoke(TranscriptionState.Transcribing, "Transcribing…");
@@ -121,7 +121,7 @@ public class WhisperService : ITranscriptionService, IService, ISingleton {
 		try {
 			var builder = this.factory.CreateBuilder()
 				.WithLanguage(effectiveLanguage)
-				.WithThreads(WhisperService.GetInferenceThreadCount());
+				.WithThreads(Whisper.GetInferenceThreadCount());
 
 			if (!string.IsNullOrEmpty(prompt))
 				builder = builder.WithPrompt(prompt);
@@ -136,20 +136,21 @@ public class WhisperService : ITranscriptionService, IService, ISingleton {
 			var result = segments.ToString().Trim();
 			this.StateChanged?.Invoke(TranscriptionState.Done, result);
 			return result;
+
 		} catch (WhisperModelLoadException ex) {
 			// The factory accepted the file (only reads header) but the model is
 			// corrupted or truncated. Delete it so InitializeAsync re-downloads it
 			// on next startup, then surface a clear error to the user.
-			this.logService.Error("Whisper model corrupted – deleting file for re-download", ex);
+			this.log.Error("Whisper model corrupted – deleting file for re-download", ex);
 			this.initialized = false;
 			this.factory.Dispose();
 			this.factory = null;
 			if (modelPath != null && File.Exists(modelPath)) {
 				try { File.Delete(modelPath); } catch (Exception delEx) {
-					this.logService.Warning($"Could not delete corrupted model file '{modelPath}'", delEx);
+					this.log.Warning($"Could not delete corrupted model file '{modelPath}'", delEx);
 				}
 			}
-			var userMsg = "Model file is corrupted and has been deleted. Restart the app to re-download it.";
+			var userMsg = "Data file is corrupted and has been deleted. Restart the app to re-download it.";
 			this.StateChanged?.Invoke(TranscriptionState.Error, userMsg);
 			throw new InvalidOperationException(userMsg, ex);
 		}

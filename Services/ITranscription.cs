@@ -6,7 +6,7 @@ namespace WhisperWriter.Services;
 /// Abstraction over any speech-to-text backend (Whisper, Parakeet, …).
 /// App and MainWindow depend only on this interface; the concrete engine is hidden behind it.
 /// </summary>
-public interface ITranscriptionService: IAsyncDisposable {
+public interface ITranscription: IAsyncDisposable {
 	/// <summary>Raised when the backend state changes (loading, transcribing, done, error).</summary>
 	event Action<TranscriptionState, string>? StateChanged;
 

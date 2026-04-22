@@ -49,7 +49,40 @@
 				<TextBlock TextWrapping="Wrap"
 						   Foreground="{StaticResource TextPrimaryBrush}"
 						   FontFamily="Segoe UI" FontSize="13"
-						   LineHeight="22"><Run FontSize="18" FontWeight="SemiBold" Text="WhisperWriter"/><LineBreak/><LineBreak/><Run Foreground="#99FFFFFF" Text="Lokální hlasový přepis textu pro Windows. Drž klávesovou zkratku, mluv, pusť – text se vloží přímo tam, kde byl kurzor."/><LineBreak/><LineBreak/><Run FontWeight="SemiBold" Text="Jak to funguje"/><LineBreak/><Run Foreground="#99FFFFFF" Text="Nahrávka je zpracována lokálně modelem OpenAI Whisper (whisper.cpp) přes knihovnu Whisper.net. GPU akcelerace přes CUDA je použita automaticky, pokud je dostupná. Žádná data neopustí tvůj počítač."/><LineBreak/><LineBreak/><Run FontWeight="SemiBold" Text="Funkce"/><LineBreak/><Run Foreground="#99FFFFFF" Text="• Push-to-talk zkratka (výchozí: Levý Ctrl + Levý Win)"/><LineBreak/><Run Foreground="#99FFFFFF" Text="• VU meter zobrazující úroveň hlasu při nahrávání"/><LineBreak/><Run Foreground="#99FFFFFF" Text="• ETA odpočet doby přepisu"/><LineBreak/><Run Foreground="#99FFFFFF" Text="• Historie posledních přepisů"/><LineBreak/><Run Foreground="#99FFFFFF" Text="• Konfigurovatelný jazyk a prompt pro Whisper"/><LineBreak/><Run Foreground="#99FFFFFF" Text="• Plovoucí widget – přetahovatelný, vždy nahoře"/><LineBreak/><LineBreak/><Run FontWeight="SemiBold" Text="Modely"/><LineBreak/><Run Foreground="#99FFFFFF" Text="Podporuje ggml modely: tiny, base, small, medium, large-v2. Větší model = lepší přesnost, pomalejší přepis. large-v2 doporučen pro češtinu."/><LineBreak/><LineBreak/><Run Foreground="#55FFFFFF" FontSize="11" Text="Powered by OpenAI Whisper · whisper.cpp · Whisper.net · NAudio"/></TextBlock>
+						   LineHeight="22">
+					<Run FontSize="18" FontWeight="SemiBold" Text="WhisperWriter"/>
+					<LineBreak/>
+					<LineBreak/>
+					<Run Foreground="#99FFFFFF" Text="Lokální hlasový přepis textu pro Windows. Drž klávesovou zkratku, mluv, pusť – text se vloží přímo tam, kde byl kurzor."/>
+					<LineBreak/>
+					<LineBreak/>
+					<Run FontWeight="SemiBold" Text="Jak to funguje"/>
+					<LineBreak/>
+					<Run Foreground="#99FFFFFF" Text="Nahrávka je zpracována lokálně modelem OpenAI Whisper (whisper.cpp) přes knihovnu Whisper.net. GPU akcelerace přes CUDA je použita automaticky, pokud je dostupná. Žádná data neopustí tvůj počítač."/>
+					<LineBreak/>
+					<LineBreak/>
+					<Run FontWeight="SemiBold" Text="Funkce"/>
+					<LineBreak/>
+					<Run Foreground="#99FFFFFF" Text="• Push-to-talk zkratka (výchozí: Levý Win + Levý Alt)"/>
+					<LineBreak/>
+					<Run Foreground="#99FFFFFF" Text="• VU meter zobrazující úroveň hlasu při nahrávání"/>
+					<LineBreak/>
+					<Run Foreground="#99FFFFFF" Text="• ETA odpočet doby přepisu"/>
+					<LineBreak/>
+					<Run Foreground="#99FFFFFF" Text="• Historie posledních přepisů"/>
+					<LineBreak/>
+					<Run Foreground="#99FFFFFF" Text="• Konfigurovatelný jazyk a prompt pro Whisper"/>
+					<LineBreak/>
+					<Run Foreground="#99FFFFFF" Text="• Plovoucí widget – přetahovatelný, vždy nahoře"/>
+					<LineBreak/>
+					<LineBreak/>
+					<Run FontWeight="SemiBold" Text="Modely"/>
+					<LineBreak/>
+					<Run Foreground="#99FFFFFF" Text="Podporuje ggml modely: tiny, base, small, medium, large-v2. Větší model = lepší přesnost, pomalejší přepis. large-v2 doporučen pro češtinu."/>
+					<LineBreak/>
+					<LineBreak/>
+					<Run Foreground="#55FFFFFF" FontSize="11" Text="Powered by OpenAI Whisper · whisper.cpp · Whisper.net · NAudio"/>
+				</TextBlock>
 			</ScrollViewer>
 
 			<!-- Footer -->

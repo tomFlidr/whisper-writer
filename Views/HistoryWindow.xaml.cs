@@ -1,20 +1,21 @@
 using System.Windows;
 using System.Windows.Input;
 using WhisperWriter.DI;
-using WhisperWriter.Utils;
+using WhisperWriter.Models;
+using WhisperWriter.Services;
 using WhisperWriter.Utils.Interfaces;
 
 namespace WhisperWriter.Views;
 
 public partial class HistoryWindow : Window, IService, ITransient {
 	[Inject]
-	protected TranscriptionHistory historyService { get; set; } = null!;
+	protected TranscriptionHistory history { get; set; } = null!;
 	public HistoryWindow () {
 		this.InitializeComponent();
 	}
 	protected override void OnActivated (EventArgs e) {
 		base.OnActivated(e);
-		this.HistoryList.ItemsSource = this.historyService.Entries;
+		this.HistoryList.ItemsSource = this.history.Entries;
 	}
 	private void _handleTitleBarMouseLeftButtonDown (object sender, MouseButtonEventArgs e) {
 		if (e.ButtonState == MouseButtonState.Pressed)

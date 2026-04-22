@@ -4,24 +4,24 @@ using System.Windows.Media;
 using WhisperWriter.DI;
 using WhisperWriter.Utils.Interfaces;
 
-namespace WhisperWriter.Services;
+namespace WhisperWriter.Services.MainWindows;
 
 /// <summary>
 /// Handles positioning logic for the floating widget window.
 /// Encapsulates all screen-placement, clamping, and persistence logic
 /// so that MainWindow stays focused on UI behaviour.
 /// </summary>
-public class WindowPositionService: IService, ITransient {
+public class Position: IService, ITransient {
 
-	protected SettingsService settingsService { get; set; } = null!;
+	protected Settings settings { get; set; } = null!;
 
 	protected Window window = null!;
 	
-	public WindowPositionService (SettingsService settingsService) {
-		this.settingsService = settingsService;
+	public Position (Settings settingsService) {
+		this.settings = settingsService;
 	}
 
-	public WindowPositionService SetWindow (Window window) {
+	public Position SetWindow (Window window) {
 		this.window = window;
 		return this;
 	}
@@ -32,7 +32,7 @@ public class WindowPositionService: IService, ITransient {
 	/// Returns true if a stored position was found, false if default was used.
 	/// </summary>
 	public bool InitialPosition(Action onPositionApplied) {
-		var s = this.settingsService.Settings;
+		var s = this.settings.Data;
 		if (s.WindowLeft >= 0 && s.WindowBottom >= 0) {
 			this.window.Loaded += (_, _) => { this.ApplyStoredPosition(); onPositionApplied(); };
 			return true;
@@ -43,7 +43,7 @@ public class WindowPositionService: IService, ITransient {
 
 	/// <summary>Positions the window using the stored Left and WindowBottom values.</summary>
 	public void ApplyStoredPosition() {
-		var s = this.settingsService.Settings;
+		var s = this.settings.Data;
 		var primary = Screen.PrimaryScreen;
 		if (primary == null) { this.PlaceAtDefaultPosition(); return; }
 
@@ -136,7 +136,7 @@ public class WindowPositionService: IService, ITransient {
 	/// </summary>
 	public void SaveWindowPosition() {
 		var primary = Screen.PrimaryScreen;
-		var s = this.settingsService.Settings;
+		var s = this.settings.Data;
 		if (primary != null) {
 			var (scaleX, scaleY) = this.getPrimaryScreenScale();
 			var wa = primary.WorkingArea;
@@ -152,7 +152,7 @@ public class WindowPositionService: IService, ITransient {
 				this.window.Top + this.window.ActualHeight / 2
 			);
 		}
-		this.settingsService.Save();
+		this.settings.Save();
 	}
 
 	/// <summary>

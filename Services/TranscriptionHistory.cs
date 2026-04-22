@@ -1,7 +1,8 @@
 using System.Collections.ObjectModel;
+using WhisperWriter.Models;
 using WhisperWriter.Utils.Interfaces;
 
-namespace WhisperWriter.Utils;
+namespace WhisperWriter.Services;
 
 public class TranscriptionHistory: IService, ISingleton {
 	public ObservableCollection<TranscriptionEntry> Entries { get; } = new();
@@ -10,7 +11,7 @@ public class TranscriptionHistory: IService, ISingleton {
 
 	private readonly object _lock = new();
 
-	public void Add(TranscriptionEntry entry) {
+	public void Add (TranscriptionEntry entry) {
 		lock (this._lock) {
 			// Insert newest at the top
 			System.Windows.Application.Current.Dispatcher.Invoke(() => {

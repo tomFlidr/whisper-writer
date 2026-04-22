@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace WhisperWriter.Services.EtaStatsServices;
+namespace WhisperWriter.Services.EtaCalcs;
 
 [StructLayout(LayoutKind.Sequential)]
 public struct SystemPowerStatus {
