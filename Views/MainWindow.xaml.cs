@@ -58,6 +58,7 @@ public partial class MainWindow : Window, IService, ISingleton {
 	// True once the initial Loaded positioning has been applied.
 	private bool _positionApplied;
 	private bool _allowClose = false;
+	private bool _initialized = false;
 	
 	public MainWindow (
 		Services.MainWindows.Position windowPosition,
@@ -99,7 +100,11 @@ public partial class MainWindow : Window, IService, ISingleton {
 	
 	protected override void OnActivated (EventArgs e) {
 		base.OnActivated(e);
-		
+
+		if (this._initialized)
+			return;
+		this._initialized = true;
+
 		this.whisper.StateChanged += this.handleWhisperStateChanged;
 		
 		var settings = this.settings.Data;
