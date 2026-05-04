@@ -1,8 +1,8 @@
 using System.IO;
+using WhisperWriter.Utils.Interfaces;
 #if DEBUG
 using Serilog;
 using Serilog.Core;
-using WhisperWriter.Utils.Interfaces;
 #endif
 
 namespace WhisperWriter.Services;

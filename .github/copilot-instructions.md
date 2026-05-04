@@ -536,4 +536,4 @@ Ideas mentioned during development, not yet implemented:
 - **Multiple microphones** – `WaveInEvent.DeviceNumber`, selection in Settings.
 - **Silent recording discard** – RMS threshold below which the recording is discarded (anti-click).
 
-#650a6f546d6bd622641631c085715b851fcf2e66
+#6f323892d19a8f9cb126853467b9b180a07e6c4b
