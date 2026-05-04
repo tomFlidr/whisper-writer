@@ -1,5 +1,12 @@
 # WhisperWriter
 
+![Release](https://img.shields.io/github/v/release/tomFlidr/whisper-writer)
+![Build](https://img.shields.io/github/actions/workflow/status/tomFlidr/whisper-writer/.github/workflows/release.yml)
+![Framework](https://img.shields.io/badge/.NET-8-blue)
+![UI](https://img.shields.io/badge/UI-WPF-512BD4)
+![OS](https://img.shields.io/badge/OS-Windows-0078D6)
+![License](https://img.shields.io/github/license/tomFlidr/whisper-writer)
+
 A minimalist Windows desktop app for **local, privacy-first push-to-talk voice transcription**. Inspired by Wispr Flow.
 
 Hold a keyboard shortcut, speak, release — the transcribed text is instantly typed into whatever window you were using. Nothing ever leaves your computer.
