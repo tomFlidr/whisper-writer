@@ -510,7 +510,7 @@ These files together form the primary source of context for future AI sessions �
 
 ## Instruction integrity / commit hash
 
-- The basic instructions in this file must always be signed on the very last line with the hash of the latest commit (prefix the hash with `#`).
+- The basic instructions in this file must always be signed on the very last line with the hash of the previous commit (prefix the hash with `#`).
 - On every commit you make to the repository, update this file so the last line contains the current commit hash.
 - Whenever you read these basic instructions and the commit hash stored here differs from the repository's HEAD commit, perform a full review of everything you know about the project (project structure, key files, docs/skills, and any inferred assumptions). If you find any discrepancy, correct the instructions so they match the actual project state and update the commit hash to the current HEAD.
 
@@ -536,4 +536,4 @@ Ideas mentioned during development, not yet implemented:
 - **Multiple microphones** – `WaveInEvent.DeviceNumber`, selection in Settings.
 - **Silent recording discard** – RMS threshold below which the recording is discarded (anti-click).
 
-#2b201b37837dad14bf19ae56375228c3ad29de9a
+#650a6f546d6bd622641631c085715b851fcf2e66
