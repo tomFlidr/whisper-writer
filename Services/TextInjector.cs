@@ -9,35 +9,15 @@ namespace WhisperWriter.Services;
 /// Injects text into the previously focused window using SendInput (Unicode).
 /// Records the focused HWND before we show the widget so we can restore it.
 /// </summary>
+/// <summary>
+/// Responsible for restoring focus to the previously active window and
+/// injecting Unicode text via SendInput.
+/// The class encapsulates all P/Invoke interop required for reliable text injection.
+/// </summary>
 public class TextInjector: IService, ISingleton {
-	#region Win32
 
-	[DllImport("user32.dll")]
-	private static extern IntPtr GetForegroundWindow ();
-
-	[DllImport("user32.dll")]
-	private static extern bool SetForegroundWindow (IntPtr hWnd);
-
-	[DllImport("user32.dll")]
-	private static extern bool BringWindowToTop (IntPtr hWnd);
-
-	[DllImport("user32.dll")]
-	private static extern bool AttachThreadInput (uint idAttach, uint idAttachTo, bool fAttach);
-
-	[DllImport("user32.dll")]
-	private static extern uint GetWindowThreadProcessId (IntPtr hWnd, out uint lpdwProcessId);
-
-	[DllImport("kernel32.dll")]
-	private static extern uint GetCurrentThreadId ();
-
-	[DllImport("user32.dll")]
-	private static extern uint SendInput (uint nInputs, Input[] pInputs, int cbSize);
-
-	[DllImport("user32.dll")]
-	private static extern IntPtr GetMessageExtraInfo ();
-
-	[DllImport("user32.dll")]
-	private static extern short GetAsyncKeyState (int vKey);
+	[Inject]
+	protected Log log { get; set; } = null!;
 
 	private static readonly uint _inputKeyboard				= 1;
 	private static readonly uint _keyEventFExtendKey		= 0x0001;
@@ -53,14 +33,41 @@ public class TextInjector: IService, ISingleton {
 	private static readonly ushort _virtualKeyMenuRight		= 0xA5;
 	private static readonly ushort _virtualKeyShiftLeft		= 0xA0;
 	private static readonly ushort _virtualKeyShiftRight	= 0xA1;
-	#endregion
-
+	
 	private static IntPtr _savedHwnd = IntPtr.Zero;
+	
+	[DllImport("user32.dll")]
+	internal static extern IntPtr GetForegroundWindow ();
 
-	[Inject]
-	protected Log log { get; set; } = null!;
+	[DllImport("user32.dll")]
+	internal static extern bool SetForegroundWindow (IntPtr hWnd);
 
+	[DllImport("user32.dll")]
+	internal static extern bool BringWindowToTop (IntPtr hWnd);
+
+	[DllImport("user32.dll")]
+	internal static extern bool AttachThreadInput (uint idAttach, uint idAttachTo, bool fAttach);
+
+	[DllImport("user32.dll")]
+	internal static extern uint GetWindowThreadProcessId (IntPtr hWnd, out uint lpdwProcessId);
+
+	[DllImport("kernel32.dll")]
+	internal static extern uint GetCurrentThreadId ();
+
+	[DllImport("user32.dll")]
+	internal static extern uint SendInput (uint nInputs, Input[] pInputs, int cbSize);
+
+	[DllImport("user32.dll")]
+	internal static extern IntPtr GetMessageExtraInfo ();
+
+	[DllImport("user32.dll")]
+	internal static extern short GetAsyncKeyState (int vKey);
+	
 	/// <summary>Call this just before we steal focus (when PTT key is pressed).</summary>
+	/// <summary>
+	/// Saves the currently foreground window handle so focus can be restored later.
+	/// Also verifies that the managed Input struct matches the native layout expected by SendInput.
+	/// </summary>
 	public void SaveFocus () {
 		TextInjector._savedHwnd = TextInjector.GetForegroundWindow();
 		// Verify struct layout matches Win32 at runtime (40 bytes on 64-bit, 28 on 32-bit).
@@ -76,6 +83,11 @@ public class TextInjector: IService, ISingleton {
 	/// Restores keyboard focus to the saved window.
 	/// Must be called from the UI thread (which owns a message pump), because
 	/// AttachThreadInput requires the calling thread to have a message queue.
+	/// </summary>
+	/// <summary>
+	/// Restores keyboard focus to the window saved by SaveFocus().
+	/// This must be called from a thread that owns a message queue (UI thread) because
+	/// AttachThreadInput requires the caller to have a message pump.
 	/// </summary>
 	public void RestoreFocus () {
 		if (TextInjector._savedHwnd == IntPtr.Zero) return;
@@ -100,6 +112,11 @@ public class TextInjector: IService, ISingleton {
 	/// </summary>
 	/// <param name="text">Text to inject via SendInput.</param>
 	/// <param name="pttVkCodes">Virtual key codes of the active PTT hotkey combination.</param>
+	/// <summary>
+	/// Injects Unicode text into the previously saved window using SendInput.
+	/// Must be called from a background thread because it waits for physical key release
+	/// and performs Thread.Sleep to allow the target window to receive focus.
+	/// </summary>
 	public void InjectText (string text, IReadOnlyList<int> pttVkCodes) {
 		if (string.IsNullOrEmpty(text)) return;
 
@@ -140,6 +157,11 @@ public class TextInjector: IService, ISingleton {
 	/// SendInput while a key is still physically down is silently ignored by
 	/// Windows – the shell hook stays active and permanently breaks mouse input.
 	/// </summary>
+	/// <summary>
+	/// Blocks up to two seconds waiting for the physical release of the specified VKs
+	/// and both Win keys. This avoids sending keyup events while a key is still physically held
+	/// which would otherwise be ignored by the OS and lead to sticky modifier behaviour.
+	/// </summary>
 	private void _waitForPhysicalRelease (IReadOnlyList<int> hotkeyVks) {
 		const int timeoutMs = 2000;
 		const int stepMs = 10;
@@ -171,6 +193,10 @@ public class TextInjector: IService, ISingleton {
 	/// Win keys require _keyEventFExtendKey – without it the keyup is ignored
 	/// and the Win shell hook stays active, permanently breaking mouse buttons.
 	/// </summary>
+	/// <summary>
+	/// Sends synthetic key-up events for all common modifier keys (Win/Ctrl/Alt/Shift).
+	/// The Win keys are sent with the extended key flag to ensure Windows accepts the keyup.
+	/// </summary>
 	private void _releaseModifierKeys () {
 		// (vk, needsExtendedKey)
 		(ushort vk, bool ext)[] modifiers = [
@@ -189,6 +215,10 @@ public class TextInjector: IService, ISingleton {
 		TextInjector.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Input>());
 	}
 
+	/// <summary>
+	/// Constructs an Input representing a virtual-key key-up event for the given VK code.
+	/// If extendedKey is true the extended-key flag is added to the dwFlags.
+	/// </summary>
 	private Input _makeVirtualKeyUp (ushort vk, bool extendedKey = false) {
 		return new Input {
 			type = TextInjector._inputKeyboard,
@@ -206,6 +236,10 @@ public class TextInjector: IService, ISingleton {
 		};
 	}
 
+	/// <summary>
+	/// Constructs an Input structure representing a Unicode key event for the given character.
+	/// The caller should emit keydown followed by keyup entries to represent a character.
+	/// </summary>
 	private Input _makeUnicodeKeyInput (char c, bool keyUp) {
 		return new Input {
 			type = TextInjector._inputKeyboard,

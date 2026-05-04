@@ -9,9 +9,13 @@ namespace WhisperWriter.Services;
 /// Using polling instead of RegisterHotKey because Win key combinations behave
 /// unreliably with RegisterHotKey on Windows 10/11.
 /// </summary>
+/// <summary>
+/// Polling-based hotkey detector. Monitors a configurable set of virtual-key codes
+/// by calling GetAsyncKeyState on a background thread and raises start/stop events.
+/// </summary>
 public class Hotkey: IDisposable, IService, ISingleton {
 	[DllImport("user32.dll")]
-	private static extern short GetAsyncKeyState(int vKey);
+	internal static extern short GetAsyncKeyState(int vKey);
 
 	public event Action? Push2TalkStarted;
 	public event Action? Push2TalkStopped;
@@ -25,6 +29,10 @@ public class Hotkey: IDisposable, IService, ISingleton {
 	private readonly object _keysLock = new();
 	private int[] _virtualKeyCodes = null!;
 	
+	/// <summary>
+	/// Sets the virtual-key codes that constitute the push-to-talk hotkey.
+	/// The provided list is copied and used by the poll loop.
+	/// </summary>
 	public Hotkey SetVirtualKeyCodes (IReadOnlyList<int> virtualKeyCodes) {
 		this._virtualKeyCodes = [..virtualKeyCodes];
 		return this;
@@ -32,6 +40,11 @@ public class Hotkey: IDisposable, IService, ISingleton {
 
 	/// <summary>
 	/// Replaces the active key combination at runtime without restarting the poll thread.
+	/// Safe to call from any thread.
+	/// </summary>
+	/// <summary>
+	/// Replaces the active key combination at runtime without restarting the poll thread.
+	/// If recording was in progress the Push2TalkStopped event is fired immediately.
 	/// Safe to call from any thread.
 	/// </summary>
 	public void UpdateKeys (IReadOnlyList<int> vkCodes) {
@@ -46,6 +59,9 @@ public class Hotkey: IDisposable, IService, ISingleton {
 	}
 
 	/// <summary>Starts the background polling loop.</summary>
+	/// <summary>
+	/// Starts the background polling thread which checks the hotkey state every 20 ms.
+	/// </summary>
 	public void Start () {
 		this._cts = new CancellationTokenSource();
 		this._pollThread = new Thread(this._pollLoop) {
@@ -55,10 +71,16 @@ public class Hotkey: IDisposable, IService, ISingleton {
 		this._pollThread.Start(this._cts.Token);
 	}
 
+	/// <summary>
+	/// Stops the background polling loop. The thread will exit shortly after cancellation.
+	/// </summary>
 	public void Stop () {
 		this._cts?.Cancel();
 	}
 
+	/// <summary>
+	/// Disposes the service and stops the poll thread.
+	/// </summary>
 	public void Dispose () {
 		if (this._disposed) return;
 		this._disposed = true;
@@ -78,6 +100,10 @@ public class Hotkey: IDisposable, IService, ISingleton {
 		return [..list];
 	}*/
 
+	/// <summary>
+	/// Background loop executed on a dedicated thread. Evaluates the pressed state of the
+	/// configured VK codes and raises Push2TalkStarted/Stopped events on transitions.
+	/// </summary>
 	private void _pollLoop (object? obj) {
 		var ct = (CancellationToken)obj!;
 		while (!ct.IsCancellationRequested) {
@@ -93,6 +119,10 @@ public class Hotkey: IDisposable, IService, ISingleton {
 		}
 	}
 
+	/// <summary>
+	/// Returns true when all configured virtual-key codes are currently held down.
+	/// Reads the shared array under a lock to avoid races with UpdateKeys().
+	/// </summary>
 	private bool _isComboHeld () {
 		int[] codes;
 		lock (this._keysLock) {

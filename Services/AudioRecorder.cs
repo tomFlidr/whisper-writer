@@ -9,6 +9,11 @@ namespace WhisperWriter.Services;
 /// Call StartRecording() / StopRecording() around the push-to-talk period.
 /// GetWavBytes() returns the complete 16 kHz mono WAV suitable for Whisper.
 /// </summary>
+/// <summary>
+/// Simple in-memory audio recorder using NAudio WaveInEvent.
+/// Records 16 kHz mono 16-bit PCM suitable for the Whisper model and
+/// exposes an amplitude event for realtime VU metering.
+/// </summary>
 public class AudioRecorder : IDisposable, IService, ISingleton {
 	private static readonly int _sampleRate = 16000;
 	private static readonly int _channels = 1;
@@ -23,6 +28,10 @@ public class AudioRecorder : IDisposable, IService, ISingleton {
 	private bool _recording;
 	private readonly object _lock = new();
 
+	/// <summary>
+	/// Starts a new in-memory WAV recording. Subsequent audio is written into a MemoryStream
+	/// until StopRecording() is called which returns the WAV bytes.
+	/// </summary>
 	public void StartRecording () {
 		lock (this._lock) {
 			if (this._recording) return;
@@ -45,6 +54,9 @@ public class AudioRecorder : IDisposable, IService, ISingleton {
 		}
 	}
 
+	/// <summary>
+	/// Stops the recording and returns the full WAV file bytes, or null if not recording.
+	/// </summary>
 	public byte[]? StopRecording () {
 		lock (this._lock) {
 			if (!this._recording) return null;
@@ -66,10 +78,17 @@ public class AudioRecorder : IDisposable, IService, ISingleton {
 		}
 	}
 
+	/// <summary>
+	/// Releases resources used by the recorder. Stops any active recording.
+	/// </summary>
 	public void Dispose () {
 		this.StopRecording();
 	}
 
+	/// <summary>
+	/// WaveIn DataAvailable handler which appends incoming audio into the WAV writer
+	/// and raises an RMS-based amplitude event for the UI VU meter.
+	/// </summary>
 	private void _handleDataAvailable (object? sender, WaveInEventArgs e) {
 		lock (this._lock) {
 			if (!this._recording || this._writer == null) return;
@@ -81,6 +100,10 @@ public class AudioRecorder : IDisposable, IService, ISingleton {
 		}
 	}
 
+	/// <summary>
+	/// Calculates RMS amplitude from 16-bit PCM samples in the provided buffer.
+	/// Returns a floating value in range 0..1 representing perceived loudness.
+	/// </summary>
 	private static float _calculateRms (byte[] buffer, int length) {
 		if (length < 2) return 0f;
 		double sum = 0;

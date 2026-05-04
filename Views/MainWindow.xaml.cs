@@ -18,6 +18,11 @@ using WpfColor = System.Windows.Media.Color;
 
 namespace WhisperWriter.Views;
 
+/// <summary>
+/// Main floating widget window implementing the push-to-talk lifecycle.
+/// Handles UI state, coordinates services (Hotkey, AudioRecorder, Whisper, TextInjector)
+/// and manages the ETA countdown shown during transcription.
+/// </summary>
 public partial class MainWindow : Window, IService, ISingleton {
 	
 	// ETA countdown
@@ -60,6 +65,10 @@ public partial class MainWindow : Window, IService, ISingleton {
 	private bool _allowClose = false;
 	private bool _initialized = false;
 	
+	/// <summary>
+	/// Constructs the MainWindow and injects required helpers for positioning and style.
+	/// The constructor wires up initial event handlers but defers service hookup until OnActivated.
+	/// </summary>
 	public MainWindow (
 		Services.MainWindows.Position windowPosition,
 		Services.MainWindows.Style windowStyle
@@ -86,10 +95,18 @@ public partial class MainWindow : Window, IService, ISingleton {
 	/// Applies a new key combination to the live hotkey service without restarting the app.
 	/// Called by App after settings are saved.
 	/// </summary>
+	/// <summary>
+	/// Applies hotkey changes from the settings into the live Hotkey service so the new combo
+	/// takes effect immediately without restarting the application.
+	/// </summary>
 	public void ReloadHotkey () {
 		this.hotkey.UpdateKeys(this.settings.Data.HotkeyCodes);
 	}
 	
+	/// <summary>
+	/// Forces application shutdown from the UI, disposing services and closing the window.
+	/// Used by the tray menu Exit command to ensure a clean termination.
+	/// </summary>
 	public void ForceClose () {
 		this._allowClose = true;
 		this.etaTimer.Stop();
@@ -98,6 +115,10 @@ public partial class MainWindow : Window, IService, ISingleton {
 		this.Close();
 	}
 	
+	/// <summary>
+	/// Initializes runtime connections to services the first time the window is activated.
+	/// Hooks up event handlers for hotkey, audio amplitude and whisper state changes.
+	/// </summary>
 	protected override void OnActivated (EventArgs e) {
 		base.OnActivated(e);
 
@@ -147,6 +168,10 @@ public partial class MainWindow : Window, IService, ISingleton {
 	/// Resets the widget to the stored position relative to the new primary screen so it
 	/// always appears on the primary monitor after docking.
 	/// </summary>
+	/// <summary>
+	/// Handles display configuration changes by re-applying the stored position or
+	/// placing the window at its default fallback position and clamping it to the screen.
+	/// </summary>
 	protected void handleWindowDisplayChange () {
 		var s = this.settings.Data;
 		if (s.WindowLeft >= 0 && s.WindowBottom >= 0) {
@@ -163,6 +188,10 @@ public partial class MainWindow : Window, IService, ISingleton {
 	/// point so it expands symmetrically. Skipped before the initial Loaded positioning
 	/// has been applied (avoids SaveWindowPosition being called with ActualWidth == 0).
 	/// </summary>
+	/// <summary>
+	/// Called on SizeChanged to reposition the window according to the stored centre anchor.
+	/// Skip actions until the initial stored position has been applied.
+	/// </summary>
 	protected void handleWindowSizeChanged (object sender, SizeChangedEventArgs args) {
 		if (!this._positionApplied)
 			return;
@@ -174,11 +203,17 @@ public partial class MainWindow : Window, IService, ISingleton {
 		}
 	}
 	
+	/// <summary>
+	/// Triggers the hover animation when mouse enters the widget.
+	/// </summary>
 	protected void handleMouseEnter (object sender, System.Windows.Input.MouseEventArgs e) {
 		var anim = (Storyboard)this.Resources["FadeToHover"];
 		anim.Begin(this);
 	}
 
+	/// <summary>
+	/// Triggers the idle animation when mouse leaves the widget.
+	/// </summary>
 	protected void handleMouseLeave (object sender, System.Windows.Input.MouseEventArgs e) {
 		var anim = (Storyboard)this.Resources["FadeToIdle"];
 		anim.Begin(this);
@@ -189,6 +224,9 @@ public partial class MainWindow : Window, IService, ISingleton {
 		this.windowPosition.SaveWindowPosition();
 	}
 
+	/// <summary>
+	/// Called when the hotkey press is detected. Saves focus, shows recording UI and starts audio capture.
+	/// </summary>
 	protected void handlePush2TalkStarted () {
 		this.textInjector.SaveFocus();
 		this.Dispatcher.Invoke(() => {
@@ -197,6 +235,10 @@ public partial class MainWindow : Window, IService, ISingleton {
 		});
 	}
 
+	/// <summary>
+	/// Called when the hotkey release is detected. Stops recording, optionally starts ETA countdown,
+	/// invokes the transcription service and handles injection of the result back to the focused app.
+	/// </summary>
 	protected void handlePush2TalkStopped () {
 		this.Dispatcher.Invoke(async () => {
 			var wav = this.audioRecorder.StopRecording();

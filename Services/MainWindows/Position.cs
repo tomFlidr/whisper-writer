@@ -21,6 +21,10 @@ public class Position: IService, ITransient {
 		this.settings = settingsService;
 	}
 
+	/// <summary>
+	/// Binds the position helper to a specific Window instance.
+	/// Returns the helper for fluent initialization.
+	/// </summary>
 	public Position SetWindow (Window window) {
 		this.window = window;
 		return this;
@@ -30,6 +34,11 @@ public class Position: IService, ITransient {
 	/// Positions the window on first load. Registers a Loaded handler that either
 	/// restores the stored position or falls back to the default bottom-centre placement.
 	/// Returns true if a stored position was found, false if default was used.
+	/// </summary>
+	/// <summary>
+	/// Registers a Loaded handler that applies the stored position on first layout.
+	/// If a stored position exists it will be applied; otherwise a default position is used.
+	/// The provided callback is invoked after the position has been applied.
 	/// </summary>
 	public bool InitialPosition(Action onPositionApplied) {
 		var s = this.settings.Data;
@@ -42,6 +51,11 @@ public class Position: IService, ITransient {
 	}
 
 	/// <summary>Positions the window using the stored Left and WindowBottom values.</summary>
+	/// <summary>
+	/// Applies the stored WindowLeft and WindowBottom values converting from the
+	/// primary screen working area coordinates into WPF device-independent pixels.
+	/// The window is clamped to the chosen screen afterwards.
+	/// </summary>
 	public void ApplyStoredPosition() {
 		var s = this.settings.Data;
 		var primary = Screen.PrimaryScreen;
@@ -59,6 +73,10 @@ public class Position: IService, ITransient {
 	}
 
 	/// <summary>Places the window at the default bottom-centre position of the primary screen.</summary>
+	/// <summary>
+	/// Places the window at the default bottom-centre location of the primary screen
+	/// using a 20 px offset above the taskbar to keep the widget visually separated.
+	/// </summary>
 	public void PlaceAtDefaultPosition() {
 		var primary = Screen.PrimaryScreen;
 		if (primary == null) {
@@ -79,6 +97,11 @@ public class Position: IService, ITransient {
 	/// Ensures the window is fully visible on some monitor. Clamps to the monitor the window
 	/// overlaps most, falls back to bottom-centre of primary if fully off-screen.
 	/// Persists the resulting position.
+	/// </summary>
+	/// <summary>
+	/// Ensures the window is fully visible on a monitor by clamping its Left/Top
+	/// to the working area of the monitor the window overlaps most. Falls back to
+	/// the primary screen if the window is entirely off-screen.
 	/// </summary>
 	public void ClampWindowToScreen() {
 		if (this.window.ActualWidth == 0 || this.window.ActualHeight == 0)
@@ -134,6 +157,10 @@ public class Position: IService, ITransient {
 	/// Persists the current window position as (WindowLeft, WindowBottom) relative to
 	/// the primary screen's working area. Both values represent the centre of the window.
 	/// </summary>
+	/// <summary>
+	/// Persists the current window centre position as WindowLeft/WindowBottom relative
+	/// to the primary screen's working area in device-independent pixels.
+	/// </summary>
 	public void SaveWindowPosition() {
 		var primary = Screen.PrimaryScreen;
 		var s = this.settings.Data;
@@ -158,6 +185,10 @@ public class Position: IService, ITransient {
 	/// <summary>
 	/// Returns the WPF device-independent scale factors for the primary screen.
 	/// Falls back to 1.0 before the window has a presentation source.
+	/// </summary>
+	/// <summary>
+	/// Returns the current WPF device-independent scale factors for the primary screen.
+	/// Falls back to an approximation when a presentation source is not yet available.
 	/// </summary>
 	protected (double scaleX, double scaleY) getPrimaryScreenScale () {
 		var source = PresentationSource.FromVisual(this.window);

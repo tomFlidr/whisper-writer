@@ -3,7 +3,13 @@ using WhisperWriter.Utils.Interfaces;
 
 namespace WhisperWriter.Views;
 
+	/// <summary>
+	/// Simple informational about dialog.
+	/// </summary>
 public partial class AboutWindow : Window, IService, ITransient {
+	/// <summary>
+	/// Initializes UI components of the about window.
+	/// </summary>
 	public AboutWindow () {
 		this.InitializeComponent();
 	}

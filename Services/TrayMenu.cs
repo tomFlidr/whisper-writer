@@ -10,6 +10,10 @@ using WhisperWriter.Utils.Interfaces;
 using WhisperWriter.Views;
 
 namespace WhisperWriter.Services;
+/// <summary>
+/// Manages the NotifyIcon in the system tray and its context menu.
+/// Responsible for showing auxiliary windows (About, History, Settings) on demand.
+/// </summary>
 public class TrayMenu: IDisposable, IService, ISingleton {
 	[Inject]
 	protected Settings settings { get; set; } = null!;
@@ -20,6 +24,9 @@ public class TrayMenu: IDisposable, IService, ISingleton {
 	
 	protected NotifyIcon? trayIcon;
 
+	/// <summary>
+	/// Creates the tray icon and constructs the static context menu.
+	/// </summary>
 	public TrayMenu () {
 		// Tray icon – right-click menu only
 		var icoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "app.ico");
@@ -50,10 +57,16 @@ public class TrayMenu: IDisposable, IService, ISingleton {
 		};
 	}
 	
+	/// <summary>
+	/// Disposes the tray icon and releases native resources.
+	/// </summary>
 	public void Dispose() {
 		this.trayIcon?.Dispose();
 	}
 	
+	/// <summary>
+	/// Called by the application exit flow to ensure the tray icon is removed immediately.
+	/// </summary>
 	public void HandleAppExit () {
 		this.trayIcon?.Dispose();
 	}

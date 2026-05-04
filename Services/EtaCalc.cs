@@ -41,6 +41,10 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 	protected readonly string dbPath;
 	protected SqliteConnection? connection;
 
+	/// <summary>
+	/// Constructs the EtaCalc service and ensures the database folder exists.
+	/// The database file is created lazily on first use.
+	/// </summary>
 	public EtaCalc () {
 		var dir = Path.Combine(AppContext.BaseDirectory, "llms");
 		Directory.CreateDirectory(dir);
@@ -65,6 +69,11 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 		return result;
 	}
 
+	/// <summary>
+	/// Estimates processing time for a given model and audio duration using historical
+	/// samples gathered for the current environment fingerprint. Returns null when
+	/// insufficient data or the DB is unavailable.
+	/// </summary>
 	public double? EstimateProcessingSeconds (string modelKey, double audioSeconds) {
 		if (!this.initConnection() || audioSeconds <= 0)
 			return null;
@@ -94,6 +103,10 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 		}
 	}
 
+	/// <summary>
+	/// Records a completed transcription timing sample into the DB and trims old rows
+	/// to keep the per-model/environment sample set bounded.
+	/// </summary>
 	public void Record (string modelKey, double audioSeconds, double processingSeconds) {
 		if (!this.initConnection())
 			return;
@@ -143,11 +156,18 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 		}
 	}
 
+	/// <summary>
+	/// Disposes the underlying SQLite connection.
+	/// </summary>
 	public void Dispose () {
 		this.connection?.Dispose();
 		this.connection = null;
 	}
 
+	/// <summary>
+	/// Ensures the required DB schema and indexes exist and records the running version
+	/// into the Versions table when the DB is first created.
+	/// </summary>
 	protected void ensureSchema () {
 		this.execute(@"
 			CREATE TABLE IF NOT EXISTS Versions (
@@ -190,6 +210,10 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 		}
 	}
 
+	/// <summary>
+	/// Computes an ETA using samples filtered by a specific audio length window.
+	/// Returns null when not enough samples are available.
+	/// </summary>
 	protected double? estimateForWindow (
 		long modelId, long environmentId, double minAudioSeconds, 
 		double maxAudioSeconds, double currentAudioSeconds
@@ -221,6 +245,10 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 		return currentAudioSeconds * ratio;
 	}
 
+	/// <summary>
+	/// Computes an ETA using all available samples for the same model/environment.
+	/// Returns null when not enough samples are available.
+	/// </summary>
 	protected double? estimateWithoutWindow (long modelId, long environmentId, double currentAudioSeconds) {
 		using var cmd = this.connection!.CreateCommand();
 		cmd.CommandText = @"
@@ -431,6 +459,9 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 		};
 	}
 
+	/// <summary>
+	/// Returns the numeric model id for a given model key, or null when the model is unknown.
+	/// </summary>
 	protected long? findModelId (string modelKey) {
 		using var cmd = this.connection!.CreateCommand();
 		cmd.CommandText = "SELECT id FROM Models WHERE model_key = $key;";

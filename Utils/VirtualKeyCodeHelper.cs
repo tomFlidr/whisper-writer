@@ -7,12 +7,16 @@ namespace WhisperWriter.Utils;
 /// Helpers for working with Windows virtual-key codes:
 /// human-readable display names and WPF Key ↔ VK conversion.
 /// </summary>
+/// <summary>
+/// Utility methods for working with Windows virtual-key (VK) codes.
+/// Provides human readable names for VK codes and formatting helpers used in the UI.
+/// </summary>
 public static class VirtualKeyCodeHelper {
 	[DllImport("user32.dll")]
-	private static extern uint MapVirtualKey (uint uCode, uint uMapType);
+	internal static extern uint MapVirtualKey (uint uCode, uint uMapType);
 
 	[DllImport("user32.dll", CharSet = CharSet.Unicode)]
-	private static extern int GetKeyNameText (int lParam, StringBuilder lpString, int nSize);
+	internal static extern int GetKeyNameText (int lParam, StringBuilder lpString, int nSize);
 
 	// Hand-crafted names for keys that GetKeyNameText returns poorly or not at all.
 	private static readonly Dictionary<int, string> _overrides = new() {
@@ -66,6 +70,10 @@ public static class VirtualKeyCodeHelper {
 	];
 
 	/// <summary>Returns a short, human-readable name for a virtual-key code.</summary>
+	/// <summary>
+	/// Returns a short, human-readable name for a virtual-key code.
+	/// Falls back to a hex representation when no friendly name can be obtained.
+	/// </summary>
 	public static string GetName (int vk) {
 		if (VirtualKeyCodeHelper._overrides.TryGetValue(vk, out var name))
 			return name;
@@ -93,6 +101,10 @@ public static class VirtualKeyCodeHelper {
 	/// <summary>
 	/// Formats a list of VK codes as a human-readable combo string,
 	/// e.g. "L Alt + L Win".
+	/// </summary>
+	/// <summary>
+	/// Formats a list of VK codes into a readable combo string (e.g. "L Alt + L Win").
+	/// Returns "(none)" when the list is empty.
 	/// </summary>
 	public static string FormatCombo (IReadOnlyList<int> vkCodes) {
 		if (vkCodes.Count == 0)

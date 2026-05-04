@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 namespace WhisperWriter.Services.TextInjectors;
 
 [StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Managed representation of the native MOUSEINPUT structure used in the INPUT union.
+/// </summary>
 struct InputMouse {
 #pragma warning disable IDE1006
 	public int dx;

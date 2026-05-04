@@ -18,6 +18,9 @@ public class Container {
 	/// Singleton DI container instance getter.
 	/// </summary>
 	/// <returns></returns>
+	/// <summary>
+	/// Returns the singleton DI container instance, building it on first call.
+	/// </summary>
 	public static Container GetInstance () {
 		if (Container._instance == null) {
 			Container._instance = new Container();

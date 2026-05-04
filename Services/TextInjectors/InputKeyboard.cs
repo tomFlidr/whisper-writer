@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 namespace WhisperWriter.Services.TextInjectors;
 
 [StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Managed representation of the native KEYBDINPUT structure used in the INPUT union.
+/// </summary>
 struct InputKeyboard {
 #pragma warning disable IDE1006
 	public ushort wVk;

@@ -10,6 +10,12 @@ namespace WhisperWriter.Services.TextInjectors;
 // so ki/mi start at offset 8, not 4.
 // Win32 sizeof(Input) = 40 bytes on 64-bit, 28 bytes on 32-bit.
 [StructLayout(LayoutKind.Explicit)]
+#pragma warning disable IDE1006
+/// <summary>
+/// Native INPUT union wrapper used for SendInput interop.
+/// The explicit layout mirrors the Win32 structure: type at offset 0 and the keyboard/mouse union at offset 8 on 64-bit.
+/// The struct size check in TextInjector.SaveFocus validates this layout at runtime.
+/// </summary>
 struct Input {
 #pragma warning disable IDE1006
 	[FieldOffset(0)] public uint type;

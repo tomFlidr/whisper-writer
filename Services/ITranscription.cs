@@ -11,8 +11,15 @@ public interface ITranscription: IAsyncDisposable {
 	event Action<TranscriptionState, string>? StateChanged;
 
 	/// <summary>Initialises the model from disk. Call once at startup.</summary>
+	/// <summary>
+	/// Initializes the transcription backend with the provided model path.
+	/// Implementations should be safe to call once during app startup.
+	/// </summary>
 	Task InitializeAsync(string modelPath);
 
 	/// <summary>Transcribes the given 16 kHz mono WAV bytes and returns the text.</summary>
+	/// <summary>
+	/// Transcribes the provided 16 kHz mono PCM WAV bytes and returns the resulting text.
+	/// </summary>
 	Task<string> TranscribeAsync(byte[] wavBytes, string language, string prompt);
 }

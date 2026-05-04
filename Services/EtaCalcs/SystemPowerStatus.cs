@@ -8,6 +8,10 @@ using System.Threading.Tasks;
 namespace WhisperWriter.Services.EtaCalcs;
 
 [StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Native SYSTEM_POWER_STATUS structure used by GetSystemPowerStatus P/Invoke.
+/// Fields are marshalled as sequential bytes/uints and interpreted by higher-level helpers.
+/// </summary>
 public struct SystemPowerStatus {
 	public byte ACLineStatus;
 	public byte BatteryFlag;

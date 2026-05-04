@@ -19,10 +19,18 @@ public static class NativeMethods {
 	[DllImport("user32.dll")]
 	internal static extern int SetWindowLong (IntPtr hwnd, int index, int newStyle);
 	
+	/// <summary>
+	/// Retrieves a 32-bit window long value for the specified index.
+	/// Provided for compatibility with older platforms; prefer the Ptr variant when available.
+	/// </summary>
 	[DllImport("user32.dll")]
 	internal static extern int GetWindowLongPtr (IntPtr hwnd, int index);
 
+	/// <summary>
+	/// Sets a 32/64-bit window long value for the specified index.
+	/// </summary>
 	[DllImport("user32.dll")]
 	internal static extern int SetWindowLongPtr (IntPtr hwnd, int index, long newStyle);
 
+    
 }

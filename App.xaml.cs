@@ -24,6 +24,10 @@ public partial class App : System.Windows.Application, IService, ISingleton {
 	[Inject]
 	protected TrayMenu trayMenu { get; set; } = null!;
 
+	/// <summary>
+	/// Application startup entry. Performs environment initialization, loads settings,
+	/// constructs the main window and triggers background model initialization.
+	/// </summary>
 	protected override async void OnStartup (StartupEventArgs e) {
 		base.OnStartup(e);
 
@@ -46,6 +50,9 @@ public partial class App : System.Windows.Application, IService, ISingleton {
 		await this.whisper.InitializeAsync(modelPath);
 	}
 	
+	/// <summary>
+	/// Requests application exit. Disposes tray resources, closes the main window and shuts down.
+	/// </summary>
 	public void ExitApp () {
 		this.trayMenu?.HandleAppExit();
 		this.MainWindow?.ForceClose();
@@ -62,6 +69,10 @@ public partial class App : System.Windows.Application, IService, ISingleton {
 	// Add the CUDA runtime folder (next to ggml-cuda-whisper.dll) to the process PATH
 	// so the OS loader finds cudart64_13.dll / cublas64_13.dll without requiring
 	// a system-wide CUDA installation or changes to the user's environment.
+	/// <summary>
+	/// Ensures the local CUDA runtime folder is present in the process PATH so native
+	/// CUDA DLLs shipped with the app can be loaded without a system-wide CUDA install.
+	/// </summary>
 	protected void initSystemPath4GfxLibs () {
 		var cudaRuntimeDir = System.IO.Path.Combine(
 			AppContext.BaseDirectory, "runtimes", "cuda", "win-x64"

@@ -18,6 +18,10 @@ using WpfTextCompositionEventArgs = System.Windows.Input.TextCompositionEventArg
 
 namespace WhisperWriter.Views;
 
+/// <summary>
+/// Settings dialog window used to view and edit application settings.
+/// Contains UI logic for model selection, language, prompt and hotkey capture.
+/// </summary>
 public partial class SettingsWindow : Window, IService, ITransient {
 	[Inject]
 	protected Settings settings { get; set; } = null!;
@@ -26,7 +30,7 @@ public partial class SettingsWindow : Window, IService, ITransient {
 	private const string _startupValueName = "WhisperWriter";
 
 	[DllImport("user32.dll")]
-	private static extern short GetAsyncKeyState (int vKey);
+	internal static extern short GetAsyncKeyState (int vKey);
 
 	// VK codes excluded from capture (they are UI-navigation keys, not hotkey material).
 	private static readonly HashSet<int> _captureExcluded = [
@@ -58,19 +62,35 @@ public partial class SettingsWindow : Window, IService, ITransient {
 		("llms/ggml-tiny.en.bin",        "tiny.en  (fastest, English only, least accurate)", "~390 MB VRAM · 78 MB disk · runs on CPU"),
 	];
 
+	/// <summary>
+	/// Initializes the WPF components for the settings window.
+	/// This constructor only wires up the XAML-defined layout.
+	/// </summary>
 	public SettingsWindow () {
 		this.InitializeComponent();
 	}
+	/// <summary>
+	/// Called when the window is activated. Loads current settings into the UI.
+	/// The load is idempotent and safe to call multiple times during the window lifetime.
+	/// </summary>
 	protected override void OnActivated (EventArgs e) {
 		base.OnActivated(e);
 		this._loadSettings();
 	}
 
+	/// <summary>
+	/// Returns whether the application is registered in HKCU Run to start with Windows.
+	/// Uses the standard registry key used for user autorun entries.
+	/// </summary>
 	private static bool _isRegisteredAtStartup () {
 		using var key = Registry.CurrentUser.OpenSubKey(_startupKeyPath, false);
 		return key?.GetValue(_startupValueName) != null;
 	}
 
+	/// <summary>
+	/// Adds or removes the Run key for this application in the current user's registry.
+	/// When enabled the full executable path is stored as the value content.
+	/// </summary>
 	private static void _setStartupRegistry (bool enable) {
 		using var key = Registry.CurrentUser.OpenSubKey(_startupKeyPath, true);
 		if (key == null)
@@ -83,6 +103,10 @@ public partial class SettingsWindow : Window, IService, ITransient {
 		}
 	}
 
+	/// <summary>
+	/// Builds the ComboBox items for available models.
+	/// Items which do not exist on disk are shown disabled and dimmed.
+	/// </summary>
 	private void _buildModelItems () {
 		this.CmbModelPath.Items.Clear();
 		foreach (var (tag, name, details) in _models) {
@@ -115,6 +139,10 @@ public partial class SettingsWindow : Window, IService, ITransient {
 		}
 	}
 
+	/// <summary>
+	/// Populates the dialog controls with values from the Settings service.
+	/// Also prepares the hotkey display and available model list.
+	/// </summary>
 	private void _loadSettings () {
 		this._buildModelItems();
 		var s = this.settings.Data;
@@ -155,10 +183,18 @@ public partial class SettingsWindow : Window, IService, ITransient {
 		this.TxtHotkeyDisplay.Text = VirtualKeyCodeHelper.FormatCombo(this._currentVkCodes);
 	}
 
+	/// <summary>
+	/// Blocks non-numeric input for the history size text field.
+	/// Implemented as a PreviewTextInput handler so invalid characters never appear.
+	/// </summary>
 	private void _handleTxtHistorySizePreviewTextInput (object sender, WpfTextCompositionEventArgs e) {
 		e.Handled = !Regex.IsMatch(e.Text, @"^\d+$");
 	}
 
+	/// <summary>
+	/// Handles the capture button click. Toggles capture mode for hotkey recording.
+	/// When entering capture mode the UI shows a live preview of pressed keys.
+	/// </summary>
 	private void _handleBtnCaptureHotkeyClick (object sender, RoutedEventArgs e) {
 		if (this._captureMode) {
 			this._exitCaptureMode(accept: false);
@@ -167,6 +203,10 @@ public partial class SettingsWindow : Window, IService, ITransient {
 		this._enterCaptureMode();
 	}
 
+	/// <summary>
+	/// Puts the window into hotkey capture mode.
+	/// Hooks low-level preview key events so modifier keys and simultaneous presses are captured.
+	/// </summary>
 	private void _enterCaptureMode () {
 		this._captureMode = true;
 		this._captureDown.Clear();
@@ -185,6 +225,10 @@ public partial class SettingsWindow : Window, IService, ITransient {
 		this.KeyUp   += this._handleCaptureSuppressKey;
 	}
 
+	/// <summary>
+	/// Exits hotkey capture mode and optionally accepts the captured combination.
+	/// Restores normal key handling and updates the displayed combo string.
+	/// </summary>
 	private void _exitCaptureMode (bool accept) {
 		this._captureMode = false;
 		this.PreviewKeyDown -= this._handleCapturePreviewKeyDown;
@@ -204,6 +248,11 @@ public partial class SettingsWindow : Window, IService, ITransient {
 		this._capturedVkCodes = new List<int>(this._currentVkCodes);
 	}
 
+	/// <summary>
+	/// PreviewKeyDown handler used during capture mode.
+	/// Records the currently held virtual-key codes and updates the live preview.
+	/// Escape cancel the capture operation.
+	/// </summary>
 	private void _handleCapturePreviewKeyDown (object sender, WpfKeyEventArgs e) {
 		e.Handled = true;
 		var vk = WpfKeyInterop.VirtualKeyFromKey(e.Key == WpfKey.System ? e.SystemKey : e.Key);
@@ -221,6 +270,10 @@ public partial class SettingsWindow : Window, IService, ITransient {
 		}
 	}
 
+	/// <summary>
+	/// PreviewKeyUp handler used during capture mode.
+	/// On the first release it snapshots the peak set of held keys and accepts the capture.
+	/// </summary>
 	private void _handleCapturePreviewKeyUp (object sender, WpfKeyEventArgs e) {
 		e.Handled = true;
 
@@ -232,15 +285,25 @@ public partial class SettingsWindow : Window, IService, ITransient {
 		this._exitCaptureMode(accept: true);
 	}
 
+	/// <summary>
+	/// Suppresses normal key handling while in capture mode so UI navigation keys do not run.
+	/// </summary>
 	private void _handleCaptureSuppressKey (object sender, WpfKeyEventArgs e) {
 		e.Handled = true;
 	}
 
+	/// <summary>
+	/// Enables window drag by title bar mouse down.
+	/// </summary>
 	private void _titleBar_MouseLeftButtonDown (object sender, WpfMouseButtonEventArgs e) {
 		if (e.ButtonState == WpfMouseButtonState.Pressed)
 			this.DragMove();
 	}
 
+	/// <summary>
+	/// Saves the dialog values back into the Settings service and closes the dialog.
+	/// Persists the Run at startup flag into the registry as well.
+	/// </summary>
 	private void _btnSave_Click (object sender, RoutedEventArgs e) {
 		var s = this.settings.Data;
 		if (this.CmbModelPath.SelectedItem is ComboBoxItem selectedModel)
@@ -263,6 +326,9 @@ public partial class SettingsWindow : Window, IService, ITransient {
 		this.Close();
 	}
 
+	/// <summary>
+	/// Cancels changes and closes the dialog.
+	/// </summary>
 	private void _btnCancel_Click (object sender, RoutedEventArgs e) {
 		this.DialogResult = false;
 		this.Close();

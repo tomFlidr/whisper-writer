@@ -33,6 +33,10 @@ public class Whisper : ITranscription, IService, ISingleton {
 	/// Tries CUDA major versions 13, 12, 11 in order.
 	/// Returns the detected major version number, or null if no CUDA runtime was found.
 	/// </summary>
+	/// <summary>
+	/// Probes the presence of CUDA runtime DLLs by attempting to load cudart/cublas
+	/// for known major versions. Returns the major version number when found.
+	/// </summary>
 	public static int? DetectCudaVersion() {
 		foreach (var version in new[] { 13, 12, 11 }) {
 			var cudart = $"cudart64_{version}.dll";
@@ -51,11 +55,18 @@ public class Whisper : ITranscription, IService, ISingleton {
 	}
 
 	/// <summary>Returns the number of CPU threads used for Whisper inference.</summary>
+	/// <summary>
+	/// Number of CPU threads to use for inference. The heuristic leaves two cores free.
+	/// </summary>
 	public static int GetInferenceThreadCount() => Math.Max(1, Environment.ProcessorCount - 2);
 
 	/// <summary>
 	/// Initialises the Whisper model from disk. Call once at startup.
 	/// Prefers CUDA; falls back to CPU automatically via Whisper.net.Runtime.Cuda.
+	/// </summary>
+	/// <summary>
+	/// Loads or downloads the GGML model and initializes the WhisperFactory.
+	/// Emits StateChanged events for UI feedback and records failures to the log.
 	/// </summary>
 	public async Task InitializeAsync(string modelPath) {
 		this.StateChanged?.Invoke(TranscriptionState.Loading, "Loading model…");
@@ -98,6 +109,10 @@ public class Whisper : ITranscription, IService, ISingleton {
 	/// <summary>
 	/// Transcribes the given WAV bytes (16 kHz mono PCM).
 	/// Returns the transcribed text, or throws on error.
+	/// </summary>
+	/// <summary>
+	/// Transcribes 16 kHz mono WAV bytes using the loaded model and returns the text.
+	/// Throws when the model is not initialized or when the model file is corrupted.
 	/// </summary>
 	public async Task<string> TranscribeAsync (byte[] wavBytes, string language, string prompt) {
 		if (!this.initialized || this.factory == null)

@@ -7,12 +7,21 @@ using WhisperWriter.Utils.Interfaces;
 
 namespace WhisperWriter.Views;
 
+	/// <summary>
+	/// Window that displays the transcription history list and allows copying individual entries.
+	/// </summary>
 public partial class HistoryWindow : Window, IService, ITransient {
 	[Inject]
 	protected TranscriptionHistory history { get; set; } = null!;
+	/// <summary>
+	/// Initializes the history window and its UI components.
+	/// </summary>
 	public HistoryWindow () {
 		this.InitializeComponent();
 	}
+	/// <summary>
+	/// Binds the observable entries collection to the ListView when the window is activated.
+	/// </summary>
 	protected override void OnActivated (EventArgs e) {
 		base.OnActivated(e);
 		this.HistoryList.ItemsSource = this.history.Entries;

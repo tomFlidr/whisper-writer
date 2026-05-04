@@ -19,6 +19,9 @@ public class Log: IService, ISingleton {
 	private Logger _provider;
 #endif
 
+	/// <summary>
+	/// Configures Serilog sinks in DEBUG builds. In Release the logger is a no-op.
+	/// </summary>
 	public Log () {
 #if DEBUG
 		Directory.CreateDirectory(this.LogDirectory);

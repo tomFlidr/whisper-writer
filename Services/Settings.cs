@@ -17,8 +17,15 @@ public class Settings: IService, ISingleton {
 		WriteIndented = true,
 	};
 
+	/// <summary>
+	/// In-memory representation of the application settings loaded from disk.
+	/// </summary>
 	public AppSettings Data { get; private set; } = new();
 
+	/// <summary>
+	/// Loads settings from the JSON file. On deserialization error defaults are used.
+	/// When the settings file is missing a new file is created with defaults.
+	/// </summary>
 	public void Load () {
 		if (!File.Exists(Services.Settings._settingsPath)) {
 			this.Data = new AppSettings();
@@ -37,6 +44,10 @@ public class Settings: IService, ISingleton {
 		}
 	}
 
+	/// <summary>
+	/// Saves the current settings to disk as pretty-printed JSON. Swallows IO exceptions
+	/// and logs them via the Log service.
+	/// </summary>
 	public void Save () {
 		try {
 			var json = JsonSerializer.Serialize(this.Data, Services.Settings._jsonOptions);
