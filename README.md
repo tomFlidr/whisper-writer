@@ -372,4 +372,4 @@ GitHub Actions will automatically:
 
 > **After every successful build that changes user-facing behavior, update this README** if the changes affect installation steps, settings, model list, hotkeys, UI navigation or any other section described here.
 
-The internal developer/AI context is maintained separately in [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
+The internal developer/AI context is maintained separately in [`AGENTS.md`](AGENTS.md).

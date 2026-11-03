@@ -18,13 +18,13 @@ Do not commit if the build fails.
 
 After every completed task with a successful build, update **all** of the following files:
 
-### `copilot-instructions.md`
+### `AGENTS.md`
 - **Section 3 – Project structure**: add or remove files that changed.
 - **Section 4 – Key files**: update descriptions of changed files; add descriptions of new files.
 - **Section 7 – Known issues / TODO**: move resolved items to "Resolved issues"; update or remove items that changed; add new open tasks if any arose.
 - **Section 10 – Ideas**: remove ideas that have been implemented.
 
-### `docs/ROADMAP.md`
+### `.agents/ROADMAP.md`
 - Move the completed item(s) to the **Dokončeno** section at the bottom.
 - Do not add new items without explicit instruction from the user.
 

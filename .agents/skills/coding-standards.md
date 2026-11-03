@@ -8,7 +8,7 @@ Every contributor and AI assistant must follow these rules without exception.
 ## 1. Language
 
 - All **code**, **comments**, **XML docs**, **commit messages**, and **file edits** must be written in **English**.
-- The only exception is `docs/ROADMAP.md`, which is written in Czech (project planning document for the owner).
+- The only exception is `.agents/ROADMAP.md`, which is written in Czech (project planning document for the owner).
 
 ---
 
@@ -338,7 +338,7 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 - Never use PowerShell or Node.js to **write or overwrite** C# source files.
 - Exception: non-source files (`.md`, `.editorconfig`, `.ps1`) may be written via terminal.
 - When using PowerShell to **read** files, always add `-Encoding UTF8`.
-- After every completed task with a successful build, update `copilot-instructions.md` and `docs/ROADMAP.md`.
+- After every completed task with a successful build, update `AGENTS.md` and `.agents/ROADMAP.md`.
 
 ---
 

@@ -1,7 +1,7 @@
 # WhisperWriter – Roadmap
 
 Tento soubor obsahuje plán všech plánovaných změn v aplikaci, seřazený od těch s **největším dopadem na kód** po ty s nejmenším.
-Každá hotová položka se přesouvá do sekce **Dokončeno** a zároveň se aktualizuje `copilot-instructions.md`.
+Každá hotová položka se přesouvá do sekce **Dokončeno** a zároveň se aktualizuje `AGENTS.md`.
 
 > **Pravidlo pro zápis:** Do tohoto souboru se zapisují pouze věci, které byly skutečně prodiskutovány a odsouhlaseny.
 > Nic se nevymýšlí. Každá položka popisuje konkrétní problém, proč se řeší, a co přesně se změní.

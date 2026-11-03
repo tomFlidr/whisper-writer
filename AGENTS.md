@@ -1,10 +1,10 @@
-# WhisperWriter – Copilot Instructions
+# WhisperWriter – Agent Instructions
 
 This file describes the current state of the **WhisperWriter** project and serves as context for GitHub Copilot / AI chat to seamlessly continue previous work.
 
 > **Language rule**: Always respond and reason in **English**, regardless of the language the user writes in. This applies to all explanations, plans, code comments, commit messages, and file edits.
 
-> **Skills rule**: At the start of every chat, read `docs/SKILLS.md`. Before performing any action listed in that file, read the corresponding skill document and follow its checklist.
+> **Skills rule**: At the start of every chat, read `.agents/SKILLS.md`. Before performing any action listed in that file, read the corresponding skill document and follow its checklist.
 
 ---
 
@@ -46,10 +46,10 @@ No data leaves the computer. CUDA GPU acceleration is automatic.
 ```
 D:\tec\cs\whisper-writer\
 ├── .github\
-│   ├── copilot-instructions.md       ← this file
 │   └── workflows\
 │       └── release.yml               ← GitHub Actions: build & publish release ZIPs on tag push
-├── docs\
+├── AGENTS.md                         ← this file; project-wide agent instructions
+├── .agents\
 │   ├── ROADMAP.md                    ← prioritized plan of all planned changes (Czech, sorted by code impact)
 │   ├── skills\
 │   │   ├── coding-standards.md
@@ -363,9 +363,9 @@ public class AppSettings
 
 ---
 
-## 5. Docs folder
+## 5. `.agents` folder
 
-### `docs/ROADMAP.md`
+### `.agents/ROADMAP.md`
 - Written in **Czech**.
 - Contains all planned features and refactoring tasks, sorted by **impact on the codebase** (largest first).
 - Refactoring always comes first.
@@ -374,12 +374,12 @@ public class AppSettings
 - After every successfully completed task (confirmed by a passing `run_build`), move the finished item to the **Dokončeno** section at the bottom of `ROADMAP.md`.
 - Do **not** add new items without the user's instruction.
 
-### `docs/skills/coding-standards.md`
+### `.agents/skills/coding-standards.md`
 - Written in **English**.
 - Defines all mandatory coding conventions: formatting, brace style, namespaces, async patterns, P/Invoke, naming, project structure, and file editing rules.
 - Update this file whenever a new convention is established or an existing one is clarified.
 
-### `docs/SKILLS.md`
+### `.agents/SKILLS.md`
 - Written in **English**.
 - Collects non-obvious discoveries, gotchas, and hard-won insights from development.
 - Add an entry whenever something surprising or tricky is learned.
@@ -489,18 +489,18 @@ Line endings in C# files are **LF** – do not fix them manually, `replace_strin
 ### Updating files after completing a task
 **After every successfully completed task where `run_build` returns a successful build, you MUST update ALL of the following files to reflect the current state of the application:**
 
-#### `copilot-instructions.md` (this file)
+#### `AGENTS.md` (this file)
 - Section **3. Project structure** – add/remove files as appropriate.
 - Section **4. Key files** – update descriptions of changed files, add descriptions of new files.
 - Section **7. Known issues / TODO** – move resolved items to "Resolved issues", remove or update items that have changed, add new open tasks if they arose.
 - Section **9. Ideas for future development** – remove ideas that have been implemented.
 - Any other sections whose content has become outdated by the task change.
 
-#### `docs/ROADMAP.md`
+#### `.agents/ROADMAP.md`
 - Move the completed item(s) to the **Dokončeno** section at the bottom.
 - Do not add new items without the user's explicit instruction.
 
-#### `docs/skills/coding-standards.md`
+#### `.agents/skills/coding-standards.md`
 - Update if a new convention was established or an existing one was clarified during the task.
 
 #### `README.md`
@@ -512,7 +512,7 @@ These files together form the primary source of context for future AI sessions �
 
 - The basic instructions in this file must always be signed on the very last line with the hash of the previous commit (prefix the hash with `#`).
 - On every commit you make to the repository, update this file so the last line contains the current commit hash.
-- Whenever you read these basic instructions and the commit hash stored here differs from the repository's HEAD commit, perform a full review of everything you know about the project (project structure, key files, docs/skills, and any inferred assumptions). If you find any discrepancy, correct the instructions so they match the actual project state and update the commit hash to the current HEAD.
+- Whenever you read these basic instructions and the commit hash stored here differs from the repository's HEAD commit, perform a full review of everything you know about the project (project structure, key files, .agents/skills, and any inferred assumptions). If you find any discrepancy, correct the instructions so they match the actual project state and update the commit hash to the current HEAD.
 
 
 ---

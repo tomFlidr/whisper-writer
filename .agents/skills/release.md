@@ -29,7 +29,7 @@ Update the version in **two places**:
 <FileVersion>1.2.0.0</FileVersion>
 ```
 
-### `copilot-instructions.md` – Section 2 (Environment and stack)
+### `AGENTS.md` – Section 2 (Environment and stack)
 ```
 | Version | 1.2.0.0 |
 ```
@@ -38,7 +38,7 @@ Update the version in **two places**:
 
 ## 3. Update release notes
 
-In `docs/ROADMAP.md`, ensure all completed items are in the **Dokončeno** section.
+In `.agents/ROADMAP.md`, ensure all completed items are in the **Dokončeno** section.
 The GitHub Actions workflow generates release notes automatically from commit messages
 (`generate_release_notes: true`) – so meaningful commit messages matter.
 
@@ -46,7 +46,7 @@ The GitHub Actions workflow generates release notes automatically from commit me
 
 ## 4. Commit the version bump
 
-Follow `docs/skills/commit.md`. Use commit type `chore`:
+Follow `.agents/skills/commit.md`. Use commit type `chore`:
 ```
 chore: bump version to 1.2.0
 ```
