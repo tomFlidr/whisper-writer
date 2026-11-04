@@ -22,7 +22,7 @@ The fourth segment is always `0` (assembly version convention).
 
 Update the version in **two places**:
 
-### `WhisperWriter.csproj`
+### `WhisperWriter/WhisperWriter.csproj`
 ```xml
 <Version>1.2.0</Version>
 <AssemblyVersion>1.2.0.0</AssemblyVersion>

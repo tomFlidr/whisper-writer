@@ -3,6 +3,8 @@
 This document defines all mandatory coding conventions for the WhisperWriter project.
 Every contributor and AI assistant must follow these rules without exception.
 
+Production source folders referenced below are under `WhisperWriter/` from the repository root.
+
 ---
 
 ## 1. Language
@@ -30,7 +32,7 @@ public void Foo() {
     try {
         Risky();
     } catch (Exception ex) {
-        LogService.Error("failed", ex);
+        Log.Error("failed", ex);
     }
 }
 
@@ -92,16 +94,16 @@ namespace WhisperWriter.Services {
 
 | Element | Convention | Example |
 |---|---|---|
-| Classes, interfaces | PascalCase | `WhisperService`, `ITranscriptionService` |
+| Classes, interfaces | PascalCase | `Whisper`, `ITranscription` |
 | Public methods | PascalCase | `TranscribeAsync`, `SaveFocus` |
-| Public properties | PascalCase | `ModelPath`, `HotkeyVkCodes` |
+| Public properties | PascalCase | `ModelPath`, `HotkeyCodes` |
 | Protected members | camelCase | `recordedBytes`, `hotkey` |
 | Private fields | `_camelCase` (underscore prefix) | `_factory`, `_recorder` |
 | Local variables | camelCase | `modelPath`, `wavBytes` |
 | Constants (C#) | PascalCase | `MinModelFileSizeBytes` |
 | Constants (Win32) | UPPER_CASE | `WM_DISPLAYCHANGE`, `GWL_EXSTYLE` |
 | Async methods | Suffix `Async` | `InitializeAsync`, `TranscribeAsync` |
-| Interfaces | Prefix `I` | `ITranscriptionService` |
+| Interfaces | Prefix `I` | `ITranscription` |
 | Event args parameters | `sender`, `e` | standard WPF convention |
 
 **Additional naming rules:**
@@ -109,7 +111,7 @@ namespace WhisperWriter.Services {
 - **Static members always use the class name** – call static methods and access static fields via `ClassName.Member()`, never via an implicit unqualified call or `this`.
 
 ```csharp
-public sealed class AudioRecorder {
+public class AudioRecorder {
     private bool _recording;
     private static readonly int SampleRate = 16000;
 
@@ -201,10 +203,11 @@ public void SaveSettings() {
 
 - **Do not use `sealed`** – every class must remain inheritable. Sealing a class removes future flexibility without meaningful benefit at this scale.
 - Prefer **`protected`** over `private` for fields and methods. Private visibility should be used only when there is a specific, justified reason (e.g., a backing field that must never be touched directly). When in doubt, choose `protected` so that subclasses can extend behaviour without copy-pasting.
-- **`static`** classes only for pure utility helpers with no instance state (`LogService`, `TextInjector`, `VkCodeHelper`).
+- Use `static` classes only for pure utility helpers with no instance state (for example, `VirtualKeyCodeHelper`).
 - No MVVM framework. Direct code-behind in WPF. The app is intentionally small – avoid framework overhead.
 - Prefer **constructor injection** over property injection or service locator for dependencies.
-- `App.SettingsService`, `App.History`, `App.Eta`, `App.TranscriptionService` are the only allowed global static access points. No other class should reference `App.*` except where architecturally necessary (e.g., `MainWindow`).
+- `Program.DI` and `Program.App` are existing static bootstrap access points. Prefer injected services;
+  do not add new global service access without an architectural reason.
 
 ---
 
@@ -279,14 +282,16 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 - All WPF UI property changes must happen on the UI thread. Use `Dispatcher.Invoke` (sync) or `Dispatcher.BeginInvoke` (async) from background threads.
 - `TextInjector.InjectText()` **must** run on a **background thread** (`Task.Run`) – it calls `Thread.Sleep`.
 - `TextInjector.RestoreFocus()` **must** run on the **UI thread** – `AttachThreadInput` requires a message queue.
-- `HotkeyService` events are raised on a background thread – handlers must marshal to the UI thread explicitly.
+- `Hotkey` events are raised on a background thread – handlers must marshal to the UI thread explicitly.
 
 ---
 
 ## 13. Win32 P/Invoke
 
-- All P/Invoke declarations must be **private**, grouped in a `#region Win32` block or a nested `private static class NativeMethods`.
-- P/Invoke must not leak outside the class that owns it. `TextInjector` owns `SendInput`/`GetAsyncKeyState`; `HotkeyService` owns its own polling copy; `MainWindow` owns window-style calls.
+- Keep P/Invoke declarations non-public and behind a narrow platform adapter; use a nested native
+  API type when that keeps the interop boundary cohesive.
+- P/Invoke must not leak outside the owning boundary. `TextInjector` owns its native input declarations,
+  `Hotkey` polls global key state, and `WindowStyleNativeApi` owns HWND/style calls.
 - Document every non-obvious flag or field offset with an inline comment.
 - `INPUT` struct on 64-bit Windows: union field (`ki`/`mi`) at `[FieldOffset(8)]`. `sizeof(INPUT)` = 40 bytes (64-bit) / 28 bytes (32-bit).
 
@@ -294,19 +299,20 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 
 ## 14. Error Handling
 
-- All `catch` blocks must log via `LogService.Error(message, exception)` or `LogService.Warning(...)`.
+- All `catch` blocks must log via `Log.Error(message, exception)` or `Log.Warning(...)`.
 - Never swallow exceptions silently – empty `catch` blocks are forbidden.
 - Service-level errors must surface via a `StateChanged` event so the UI can show an error message.
-- Background tasks that cannot use events must fall back to `.ContinueWith(t => LogService.Error(..., t.Exception?.InnerException))`.
+- Background tasks that cannot use events must log failures through `Log.Error(...)`.
 
 ---
 
 ## 15. Logging
 
-- `LogService` is a static facade over Serilog.
+- `Log` is the application logging service backed by Serilog.
 - **All logging is DEBUG-only.** In Release, all methods are no-ops (`#if DEBUG`).
-- Methods: `LogService.Info(string)`, `LogService.Warning(string, Exception?)`, `LogService.Error(string, Exception?)`, `LogService.Transcription(string, TimeSpan)`.
-- Do not reference `Serilog` directly anywhere except `LogService`.
+- Methods: `Log.Info(string)`, `Log.Warning(string, Exception?)`, `Log.Error(string, Exception?)`,
+  `Log.Transcription(string, TimeSpan)`, and `Log.CloseAndFlush()`.
+- Do not reference `Serilog` directly anywhere except `Log`.
 
 
 ---
@@ -318,18 +324,18 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 
 ### File placement rules
 
-**Classes** go in the folder that matches their role (`Services/`, `Util/`, `Views/`).
+**Classes** go in the folder that matches their role (`Services/`, `Models/`, `Utils/`, `Views/`).
 
 **Interfaces** are placed as close as possible to where they are implemented or primarily used:
 - Next to the implementing class (same folder) – preferred when the interface is specific to one class or one area.
-- In the folder where it is most commonly implemented (e.g. `Services/` for `ITranscriptionService`).
-- In `Util/` only if the interface is truly application-wide and has no single natural home.
+- In the folder where it is most commonly implemented (e.g. `Services/` for `ITranscription`).
+- In `Utils/Interfaces/` only for genuinely shared marker/interface contracts with no better home.
 
-**Enums** – if there are multiple enums, group them in `Util/Enums/`.
+**Enums** – group shared enums under `Utils/Enums/` when that matches their role.
 
-**Structs** – if there are multiple structs, group them in `Util/Structs/`.
+**Structs** – keep interop structs beside the Windows/native boundary that owns them.
 
-> Do not create a `Util/Interfaces/` folder unless the project accumulates a large number of genuinely cross-cutting interfaces with no better home.
+> Avoid a generic interface folder for area-specific contracts; keep interfaces beside their service or view boundary.
 
 ---
 
@@ -342,7 +348,22 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 
 ---
 
-## 18. No Section-Separator Comments
+## 18. Automated Testing and TDD
+
+- Every new behavior, bug fix, and behavior-preserving refactor must have automated tests
+  written or updated before production code changes.
+- Follow `.agents/skills/testing.md`: verify the expected RED failure, implement the smallest
+  change, then verify GREEN and run the full suite.
+- Tests must cover changed acceptance behavior, not private implementation details. Do not
+  impose an arbitrary line-coverage target.
+- Keep required tests deterministic and independent of physical microphones, GPUs, clipboard
+  state, foreground windows, and downloaded models.
+- Phase 0's test project and baseline inventory are complete. Maintain the inventory when public/protected
+  behavior or XAML event bindings change; use acceptance tests for every later behavior change.
+
+---
+
+## 19. No Section-Separator Comments
 
 Do **not** use visual separator comments of any form to divide members into sections within a class. Examples of **forbidden** patterns:
 

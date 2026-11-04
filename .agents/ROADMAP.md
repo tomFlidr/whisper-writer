@@ -1,16 +1,29 @@
 # WhisperWriter – Roadmap
 
-Tento soubor obsahuje plán všech plánovaných změn v aplikaci, seřazený od těch s **největším dopadem na kód** po ty s nejmenším.
-Každá hotová položka se přesouvá do sekce **Dokončeno** a zároveň se aktualizuje `AGENTS.md`.
+Tento soubor obsahuje plán všech plánovaných změn v aplikaci, seřazený od těch s
+**největším dopadem na kód** po ty s nejmenším. Každá fáze má před implementací vlastní
+specifikaci v `.agents/specs/`. Každá hotová položka se přesouvá do sekce **Dokončeno** a
+zároveň se aktualizuje `AGENTS.md`.
 
 > **Pravidlo pro zápis:** Do tohoto souboru se zapisují pouze věci, které byly skutečně prodiskutovány a odsouhlaseny.
 > Nic se nevymýšlí. Každá položka popisuje konkrétní problém, proč se řeší, a co přesně se změní.
+> Každá implementace musí mít automatizované testy podle `.agents/skills/testing.md`.
+
+> Cesty k produkčním zdrojům v tomto plánu jsou relativní k `WhisperWriter/`; cesty k testům jsou
+> relativní k sousednímu `WhisperWriter.Tests/`.
+
+---
+
+## Fáze 0 – Základ automatizovaných testů
+
+**Stav:** Lokální testy, inventář a aktuální oddíly `AGENTS.md` dokončeny 4. listopadu 2026.
+Hosted GitHub Actions zatím neběželo; výsledek zůstává neověřený.
 
 ---
 
 ## Fáze 1 - dodělat hrubý refactoring
 
-Přejít na https://avaloniaui.net/.
+Původní refaktorovací položky jsou v sekci **Dokončeno**. Přechod na Avalonia je odložen do Fáze 6.
 
 ## Fáze 2 – Sjednocení sekundárních oken do jednoho tabbed okna
 
@@ -45,6 +58,9 @@ Uživatel chce, aby tato okna byla pohromadě jako záložky v jednom okně, nik
 - `AppWindow` bude singleton – druhé volání jen přepne záložku a aktivuje okno, neotvírá novou instanci.
 - Veřejná metoda `Show(int tabIndex)` umožní tray menu otevřít okno rovnou na správné záložce.
 - Tlačítka Save / Cancel pro nastavení budou v patičce `AppWindow` (sdílená pro celé okno), ne uvnitř panelu.
+- Při odchodu na jinou záložku nebo zavření `AppWindow` s neuloženými změnami nabídnout
+  jejich uložení a pokračování, nebo zahození změn a pokračování.
+- Podrobné chování potvrzovacího dialogu bude popsáno ve specifikaci Fáze 2 před implementací.
 
 ---
 
@@ -120,7 +136,8 @@ okamžitě upozorní, že text se nevložil.
 
 ### 3.4 Do nastavení přidat volbu pro překlad
 
-Vyzkoumat jak funguje překládání textu - jaké jsou možnsoti, a podle toho rozšířit nastavení o checkbox nebo další combobox.
+Cílem je, aby šel překlad skutečně používat přímo v aplikaci. Výchozí stav překladu musí být vypnutý.
+Konkrétní režim, cílový jazyk a ovládání se určí po průzkumu a v samostatné specifikaci.
 
 ---
 
@@ -128,6 +145,8 @@ Vyzkoumat jak funguje překládání textu - jaké jsou možnsoti, a podle toho 
 
 > Střední dopad – přidání NuGet balíčků, rozšíření stávajících servisních tříd a Settings.
 > Nezávisí na Fázích 2 a 3, ale musí proběhnout před implementací Parakeet (Fáze 5).
+> U větších runtime balíčků nejprve prozkoumat distribuci; preferovat stažení s potvrzením
+> uživatele při instalaci nebo samostatný instalační skript.
 
 ---
 
@@ -192,17 +211,19 @@ ale musí to být na jistotu, protože tato knihovna nemá fallback pro CPU, ale
 
 > Největší nová feature – nový transkripční engine, nová stahovaná data, nová servisní třída, změny settings.
 > Závisí na Fázi 1 (ITranscriptionService), Fázi 2 (SettingsPanel detekce modelů) a Fázi 4 (ORT backendy).
+> U větších modelů nejprve prozkoumat distribuci; preferovat samostatné stažení s potvrzením
+> uživatele nebo instalační skript.
 
 ---
 
-### 5.1 Rozšíření `download-models.ps1` o stažení Parakeet V3
+### 5.1 Rozšíření `WhisperWriter/download-models.ps1` o stažení Parakeet V3
 
 **Proč:** Parakeet model je distribuován jako `.tar.gz` archiv (nikoli jako jediný `.bin` soubor jako
 Whisper GGML modely). Po rozbalení vznikne **adresář** s ONNX soubory. Stávající skript umí pouze stáhnout
 a přejmenovat soubor – je třeba přidat rozbalování archivu.
 
 **Co se změní:**
-- Do tabulky modelů v `download-models.ps1` se přidá:
+- Do tabulky modelů v `WhisperWriter/download-models.ps1` se přidá:
   ```
   Parakeet TDT 0.6B V3 (parakeet-tdt-0.6b-v3-int8)
     Velikost: 456 MB | VRAM: ~1.5 GB
@@ -278,7 +299,38 @@ dle `AppSettings.EngineType`. Při změně v Settings musí starý engine zlikvi
 
 ---
 
+## Fáze 6 – Průzkum a případný přechod na Avalonia
+
+**Proč:** Do dokončení Fází 0–5 se projekt soustředí na Windows. Teprve potom se vyhodnotí,
+které části aplikace lze přenést.
+
+**Co se změní:**
+- Nejprve se provede průzkum přenositelnosti jednotlivých částí a jejich závislostí.
+- Rozsah migrace a podporované platformy se po průzkumu určí v samostatné specifikaci.
+- Následně se přenesou pouze odsouhlasené části, které se ukážou jako přenositelné.
+
+---
+
 ## Dokončeno
+
+### ✅ Fáze 0 – Lokálně ověřená testová základna a dokumentace
+
+- Přidán testovací projekt xUnit v3 + VSTest pro `net8.0-windows7.0`, zařazený v solution.
+- Přidána `.github/workflows/tests.yml` pro pull requesty a push na `main`.
+- V `.agents/specs/phase-0-coverage-inventory.md` je mapováno 95 behavior-bearing
+  public/protected kontraktů a všech 15 routovaných event bindingů ve čtyřech view XAML souborech.
+- Finální lokální ověření 4. 11. 2026: **185/185 testů Debug**, **185/185 Release**;
+  aplikační build v obou konfiguracích: **0 warningů, 0 chyb**.
+- Non-zero návratový kód `dotnet test` při selhání assertion byl ověřen dočasným testem,
+  který byl následně odstraněn.
+- Hosted GitHub Actions výsledek zůstává neověřený, protože změny nebyly commitnuty ani pushnuty.
+- Oddíly 1–9 v `AGENTS.md` jsou sladěné s aktuálním stromem, testy, build příkazy a nastaveními;
+  Appendix A je označený jako historický kontext.
+- První pozdější změna aplikačního chování musí samostatně projít RED → GREEN → REFACTOR;
+  tento krok zůstává odložený, aby Fáze 0 skončila bez zahájení další fáze.
+
+> Starší dokončené položky níže uchovávají historii a mohou používat tehdejší názvy souborů/tříd.
+> Pro aktuální strom použij zdrojový kód a `.agents/specs/phase-0-coverage-inventory.md`.
 
 ### ✅ Fáze 1 – Refaktoring a čistota kódu
 

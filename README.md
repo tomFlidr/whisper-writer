@@ -289,16 +289,16 @@ WhisperWriter stores ETA timing data in a local SQLite database:
 
 ### Quick setup (recommended)
 
-After cloning, simply double-click **`setup-dev.bat`** in the repository root.
+After cloning, double-click **`WhisperWriter\setup-dev.bat`** in the app project folder.
 
 The script performs all first-time setup steps automatically:
 
 1. Verifies a compatible .NET SDK (>= 8) is installed.
 2. Detects the locally installed CUDA Toolkit (versions 11, 12, 13) and extracts the runtime version.
 3. Runs `dotnet restore`.
-4. Copies the CUDA runtime DLLs (`cudart64_N.dll`, `cublas64_N.dll`, `cublasLt64_N.dll`) to `bin\Debug\runtimes\cuda\win-x64`.
-5. If the detected CUDA path differs from the one stored in `WhisperWriter.csproj`, offers to update it.
-6. Checks for a Whisper model in `llms\` and offers to launch `download-models.ps1` if none is found.
+4. Copies the CUDA runtime DLLs (`cudart64_N.dll`, `cublas64_N.dll`, `cublasLt64_N.dll`) to the application output under `WhisperWriter\bin\Debug\net8.0-windows7.0\runtimes\cuda\win-x64`.
+5. If the detected CUDA path differs from the one stored in `WhisperWriter\WhisperWriter.csproj`, offers to update it.
+6. Checks for a Whisper model in `WhisperWriter\llms\` and offers to launch `WhisperWriter/download-models.ps1` if none is found.
 
 If CUDA is not installed the script skips steps 4–5 and continues — the app will run on CPU.
 
@@ -310,20 +310,20 @@ git clone https://github.com/tomFlidr/whisper-writer.git
 cd whisper-writer
 
 # One-time setup (NuGet restore, CUDA DLL copy, model download prompt)
-.\setup-dev.bat
+.\WhisperWriter\setup-dev.bat
 
 # Build
-dotnet build WhisperWriter.csproj -c Debug
+dotnet build WhisperWriter/WhisperWriter.csproj -c Debug
 
 # Run
-.\bin\Debug\net8.0-windows\WhisperWriter.exe
+.\WhisperWriter\bin\Debug\net8.0-windows7.0\WhisperWriter.exe
 ```
 
 > Before building, make sure `WhisperWriter.exe` is not running — the output file will be locked by the running process.
 
 ### CUDA DLL version detection
 
-The MSBuild target `CopyCudaRuntimeDlls` in `WhisperWriter.csproj` automatically derives the CUDA major version from the `CudaBinDir` path (e.g. `…\CUDA\v13.2\bin\x64` → version `13`). The correct DLL names are assembled at build time — no manual version editing is needed. `setup-dev.ps1` updates `CudaBinDir` in the project file to match whatever CUDA version is installed on the machine.
+The MSBuild target `CopyCudaRuntimeDlls` in `WhisperWriter/WhisperWriter.csproj` automatically derives the CUDA major version from the `CudaBinDir` path (e.g. `…\CUDA\v13.2\bin\x64` → version `13`). The correct DLL names are assembled at build time — no manual version editing is needed. `WhisperWriter/setup-dev.ps1` updates `CudaBinDir` in the project file to match whatever CUDA version is installed on the machine. Build output is under `WhisperWriter/bin/<Configuration>/net8.0-windows7.0/`.
 
 ### Key dependencies
 

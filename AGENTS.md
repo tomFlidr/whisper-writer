@@ -1,10 +1,18 @@
 # WhisperWriter – Agent Instructions
 
-This file describes the current state of the **WhisperWriter** project and serves as context for GitHub Copilot / AI chat to seamlessly continue previous work.
+This file summarizes the current **WhisperWriter** project for future contributors and AI tools.
+The source tree and `.agents/specs/phase-0-coverage-inventory.md` are authoritative when details differ.
 
-> **Language rule**: Always respond and reason in **English**, regardless of the language the user writes in. This applies to all explanations, plans, code comments, commit messages, and file edits.
+> **Language rule**: Keep code comments, project documentation, and commit messages in English.
+> Respond to the user in the language they use unless they request otherwise.
 
 > **Skills rule**: At the start of every chat, read `.agents/SKILLS.md`. Before performing any action listed in that file, read the corresponding skill document and follow its checklist.
+
+> **Automated testing rule**: Phase 0 is complete locally. The xUnit v3/VSTest project and
+> behavior/XAML coverage inventory are in place; see `.agents/specs/phase-0-automated-testing.md`
+> and `.agents/specs/phase-0-coverage-inventory.md`. Follow `.agents/skills/testing.md` for
+> subsequent changes. A zero-test `dotnet test` run is not a pass. Hosted CI remains unverified
+> until the workflow runs in GitHub Actions.
 
 ---
 
@@ -27,15 +35,16 @@ No data leaves the computer. CUDA GPU acceleration is automatic.
 |---|---|
 | Platform | Windows 10/11, .NET 8, WPF + WinForms (NotifyIcon) |
 | Version | 1.2.0.0 |
-| Project | `D:\tec\cs\whisper-writer\WhisperWriter.csproj` |
-| GPU | NVIDIA Quadro T2000, 4 GB VRAM, CUDA 13.2, driver 595.71 |
+| Project | `D:\tec\cs\whisper-writer-wpf\WhisperWriter\WhisperWriter.csproj` |
+| Inference | Whisper.net; CPU path available, CUDA runtime optional |
 | Whisper.net | 1.9.0 (+ Runtime + Runtime.Cuda) |
 | NAudio | 2.2.1 |
 | Microsoft.Data.Sqlite | 8.0.0 |
 | System.Management | 8.0.0 |
-| System.Text.Json | 8.0.5 |
+| System.Text.Json | Transitive dependency; not pinned in the project file |
 | Serilog | 4.3.0 (+ Serilog.Sinks.File 6.0.0) |
-| Code language | C# 12, nullable enable, implicit usings, file-scoped namespaces |
+| Tests | xUnit v3 + VSTest, `net8.0-windows7.0`; see Phase 0 coverage inventory |
+| Code language | C# 12, nullable enabled, implicit usings; prefer file-scoped namespaces |
 | Indentation | TAB (not spaces) |
 | Comments | English |
 
@@ -43,76 +52,81 @@ No data leaves the computer. CUDA GPU acceleration is automatic.
 
 ## 3. Project structure
 
+The production project contains 52 C# files and 5 XAML files. The sibling Phase 0 test project
+contains 30 C# files (25 test sources and 5 support files); see the coverage inventory for the map.
+
 ```
-D:\tec\cs\whisper-writer\
-├── .github\
-│   └── workflows\
-│       └── release.yml               ← GitHub Actions: build & publish release ZIPs on tag push
-├── AGENTS.md                         ← this file; project-wide agent instructions
+D:\tec\cs\whisper-writer-wpf\
 ├── .agents\
-│   ├── ROADMAP.md                    ← prioritized plan of all planned changes (Czech, sorted by code impact)
-│   ├── skills\
-│   │   ├── coding-standards.md
-│   │   ├── commit.md
-│   │   ├── debugging.md
-│   │   ├── new-feature.md
-│   │   ├── refactoring.md
-│   │   └── release.md
-│   └── SKILLS.md                     ← discovered knowledge, gotchas, hard-won insights (English)
-├── README.md                          ← user-facing documentation (EN)
-├── WhisperWriter.csproj
-├── setup-dev.ps1                      ← one-time developer setup: checks .NET SDK + CUDA, restores NuGet, copies CUDA DLLs, optional model download
-├── setup-dev.bat                      ← launcher for setup-dev.ps1, bypasses execution policy
-├── download-models.ps1                ← interactive PowerShell script: download GGML models to models\
-├── download-models.bat                ← launcher for download-models.ps1, bypasses execution policy
-├── App.xaml                           ← global WPF resources, styles
-├── App.xaml.cs                        ← startup, tray icon, static services
-├── AssemblyInfo.cs
-├── settings.json                      ← default configuration (copied to bin on build)
-├── Services\
-│   ├── AudioRecorder.cs               ← NAudio, 16 kHz mono WAV, RMS amplitude event
-│   ├── DI.cs                          ← simple DI helpers / service registrations
-│   ├── EtaStatsService.cs             ← SQLite-backed ETA statistics; class name: EtaService
-│   ├── HotkeyService.cs               ← polling GetAsyncKeyState, 20 ms interval
-│   ├── ITranscriptionService.cs       ← interface for transcription engines
-│   ├── LogService.cs                  ← Serilog facade, daily rolling log to logs/
-│   ├── SettingsService.cs             ← JSON load/save to BaseDirectory/settings.json
-│   ├── TextInjector.cs                ← SaveFocus() + SendInput Unicode
-│   ├── WhisperService.cs              ← WhisperFactory, TranscribeAsync, CUDA
-│   ├── WindowPositioner.cs            ← window position logic extracted from MainWindow
-│   ├── EtaStatsServices\             ← helpers and P/Invoke for ETA DB / environment fingerprinting
-│   │   ├── NativeMethods.cs
-│   │   ├── PowerStatusSnapshot.cs
-│   │   └── SystemPowerStatus.cs
-│   └── TextInjectors\                ← low-level input providers used by TextInjector
-│       ├── Input.cs
-│       ├── InputKeyboard.cs
-│       └── InputMouse.cs
-├── Utils\
-│   ├── HotkeyModifiers.cs             ← [Flags] enum: None, Alt, Control, Shift, Win
-│   ├── TranscriptionEntry.cs          ← data record: Timestamp, Text, Duration
-│   ├── TranscriptionHistory.cs        ← ObservableCollection<TranscriptionEntry>, thread-safe Add()
-│   ├── VkCodeHelper.cs                ← static helper: VK code → display name, FormatCombo()
-│   ├── Enums\
-│   │   └── TranscriptionState.cs      ← enum: Loading, Transcribing, Done, Error
-│   └── Interfaces\
-│       ├── IService.cs
-│       ├── ISingleton.cs
-│       └── ITransient.cs
-├── Views\
-│   ├── MainWindow.xaml/.cs            ← floating pill widget, PTT logic, VU meter, ETA
-│   ├── HistoryWindow.xaml/.cs         ← transcription list, copy to clipboard
-│   ├── SettingsWindow.xaml/.cs        ← settings form
-│   └── AboutWindow.xaml/.cs           ← about window
-└── models\ (not fully committed to repo - large model files kept out of VCS)
-    ├── eta-time-stats.db              ← SQLite database with per-model ETA timing statistics
-    ├── ggml-large-v2.bin              ← usually downloaded by the user (not in repo)
-    └── ggml-medium.bin                ← fallback model (not in repo)
+│   ├── ROADMAP.md
+│   ├── SKILLS.md
+│   ├── skills\                 ← project conventions and workflows
+│   └── specs\                  ← Phase 0 test and coverage specifications
+├── .github\workflows\          ← release.yml and tests.yml
+├── AGENTS.md
+├── .editorconfig
+├── README.md
+├── WhisperWriter.sln
+├── WhisperWriter\               ← WPF application project
+│   ├── App.xaml / App.xaml.cs   ← WPF resources and application lifecycle
+│   ├── Program.cs               ← entry point and DI startup
+│   ├── AssemblyInfo.cs
+│   ├── DI\                      ← Autofac setup and injection helpers
+│   ├── Models\                  ← AppSettings and TranscriptionEntry
+│   ├── Services\
+│   │   ├── EtaCalcs\            ← ETA environment, power-state, and native helpers
+│   │   ├── MainWindows\         ← placement and window-style behavior
+│   │   ├── TextInjectors\       ← native input structures
+│   │   ├── Whispers\            ← whisper-native declarations
+│   │   └── service implementations and testable platform seams
+│   ├── Utils\                   ← virtual-key helper, enums, shared interfaces
+│   ├── Views\                   ← windows and platform adapters
+│   ├── Properties\PublishProfiles\
+│   ├── llms\                    ← local model/history data location
+│   ├── setup-dev.ps1/.bat
+│   ├── download-models.ps1/.bat
+│   ├── settings.json
+│   └── WhisperWriter.csproj
+└── WhisperWriter.Tests\         ← xUnit v3 / VSTest characterization tests
+    ├── DI, Models, Services, Utils, Views
+    ├── TestSupport\             ← WPF host and deterministic fakes
+    └── WhisperWriter.Tests.csproj
 ```
 
 ---
 
-## 4. Key files – overview
+## 4. Current code map
+
+- Production source paths below are rooted at `WhisperWriter/`; the test project is the sibling
+  `WhisperWriter.Tests/` directory. Commands run from the solution root unless stated otherwise.
+- `Program.cs` bootstraps Autofac through `DI/Container.cs`, resolves `App`, initializes WPF, and
+  runs it. `IProgramRuntime` and `IAppRuntime` expose deterministic startup/lifecycle boundaries.
+- `App.xaml.cs` loads settings, configures global exception handlers, shows `MainWindow`, and starts
+  Whisper initialization. It disposes ETA resources and flushes logging on exit.
+- Core services live in `Services/`: `Settings`, `TranscriptionHistory`, `AudioRecorder`, `Hotkey`,
+  `Whisper`, `EtaCalc`, `TextInjector`, `TrayMenu`, and `Log`. Platform seams keep native/device
+  effects testable while production defaults remain unchanged.
+- `Services/MainWindows/` contains `Position` and `Style`; `Models/` contains `AppSettings` and
+  `TranscriptionEntry`; shared enums and marker interfaces are under `Utils/Enums/` and
+  `Utils/Interfaces/`.
+- `Views/` contains `MainWindow`, `SettingsWindow`, `HistoryWindow`, and `AboutWindow` plus runtime
+  and Windows-platform adapters. XAML event behavior is mapped in the Phase 0 inventory.
+- `WhisperWriter.Tests/` uses xUnit v3 with VSTest and targets `net8.0-windows7.0`.
+  The inventory maps 95 behavior-bearing contracts and all 15 view XAML event assignments.
+- Phase 0 was locally verified on November 4, 2026: 185/185 tests passed in both Debug and Release;
+  application builds completed with zero warnings and zero errors. Hosted GitHub Actions has not run.
+- Irreducible physical integrations (real microphone, global focus/input, clipboard/registry writes,
+  Windows shell/HWND behavior, installed CUDA/model inference) are documented in the inventory;
+  surrounding application decisions are tested through fakes.
+
+For detailed behavior-to-test mappings and exact commands, use
+`.agents/specs/phase-0-coverage-inventory.md` and `.agents/specs/phase-0-automated-testing.md`.
+The following appendix is historical and must not be used as current implementation guidance.
+
+## Appendix A. Historical file notes (superseded)
+
+> The notes below were written against an older project tree. Names, paths, APIs, and behavior may
+> no longer match the source; verify current details in the source tree and Phase 0 inventory.
 
 ### `App.xaml`
 - Defines global `ResourceDictionary`: colors (`BgBrush`, `AccentBrush`, `AccentRecordingBrush`, `TextPrimaryBrush`, `TextSecondaryBrush`) and `IconButton` style.
@@ -121,7 +135,7 @@ D:\tec\cs\whisper-writer\
 
 ### `App.xaml.cs`
 - Four static services: `App.SettingsService`, `App.History`, `App.WhisperService` (type `ITranscriptionService`), `App.Eta`.
-- `App.Eta.Initialize()` is called on startup (opens/creates `models/eta-time-stats.db`).
+- `App.Eta.Initialize()` is called on startup (opens/creates `llms/eta-time-stats.db`).
 - `App.Eta.Dispose()` is called in `OnExit` to cleanly close the SQLite connection.
 - Tray icon (`NotifyIcon` from WinForms) – **right-click** opens menu:
   ```
@@ -141,7 +155,7 @@ D:\tec\cs\whisper-writer\
 ```csharp
 public class AppSettings
 {
-    public string ModelPath { get; set; } = "models/ggml-large-v2.bin";
+    public string ModelPath { get; set; } = "llms/ggml-large-v2.bin";
     public string Language  { get; set; } = "auto";   // "auto", "cs", "en", ...
     public string Prompt    { get; set; } = "";
     public int    HotkeyModifiers { get; set; } = 0x0001 | 0x0008; // Alt + Win (kept for reference)
@@ -182,7 +196,7 @@ public class AppSettings
 - On deserialization error silently returns `new AppSettings()`.
 
 ### `Services/EtaStatsService.cs` (class: `EtaService`)
-- Manages a SQLite database at `<BaseDirectory>/models/eta-time-stats.db` via `Microsoft.Data.Sqlite`.
+- Manages a SQLite database at `<BaseDirectory>/llms/eta-time-stats.db` via `Microsoft.Data.Sqlite`.
 - **Schema**: two tables:
   - `Versions (value TEXT)` – single row seeded from the current assembly version (`typeof(App).Assembly.GetName().Version`).
   - `Environments (id INTEGER PK AUTOINCREMENT, fingerprint TEXT UNIQUE, value TEXT UNIQUE)` – one row per detected runtime environment.
@@ -284,7 +298,7 @@ public class AppSettings
 - Form: `ModelPath` (ComboBox: 12 models, items built at runtime in code-behind), `Language` (ComboBox: 57 languages + `auto`), `Prompt` (multiline TextBox), **hotkey capture** (display field + "Change…" button), `HistorySize` (numeric TextBox, min 1, max Int32.MaxValue), `CopyToClipboard` (CheckBox, default checked), `RunAtStartup` (CheckBox – reads/writes `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`, value name `WhisperWriter`, default unchecked).
 - **Hotkey capture UI**: `TxtHotkeyDisplay` (read-only `TextBlock` inside a styled `Border`) shows the current combo. `BtnCaptureHotkey` ("Change…" / "Cancel") toggles capture mode. `TxtCaptureHint` (collapsed outside capture) shows instructions. Default combo: Left Alt + Left Win (`VK_LMENU` + `VK_LWIN`).
 - Capture mode: `PreviewKeyDown` accumulates VK codes into `_captureDown`; on `PreviewKeyUp` the full set is snapshotted as `_capturedVkCodes` and capture exits. Escape cancels without saving. The captured combo is previewed live while keys are held. WPF input types aliased as `WpfKeyEventArgs` / `WpfKey` / `WpfKeyInterop` to avoid `System.Windows.Forms.KeyEventArgs` ambiguity.
-- `CmbModelPath`: items are built dynamically in `BuildModelItems()` in code-behind. Each item has `Tag` = file path, `Content` = two-line `StackPanel` (name bold + HW requirements and size in smaller text). Models that are not downloaded (`File.Exists` check against `AppContext.BaseDirectory`) are shown with `Opacity=0.45`, `IsEnabled=false`, and ` · not downloaded` appended to the detail line. Model availability is checked against the 12 known `.bin` paths only, so `eta-time-stats.db` in the same `models\` folder is ignored.
+- `CmbModelPath`: items are built dynamically in `BuildModelItems()` in code-behind. Each item has `Tag` = file path, `Content` = two-line `StackPanel` (name bold + HW requirements and size in smaller text). Models that are not downloaded (`File.Exists` check against `AppContext.BaseDirectory`) are shown with `Opacity=0.45`, `IsEnabled=false`, and ` · not downloaded` appended to the detail line. Model availability is checked against the 12 known `.bin` paths only, so `eta-time-stats.db` in the same `llms\` folder is ignored.
 - `CmbLanguage`: each item has `Tag` = ISO language code (e.g. `"cs"`) and `Content` = `"cs – Čeština"` (code + native name).
 - `TxtHistorySize`: numeric TextBox, `PreviewTextInput` handler blocks non-numeric characters, fallback to `1` on save if value is invalid or < 1.
 - `ChkCopyToClipboard`: CheckBox bound to `AppSettings.CopyToClipboard`.
@@ -294,14 +308,14 @@ public class AppSettings
 - Info window, `ScrollViewer` with `TextBlock` (inline `Run` elements).
 - Draggable, closeable via the close button or "Close" in the footer.
 
-### `WhisperWriter.csproj` – CUDA target
+### `WhisperWriter/WhisperWriter.csproj` – CUDA target
 - `CopyCudaRuntimeDlls` MSBuild target copies `cublas64_N.dll`, `cublasLt64_N.dll`, `cudart64_N.dll` to `$(OutputPath)runtimes\cuda\win-x64` after each build.
-- `<CudaBinDir>` holds the full path to the CUDA bin folder (e.g. `C:\...\CUDA\v13.2\bin\x64`). Updated automatically by `setup-dev.ps1`.
+- `<CudaBinDir>` holds the full path to the CUDA bin folder (e.g. `C:\...\CUDA\v13.2\bin\x64`). Updated automatically by `WhisperWriter/setup-dev.ps1`.
 - `<CudaVersion>` is extracted at build time from the path suffix via MSBuild `Regex` property function (e.g. `v13.2` → `13`). DLL names are assembled as `cublas64_$(CudaVersion).dll` – no hardcoded version number. Supports CUDA 11, 12, 13 and any future major version without further changes.
-- **`$(IsPublishing)` condition**: `CudaEffectiveOutputDir` uses `$(IsPublishing) == 'true'` to decide between `$(PublishDir)` and `$(OutputPath)`. Using `$(PublishDir) != ''` was incorrect because the .NET SDK sets `$(PublishDir)` during every regular build when `<PublishSingleFile>true</PublishSingleFile>` is present, causing the DLLs to be copied into `bin\Debug\...\publish\runtimes\...` instead of the actual run directory.
+- **`$(IsPublishing)` condition**: `CudaEffectiveOutputDir` uses `$(IsPublishing) == 'true'` to decide between `$(PublishDir)` and `$(OutputPath)`. Using `$(PublishDir) != ''` was incorrect because the .NET SDK sets `$(PublishDir)` during every regular build when `<PublishSingleFile>true</PublishSingleFile>` is present, causing the DLLs to be copied into `WhisperWriter/bin/Debug/.../publish/runtimes/...` instead of the actual run directory.
 - `ContinueOnError="true"` – build does not fail if CUDA is not installed.
 
-### `WhisperWriter.csproj` – signing
+### `WhisperWriter/WhisperWriter.csproj` – signing
 - **Strong name**: `<SignAssembly>true</SignAssembly>` + `WhisperWriter.snk` (RSA key pair, no password).
 - **Authenticode**: post-build target `AuthenticodeSigning` calls `signtool.exe` from Windows SDK `10.0.26100.0`.
   - Signs `$(OutputPath)WhisperWriter.exe` using `WhisperWriter.pfx` (password `1234`).
@@ -318,7 +332,7 @@ public class AppSettings
   2. For the `win-x86` leg also removes the `CopyCudaRuntimeDlls` target (CUDA has no x86 package).
   3. Runs `dotnet publish -c Release -r <rid> --self-contained false`.
   4. Copies `download-models.ps1` + `download-models.bat` into the publish folder.
-  5. Creates an empty `models\` folder with a `README.txt` placeholder.
+  5. Creates an empty `llms\` folder with a `README.txt` placeholder.
   6. Strips `.pdb` files.
   7. Packs everything into `WhisperWriter-v1.x.x-<rid>.zip`.
 - A separate `release` job downloads all ZIPs and creates a GitHub Release via `softprops/action-gh-release@v2`.
@@ -326,36 +340,36 @@ public class AppSettings
   - Release notes are auto-generated from commit messages (`generate_release_notes: true`).
 - Whisper model `.bin` files are **not** included in the ZIP (too large); users download them with the bundled scripts.
 
-### `setup-dev.ps1`
+### `WhisperWriter/setup-dev.ps1`
 - One-time developer environment setup script. Run once after cloning the repository.
 - **Steps performed**:
   1. Checks for a compatible .NET SDK (>= 8). Aborts with a download link if not found.
   2. Detects NVIDIA CUDA Toolkit (major versions 13, 12, 11) via env vars, standard install paths, and `nvcc` in PATH. Extracts version from `cudart64_NN.dll` filename.
-  3. Runs `dotnet restore WhisperWriter.csproj --verbosity quiet`.
-  4. Copies `cudart64_NN.dll`, `cublas64_NN.dll`, `cublasLt64_NN.dll` from CUDA bin to `bin\Debug\net8.0-windows\runtimes\cuda\win-x64` (skips Release if not built yet). If CUDA was not found, step is skipped.
-  5. Compares the `<CudaBinDir>` value in `.csproj` with the detected path and offers to update it interactively.
-  6. Checks whether the default Whisper model (`ggml-large-v2.bin`) exists in `models\`. If no model is present, offers to launch `download-models.ps1`.
+  3. Runs `dotnet restore WhisperWriter/WhisperWriter.csproj --verbosity quiet`.
+  4. Copies `cudart64_NN.dll`, `cublas64_NN.dll`, `cublasLt64_NN.dll` from CUDA bin to `WhisperWriter\bin\Debug\net8.0-windows7.0\runtimes\cuda\win-x64` (skips Release if not built yet). If CUDA was not found, step is skipped.
+  5. Compares the `<CudaBinDir>` value in `WhisperWriter/WhisperWriter.csproj` with the detected path and offers to update it interactively.
+  6. Checks whether the default Whisper model (`ggml-large-v2.bin`) exists in `WhisperWriter\llms\`. If no model is present, offers to launch `WhisperWriter/download-models.ps1`.
 - If CUDA is absent, the app still works via CPU inference – the script warns about it but does not abort.
 - No external dependencies – built-in Windows PowerShell 5.1+ compatible.
 
-### `setup-dev.bat`
+### `WhisperWriter/setup-dev.bat`
 - One-line `.bat` launcher: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup-dev.ps1"`.
 - Uses `%~dp0` so it works from any working directory.
 - Ends with `pause` so the console window stays open after the script finishes.
 
-### `download-models.ps1`
+### `WhisperWriter/download-models.ps1`
 - Interactive PowerShell script (no external dependencies, runs on built-in Windows PowerShell 5.1+).
-- **Location**: project root, next to `WhisperWriter.csproj`. Should also be present next to the release `WhisperWriter.exe` in the ZIP.
+- **Location**: `WhisperWriter/`, next to `WhisperWriter.csproj`. It is also copied next to the release `WhisperWriter.exe` in the ZIP.
 - **What it does**:
   1. Shows a numbered table of all 12 GGML models (name, disk size, VRAM, description). Already-downloaded models are highlighted in green with `[downloaded]`.
   2. User enters a selection: comma/space-separated numbers and/or ranges (e.g. `1-3,7`).
   3. After confirmation, downloads missing files one by one via `System.Net.WebClient.DownloadFileTaskAsync` with live progress (`%`, MB received / MB total).
   4. Downloads are written to a `.tmp` file first, then atomically renamed on success. Failed downloads clean up the `.tmp` file.
-  5. The `models\` folder is created automatically if it does not exist.
+  5. The `llms\` folder is created automatically if it does not exist.
 - **Source URL base**: `https://huggingface.co/ggerganov/whisper.cpp/resolve/main`
 - **Execution policy**: if blocked, user must run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
 
-### `download-models.bat`
+### `WhisperWriter/download-models.bat`
 - One-line `.bat` launcher that runs `download-models.ps1` via `powershell.exe -NoProfile -ExecutionPolicy Bypass`.
 - Solves the execution policy error users get when running `.ps1` directly in PowerShell ISE or a restricted environment.
 - Uses `%~dp0` so it works from any working directory (always resolves to the folder where the `.bat` lives).
@@ -368,10 +382,11 @@ public class AppSettings
 ### `.agents/ROADMAP.md`
 - Written in **Czech**.
 - Contains all planned features and refactoring tasks, sorted by **impact on the codebase** (largest first).
-- Refactoring always comes first.
+- Follow the approved phase order and dependencies; do not reorder roadmap work without agreement.
 - Each item describes: what the problem is, why it is being addressed, and exactly what will change.
 - **Only things that have been explicitly discussed and agreed upon are written here.** Nothing is invented.
-- After every successfully completed task (confirmed by a passing `run_build`), move the finished item to the **Dokončeno** section at the bottom of `ROADMAP.md`.
+- After completing a user-approved roadmap item and passing its tests/build, move it to the
+  **Dokončeno** section at the bottom of `ROADMAP.md`.
 - Do **not** add new items without the user's instruction.
 
 ### `.agents/skills/coding-standards.md`
@@ -381,23 +396,30 @@ public class AppSettings
 
 ### `.agents/SKILLS.md`
 - Written in **English**.
-- Collects non-obvious discoveries, gotchas, and hard-won insights from development.
-- Add an entry whenever something surprising or tricky is learned.
-- Currently empty – entries are added as development progresses.
+- Indexes the project skills and states when each one should be loaded.
+- Update the index when a project skill is added, removed, or renamed.
 
 ---
 
-## 6. Build and run
+## 6. Build, test, and run
 
 ```powershell
-# Build (without restore – models are large)
-dotnet build "D:\tec\cs\whisper-writer\WhisperWriter.csproj" -c Debug --no-restore
+# Restore on a clean checkout
+dotnet restore WhisperWriter.sln
 
-# Run
-Start-Process "D:\tec\cs\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.exe"
+# Full test suite
+dotnet test WhisperWriter.sln -c Debug --no-restore -p:SignAssembly=false --logger "console;verbosity=normal"
+dotnet test WhisperWriter.sln -c Release --no-restore -p:SignAssembly=false --logger "console;verbosity=normal"
+
+# Build the application
+dotnet build WhisperWriter/WhisperWriter.csproj -c Debug --no-restore -p:SignAssembly=false
+dotnet build WhisperWriter/WhisperWriter.csproj -c Release --no-restore -p:SignAssembly=false
+
+# Run from the project
+Start-Process ".\WhisperWriter\bin\Debug\net8.0-windows7.0\WhisperWriter.exe"
 ```
 
-> **Important**: The app must be closed before building – the exe file is locked by the running instance.
+> Close the running application before rebuilding if Windows has locked its output executable.
 
 ---
 
@@ -405,16 +427,18 @@ Start-Process "D:\tec\cs\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.e
 
 ### Open tasks
 
-| Priority | Description |
-|---|---|
-| Low | **settings.json overwrite on build** – `PreserveNewest` copies the source `settings.json` to bin if it is newer, overwriting user settings. Consider `CopyToOutputDirectory=Never` and manual initialization on first run (SettingsService already handles this via `Save()` when the file does not exist). |
-| Low | **Whisper model download fallback** – if the default model (`ggml-large-v2.bin`) is missing, `InitializeAsync` downloads `GgmlType.Medium` (not Large). A "Downloading model…" message is shown. |
+- **Low — `settings.json` overwrite on build.** `PreserveNewest` copies the root file to the output
+  folder when newer and can overwrite user-edited settings. Consider changing the content-copy
+  strategy; `Settings.Load()` creates and saves defaults when the file is missing.
+- **Low — Whisper model fallback.** If `ggml-large-v2.bin` is absent, `Whisper.InitializeAsync()`
+  falls back to `GgmlType.Medium` and displays a download status. Consider making the fallback
+  explicit or configurable.
 
-### Resolved issues (for context)
+### Resolved issues (historical context; names reflect the code at the time)
 
 - **Phase 1 refactoring completed**: introduced `ITranscriptionService` interface, renamed `EtaStatsService` class to `EtaService` / `App.EtaStats` to `App.Eta`, replaced `ContinueWith+Unwrap` with clean `await` in `WhisperService`, extracted `WindowPositioner` from `MainWindow`, removed `App.SettingsService` dependency from `TextInjector` (new signature `InjectText(string, IReadOnlyList<int>)`), added `WavBytesPerSecond` constant, moved `TranscriptionState` to `Util/Enums/`, added `ITranscriptionService.cs`, `WindowPositioner.cs`, `PowerStatusSnapshot.cs`. All coding-standards fixes applied (`sealed` removed, `this.`/`ClassName.` prefixes, member order).
-- **Environment-aware adaptive ETA**: replaced the old hardcoded per-model ETA factor approach with `EtaStatsService` backed by `models\eta-time-stats.db`. The DB now stores `Versions`, `Environments`, `Models`, and `Stats`. Each completed transcription records `(model_id, environment_id, audio_seconds, processing_seconds)`, where `environment_id` is derived from a fingerprinted JSON of CPU/GPUs/RAM/OS/backend/CUDA/thread-count/power state. ETA is estimated only from the same model + same environment, preferring similar recording lengths (±30%, then ±50%, then all rows). ETA appears from the second matching transcription onward; otherwise the UI shows only "Transcribing…".
-- **`Models/` folder renamed to `Util/`, classes split into separate files**: C# source files (`AppSettings.cs`, `HotkeyModifiers.cs`, `TranscriptionEntry.cs`, `TranscriptionHistory.cs`) moved from `Models\` to `Util\`. Each class is now in its own file. All namespaces updated from `WhisperWriter.Models` to `WhisperWriter.Util`. All `using WhisperWriter.Models` directives updated accordingly in `SettingsService.cs`, `HotkeyService.cs`, and `MainWindow.xaml.cs`. The `models\` directory (lowercase) remains as the data folder for Whisper `.bin` weight files only.
+- **Environment-aware adaptive ETA**: replaced the old hardcoded per-model ETA factor approach with `EtaStatsService` backed by `llms\eta-time-stats.db`. The DB now stores `Versions`, `Environments`, `Models`, and `Stats`. Each completed transcription records `(model_id, environment_id, audio_seconds, processing_seconds)`, where `environment_id` is derived from a fingerprinted JSON of CPU/GPUs/RAM/OS/backend/CUDA/thread-count/power state. ETA is estimated only from the same model + same environment, preferring similar recording lengths (±30%, then ±50%, then all rows). ETA appears from the second matching transcription onward; otherwise the UI shows only "Transcribing…".
+- **`Models/` folder renamed to `Util/`, classes split into separate files**: C# source files (`AppSettings.cs`, `HotkeyModifiers.cs`, `TranscriptionEntry.cs`, `TranscriptionHistory.cs`) moved from `Models\` to `Util\`. Each class is now in its own file. All namespaces updated from `WhisperWriter.Models` to `WhisperWriter.Util`. All `using WhisperWriter.Models` directives updated accordingly in `SettingsService.cs`, `HotkeyService.cs`, and `MainWindow.xaml.cs`. The `llms\` directory (lowercase) remains as the data folder for Whisper `.bin` weight files only.
 - **`IsCudaAvailable()` replaced by `DetectCudaVersion()`**: the old boolean probe hardcoded CUDA 13. Replaced with `DetectCudaVersion()` (returns `int?`) that probes major versions 13, 12, 11 in order and returns the first that has both `cudart64_N.dll` and `cublas64_N.dll` loadable. `MainWindow.xaml.cs` updated at both call sites to use the new method (startup status message and `OnWhisperState` backend label).
 - **`WithGreedySamplingStrategy()` API**: this method returns a different interface (`IWhisperSamplingStrategyBuilder`) without `WithPrompt`/`Build`. Cannot be chained. Not used currently.
 - **Ambiguous reference `System.Windows` vs `System.Windows.Forms`**: resolved with alias `using WpfApp = System.Windows.Application`.
@@ -424,7 +448,7 @@ Start-Process "D:\tec\cs\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.e
 - **`WM_DISPLAYCHANGE` handler and `ClampWindowToScreen()` missing**: the `OnSourceInitialized` handler only set the window style (toolwindow / no taskbar entry) but did not register a `WndProc` hook. Added `HwndSource.AddHook(WndProc)`, constant `WM_DISPLAYCHANGE = 0x007E`, method `WndProc` that triggers `Dispatcher.BeginInvoke(ClampWindowToScreen)`, and `ClampWindowToScreen()` that clamps the window to the nearest monitor's working area (with DPI-aware scaling), falls back to bottom-centre of the primary screen if the window ends up completely off-screen, and saves the new position to `settings.json`.
 - **`WindowTop` replaced by `WindowBottom`, visibility clamping improved**: `AppSettings.WindowTop` was removed entirely and replaced by `WindowBottom` (distance from the bottom of the widget to the bottom of the primary screen's working area). This ensures the widget stays visually anchored to the bottom after resolution/DPI/dock changes. `ClampWindowToScreen()` uses `Screen.AllScreens` with maximum-overlap selection, checks all screens for visibility, and is also triggered by `SizeChanged`. `SaveWindowPosition()` stores only `WindowLeft` and `WindowBottom`.
 - **Centre-based window anchor**: `WindowLeft`/`WindowBottom` now store the **centre** of the widget (not the bottom-left corner). `ApplyStoredPosition()`, `PlaceAtDefaultPosition()`, `SaveWindowPosition()` and the `ClampWindowToScreen()` fallback all updated accordingly. The widget now expands symmetrically from its anchor point when the status text changes length (e.g. "Ready [GPU]" ↔ "Transcribing…").
-- **Release publish failing with `GenerateBundle` error**: `dotnet publish -c Release` crashed with `System.ArgumentException: Stream length minus starting position is too large to hold a PEImage` because the `GenerateBundle` task (single-file publish) tried to parse Whisper model `.bin` files in `models\` as PE assemblies. Fixed by adding `<ExcludeFromSingleFile>true</ExcludeFromSingleFile>` to both `<Content>` items in `.csproj` (`models\**\*` and `settings.json`). The files are still copied next to the exe – just not bundled into it.
+- **Release publish failing with `GenerateBundle` error**: `dotnet publish -c Release` crashed with `System.ArgumentException: Stream length minus starting position is too large to hold a PEImage` because the `GenerateBundle` task (single-file publish) tried to parse Whisper model `.bin` files in `llms\` as PE assemblies. Fixed by adding `<ExcludeFromSingleFile>true</ExcludeFromSingleFile>` to both `<Content>` items in `.csproj` (`llms\**\*` and `settings.json`). The files are still copied next to the exe – just not bundled into it.
 - **Configurable push-to-talk hotkey**: the hotkey was previously hardcoded to Left Ctrl + Left Win. Now the full key combination is stored in `AppSettings.HotkeyVkCodes` (a `List<int>` of Windows VK codes). Default changed to Left Alt + Left Win (`[0xA4, 0x5B]`). Settings dialog has an interactive capture UI: clicking "Change…" enters capture mode, the user holds the desired keys and releases them – the snapshot of simultaneously held keys becomes the new combo. `HotkeyService.UpdateKeys()` applies the change immediately without restart. `VkCodeHelper` provides human-readable display names for VK codes. `TextInjector.WaitForPhysicalRelease()` now reads the active VK list from settings at call time.
 - **CUDA DLLs copied to wrong directory on build**: `CopyCudaRuntimeDlls` MSBuild target used `'$(PublishDir)' != ''` to decide the output directory, but the .NET SDK sets `$(PublishDir)` during every regular `dotnet build` when `<PublishSingleFile>true</PublishSingleFile>` is set, so DLLs landed in `bin\Debug\...\publish\runtimes\...` instead of the actual run directory. Fixed by using `'$(IsPublishing)' == 'true'` as the condition.
 - **Truncated model file causes `WhisperModelLoadException`**: `WhisperFactory.FromPath` succeeds on a truncated GGML file (only reads header metadata) but `CreateBuilder()` fails at transcription time. Two-layer defence: (1) `MinModelFileSizeBytes` (70 MB) size check in `InitializeAsync` deletes and re-downloads the file before `FromPath` is called; (2) `TranscribeAsync` catches `WhisperModelLoadException` from `CreateBuilder()` (for files that pass the size check but are still corrupted), disposes and nulls `_factory`, deletes the model file, and fires `StateChanged(Error, …)` with a user-facing message so the status widget shows the error and the file is removed for re-download on next startup.
@@ -435,14 +459,16 @@ Start-Process "D:\tec\cs\whisper-writer\bin\Debug\net8.0-windows\WhisperWriter.e
 
 - **OOP**, clean code, no unnecessary dependencies.
 - Comments in **English**, indentation with **TAB**.
-- File-scoped namespaces (`namespace WhisperWriter.Services;`).
+- Prefer file-scoped namespaces for new C# files; preserve surrounding style when editing existing files.
 - Async/await everywhere there is I/O (Whisper, disk).
-- Win32 P/Invoke interop concentrated in the relevant class (`TextInjector`, `HotkeyService`).
+- Keep Win32 calls within their owning service or platform adapter (`TextInjector`, `Hotkey`,
+  `EtaCalc` native helpers, and `WindowStyleNativeApi`); do not put P/Invoke in unrelated UI code.
 - WPF: `Dispatcher.Invoke` for cross-thread UI updates.
 - No MVVM framework – direct code-behind, the app is small.
 
 ### `.editorconfig`
-The `.editorconfig` file is in the project root (`D:\tec\cs\whisper-writer\.editorconfig`) and defines mandatory formatting rules:
+The `.editorconfig` file is at the project root:
+`D:\tec\cs\whisper-writer-wpf\.editorconfig`. It defines formatting defaults:
 
 ```ini
 root = true
@@ -466,8 +492,8 @@ csharp_new_line_before_finally = false
 
 Key points:
 - Indentation: **TAB**, width 4.
-- Encoding: **UTF-8** (without BOM – `charset = utf-8`, not `-bom`).
-- Line endings: **LF** (`\n`), not CRLF.
+- Encoding: `.editorconfig` defaults to UTF-8; preserve existing BOM choices.
+- Line endings: `.editorconfig` defaults to LF; preserve existing CRLF in solution/project files.
 - No blank line at end of file (`insert_final_newline = false`).
 - Trailing whitespace is not trimmed (`trim_trailing_whitespace = false`).
 - C# style: **K&R** – opening `{` always at the **end of the line** (not Allman).
@@ -475,25 +501,25 @@ Key points:
 
 ---
 
-### File encoding
-All files in this project use **UTF-8 without BOM**.
-When using PowerShell to read or search files, always add `-Encoding UTF8`.
+### File encoding and line endings
+Follow `.editorconfig` for new files, but preserve existing file encoding and line endings when editing.
+The current checkout has exceptions (including a BOM in `.editorconfig` and CRLF in the solution and
+project files), so do not normalize whole files merely to match defaults.
 
 ### Editing files
-When editing files **always** use the `replace_string_in_file` or `multi_replace_string_in_file` tool.
-Never use terminal scripts (PowerShell, Node.js) to **write or modify** C# files — prefer file-editing tools.
-Exception: files outside the project (`.editorconfig`, `.md`) may be written via `node -e` with a single-line command using `fs.writeFileSync`.
-If you need PowerShell only for **reading or searching**, use it, but add `-Encoding UTF8` and run the command as a single line, not as a block script.
-Line endings in C# files are **LF** – do not fix them manually, `replace_string_in_file` will preserve them.
+Use the available file-editing tools and narrow patches; preserve unrelated user changes.
+Avoid broad scripted rewrites and line-ending-only changes. Never stage or commit unless the user asks.
 
 ### Updating files after completing a task
-**After every successfully completed task where `run_build` returns a successful build, you MUST update ALL of the following files to reflect the current state of the application:**
+After a task changes project behavior, structure, or user-facing instructions, update only the applicable
+documentation and verify it against the source and test results. Use the documented `dotnet build`
+and `dotnet test` commands.
 
 #### `AGENTS.md` (this file)
 - Section **3. Project structure** – add/remove files as appropriate.
-- Section **4. Key files** – update descriptions of changed files, add descriptions of new files.
+- Section **4. Current code map** – update descriptions of changed files and boundaries.
 - Section **7. Known issues / TODO** – move resolved items to "Resolved issues", remove or update items that have changed, add new open tasks if they arose.
-- Section **9. Ideas for future development** – remove ideas that have been implemented.
+- Section **10. Ideas for future development** – remove ideas that have been implemented.
 - Any other sections whose content has become outdated by the task change.
 
 #### `.agents/ROADMAP.md`
@@ -519,8 +545,10 @@ These files together form the primary source of context for future AI sessions �
 
 ## 9. Settings and Configuration
 
-- All user-configurable values live in `Util/AppSettings.cs` as public properties with defaults.
-- Settings are serialized to `settings.json` next to the exe via `SettingsService`.
+- User-configurable defaults live in `WhisperWriter/Models/AppSettings.cs`.
+- `WhisperWriter/Services/Settings.cs` loads and saves `settings.json` beside the executable.
+- Current settings include model path, language, prompt, hotkey codes, history size, clipboard/startup
+  flags, and the main-window position.
 - Never hardcode a value that the user might want to change. If in doubt, add it to `AppSettings`.
 - `AppSettings` must remain a plain POCO – no logic, no dependencies, no constructor parameters.
 
@@ -536,4 +564,4 @@ Ideas mentioned during development, not yet implemented:
 - **Multiple microphones** – `WaveInEvent.DeviceNumber`, selection in Settings.
 - **Silent recording discard** – RMS threshold below which the recording is discarded (anti-click).
 
-#6f323892d19a8f9cb126853467b9b180a07e6c4b
+#61382e8595a0f321bdbe140536579dbd6eb0a6c8
