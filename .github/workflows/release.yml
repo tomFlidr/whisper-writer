@@ -48,7 +48,7 @@ jobs:
 
       # ── 2. .NET SDK ──────────────────────────────────────────────────────────
       # windows-latest ships with .NET 8, 9 and 10 pre-installed.
-      # We pin to .NET 8 to match the TargetFramework (net8.0-windows).
+      # We pin to .NET 8 to match the TargetFramework (net8.0-windows7.0).
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
@@ -60,7 +60,7 @@ jobs:
       - name: Disable assembly signing
         shell: pwsh
         run: |
-          $csproj = "WhisperWriter.csproj"
+          $csproj = "WhisperWriter/WhisperWriter.csproj"
           $content = Get-Content $csproj -Raw -Encoding UTF8
           # Disable strong-name signing
           $content = $content -replace '<SignAssembly>true</SignAssembly>', '<SignAssembly>false</SignAssembly>'
@@ -76,7 +76,7 @@ jobs:
         if: matrix.cuda == false
         shell: pwsh
         run: |
-          $csproj = "WhisperWriter.csproj"
+          $csproj = "WhisperWriter/WhisperWriter.csproj"
           $content = Get-Content $csproj -Raw -Encoding UTF8
           $content = $content -replace '(?s)<Target Name="CopyCudaRuntimeDlls".*?</Target>', ''
           [System.IO.File]::WriteAllText($csproj, $content, [System.Text.Encoding]::UTF8)
@@ -84,14 +84,14 @@ jobs:
 
       # ── 5. Restore ───────────────────────────────────────────────────────────
       - name: Restore NuGet packages
-        run: dotnet restore WhisperWriter.csproj -r ${{ matrix.rid }}
+        run: dotnet restore WhisperWriter/WhisperWriter.csproj -r ${{ matrix.rid }}
 
       # ── 6. Publish ───────────────────────────────────────────────────────────
       # PublishSingleFile=true is already set in the .csproj.
       # We override RuntimeIdentifier on the command line.
       - name: Publish (${{ matrix.rid }})
         run: >
-          dotnet publish WhisperWriter.csproj
+          dotnet publish WhisperWriter/WhisperWriter.csproj
           -c Release
           -r ${{ matrix.rid }}
           --no-restore
