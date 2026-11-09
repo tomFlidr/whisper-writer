@@ -1,7 +1,7 @@
 # WhisperWriter – Roadmap
 
-Tento soubor obsahuje plán všech plánovaných změn v aplikaci, seřazený od těch s
-**největším dopadem na kód** po ty s nejmenším. Každá fáze má před implementací vlastní
+Tento soubor obsahuje plán všech plánovaných změn aplikace v doporučeném pořadí
+implementace. Každá fáze má před implementací vlastní
 specifikaci v `.agents/specs/`. Každá hotová položka se přesouvá do sekce **Dokončeno** a
 zároveň se aktualizuje `AGENTS.md`.
 
@@ -21,18 +21,43 @@ Hosted GitHub Actions zatím neběželo; výsledek zůstává neověřený.
 
 ---
 
-## Fáze 1 - dodělat hrubý refactoring
+## Fáze 2 – Paralelní nahrávání a transkripce přes hotkey
 
-Původní refaktorovací položky jsou v sekci **Dokončeno**. Přechod na Avalonia je odložen do Fáze 6.
+**Proč:** Uživatel chce po ukončení nahrávky ihned pokračovat dalším úsekem, i když se
+předchozí úsek ještě přepisuje. Každá dávka má být konvertována samostatně a souběžně,
+ne čekat ve frontě na dokončení předchozí konverze.
 
-## Fáze 2 – Sjednocení sekundárních oken do jednoho tabbed okna
+**Co se změní:**
+- Každé uvolnění hotkey uzavře vlastní audio dávku a okamžitě spustí její transkripci
+  jako samostatnou souběžnou úlohu; nesmí čekat na dokončení starších úloh ani se pouze
+  zařadit za ně do FIFO fronty.
+- Další stisk hotkey zahájí nové nahrávání, i když jedna nebo více předchozích transkripcí
+  právě běží. Opakování tohoto cyklu nesmí předchozí nahrávku přepsat, zrušit ani ztratit
+  a ani ztratit cílové pole kam se text má vepsat.
+- Každá úloha bude mít vlastní neměnná audio data, stav, chybu a kontext potřebný pro
+  vložení výsledku. Sdílený mutable stav nesmí propojit obsah různých nahrávek.
+- Ověřit, že transkripční engine skutečně podporuje současná inference volání; případně
+  vytvořit nezávislé inference kontexty. Stanovit bezpečný stupeň souběhu s ohledem na
+  CPU/GPU paměť, ale neřešit další dávky jejich serializací do čekací fronty.
+- Výsledek musí zůstat přiřazen ke správné nahrávce. Chování vkládání výsledků, pokud
+  se paralelní úlohy dokončí v jiném pořadí, upřesní specifikace před implementací.
+- Automatizované testy ověří, že druhý přepis začne před dokončením prvního, že další
+  nahrávání zůstane dostupné a že žádná audio dávka ani výsledek není zaměněn nebo ztracen.
 
-> Druhý největší dopad na kód – kompletně přestrukturuje složku `Views/`,
+---
+
+## Fáze 3 – dodělat hrubý refactoring
+
+Původní refaktorovací položky jsou v sekci **Dokončeno**. Přechod na Avalonia je odložen do Fáze 8.
+
+## Fáze 4 – Sjednocení sekundárních oken do jednoho tabbed okna
+
+> Výrazný dopad na kód – kompletně přestrukturuje složku `Views/`,
 > odstraní tři samostatná okna a nahradí je `UserControl` panely uvnitř jednoho `AppWindow`.
 
 ---
 
-### 2.1 Refaktorovat stávající okna na `UserControl` panely
+### 4.1 Refaktorovat stávající okna na `UserControl` panely
 
 **Proč:** Aktuálně existují tři samostatná WPF okna – `SettingsWindow`, `HistoryWindow`, `AboutWindow`.
 Každé se otevírá zvlášť přes tray menu a vzájemně se navzájem zavírají (`CloseSecondaryWindow`).
@@ -48,23 +73,23 @@ Uživatel chce, aby tato okna byla pohromadě jako záložky v jednom okně, nik
 
 ---
 
-### 2.2 Vytvořit nové `AppWindow` se záložkami
+### 4.2 Vytvořit nové `AppWindow` se záložkami
 
 **Proč:** Potřebujeme nové hostitelské okno, které drží `TabControl` se záložkami Settings, Transcriptions, About.
 
 **Co se změní:**
 - Vznikne `Views/AppWindow.xaml` + `.cs` s `TabControl`.
-- Záložky budou hostovat příslušné panely z 2.1.
+- Záložky budou hostovat příslušné panely z 4.1.
 - `AppWindow` bude singleton – druhé volání jen přepne záložku a aktivuje okno, neotvírá novou instanci.
 - Veřejná metoda `Show(int tabIndex)` umožní tray menu otevřít okno rovnou na správné záložce.
 - Tlačítka Save / Cancel pro nastavení budou v patičce `AppWindow` (sdílená pro celé okno), ne uvnitř panelu.
 - Při odchodu na jinou záložku nebo zavření `AppWindow` s neuloženými změnami nabídnout
   jejich uložení a pokračování, nebo zahození změn a pokračování.
-- Podrobné chování potvrzovacího dialogu bude popsáno ve specifikaci Fáze 2 před implementací.
+- Podrobné chování potvrzovacího dialogu bude popsáno ve specifikaci Fáze 4 před implementací.
 
 ---
 
-### 2.3 Aktualizovat `App.xaml.cs` – nahradit `ShowAbout/History/Settings` voláním `AppWindow`
+### 4.3 Aktualizovat `App.xaml.cs` – nahradit `ShowAbout/History/Settings` voláním `AppWindow`
 
 **Co se změní:**
 - `App.ShowAbout()`, `App.ShowHistory()`, `App.ShowSettings()` budou všechny volat `AppWindow.Show(tabIndex)`.
@@ -73,7 +98,7 @@ Uživatel chce, aby tato okna byla pohromadě jako záložky v jednom okně, nik
 
 ---
 
-### 2.4 Zajistit viditelnost `AppWindow` v Alt+Tab
+### 4.4 Zajistit viditelnost `AppWindow` v Alt+Tab
 
 **Proč:** Uživatel chce, aby se sekundární okna (Settings, History, About) zobrazovala v Alt+Tab
 přepínači jako normální aplikační okna. Zároveň `MainWindow` nesmí být nikdy v Alt+Tab vidět.
@@ -85,14 +110,14 @@ přepínači jako normální aplikační okna. Zároveň `MainWindow` nesmí bý
 
 ---
 
-## Fáze 3 – Malé izolované změny
+## Fáze 5 – Malé izolované změny
 
 > Nejmenší dopad na kód – každá změna je nezávislá na ostatních.
 > Lze implementovat v libovolném pořadí, ideálně mezi většími fázemi.
 
 ---
 
-### 3.1 Přidat 300 ms ticha na začátek nahrávky pro Whisper
+### 5.1 Přidat 300 ms ticha na začátek nahrávky pro Whisper
 
 **Proč:** Whisper občas zahodí první písmeno nebo slabiku nahrávky, pokud neexistuje žádný náběhový čas.
 Přidání 300 ms ticha (nulové PCM bajty) před skutečnou nahrávku tento artifact eliminuje.
@@ -101,11 +126,11 @@ Přidání 300 ms ticha (nulové PCM bajty) před skutečnou nahrávku tento art
 - V `MainWindow.OnPttStopped`, po zavolání `_recorder.StopRecording()`, se k výsledným WAV bytům prepend
   300 ms ticha: `300 ms × 16 000 Hz × 2 bytes = 9 600 bytů` nulových hodnot vložených za WAV hlavičku před PCM data.
 - Alternativně lze upravit `AudioRecorder.StopRecording()` tak, aby ticho přidávala sama jako volitelný parametr.
-- Pro Parakeet platí jiné výchozí ticho (250 ms), řeší se v Fázi 4 samostatně v `ParakeetService`.
+- Pro Parakeet platí jiné výchozí ticho (250 ms), řeší se v Fázi 7 samostatně v `ParakeetService`.
 
 ---
 
-### 3.2 Přidat do tray menu položku „Kopírovat poslední přepis"
+### 5.2 Přidat do tray menu položku „Kopírovat poslední přepis"
 
 **Proč:** Uživatel chce rychle zkopírovat poslední přepis do schránky přímo z tray menu, bez nutnosti
 otevírat okno Historie.
@@ -118,7 +143,7 @@ otevírat okno Historie.
 
 ---
 
-### 3.3 Zvukové upozornění při selhání injektáže textu
+### 5.3 Zvukové upozornění při selhání injektáže textu
 
 **Proč:** Když se `SendInput` nepovede (vrátí méně odeslaných eventů než očekáváme), uživatel se to
 nijak nedozví – text se nezobrazí v cílovém okně a aplikace jen tiše selže. Krátký systémový zvuk
@@ -134,23 +159,23 @@ okamžitě upozorní, že text se nevložil.
 
 ---
 
-### 3.4 Do nastavení přidat volbu pro překlad
+### 5.4 Do nastavení přidat volbu pro překlad
 
 Cílem je, aby šel překlad skutečně používat přímo v aplikaci. Výchozí stav překladu musí být vypnutý.
 Konkrétní režim, cílový jazyk a ovládání se určí po průzkumu a v samostatné specifikaci.
 
 ---
 
-## Fáze 4 – Podpora GPU backendů
+## Fáze 6 – Další GPU backendy a ONNX Runtime
 
-> Střední dopad – přidání NuGet balíčků, rozšíření stávajících servisních tříd a Settings.
-> Nezávisí na Fázích 2 a 3, ale musí proběhnout před implementací Parakeet (Fáze 5).
+> Další backendy pro Whisper.net a ONNX Runtime; tato fáze musí proběhnout před
+> implementací Parakeet (Fáze 7). Nezávisí na Fázích 4 a 5.
 > U větších runtime balíčků nejprve prozkoumat distribuci; preferovat stažení s potvrzením
 > uživatele při instalaci nebo samostatný instalační skript.
 
 ---
 
-### 4.1 Vulkan backend pro Whisper.net
+### 6.1 Vulkan backend pro Whisper.net
 
 **Proč:** Aplikace aktuálně na GPU funguje pouze přes CUDA. Vulkan je cross-vendor GPU API,
 které funguje i na AMD a Intel GPU. Whisper.net má pro Vulkan samostatný runtime balíček.
@@ -164,15 +189,15 @@ které funguje i na AMD a Intel GPU. Whisper.net má pro Vulkan samostatný runt
 
 ---
 
-### 4.2 DirectML backend pro ONNX Runtime (příprava pro Parakeet)
+### 6.2 DirectML backend pro ONNX Runtime (příprava pro Parakeet)
 
-**Proč:** ONNX Runtime, který bude Parakeet Service využívat (Fáze 5), nativně podporuje DirectML –
+**Proč:** ONNX Runtime, který bude Parakeet Service využívat (Fáze 7), nativně podporuje DirectML –
 GPU akceleraci dostupnou na každém Windows 10/11 systému bez závislosti na CUDA nebo specifickém vendoru.
 
 **Co se změní:**
 - Přidat NuGet balíček `Microsoft.ML.OnnxRuntime.DirectML` jako podmíněný balíček (pouze `win-x64`).
 - Do `AppSettings` přidat vlastnost `OrtBackend` s hodnotami `Auto`, `Cpu`, `DirectMl`.
-  (`Cuda` přijde v 4.3.) Výchozí hodnota: `Auto`.
+  (`Cuda` přijde v 6.3.) Výchozí hodnota: `Auto`.
 - `Auto` bude znamenat: zkus DirectML, fallback CPU.
 - DirectML vyžaduje speciální nastavení session (`parallel_execution = false`, `memory_pattern = false`) –
   tato nastavení budou zdokumentována komentáři přímo v kódu `ParakeetService`.
@@ -180,7 +205,7 @@ GPU akceleraci dostupnou na každém Windows 10/11 systému bez závislosti na C
 
 ---
 
-### 4.3 CUDA backend pro ONNX Runtime
+### 6.3 CUDA backend pro ONNX Runtime
 
 **Proč:** Pro uživatele s NVIDIA GPU a CUDA toolkitem bude CUDA inference výrazně rychlejší než DirectML.
 
@@ -192,31 +217,16 @@ GPU akceleraci dostupnou na každém Windows 10/11 systému bez závislosti na C
 
 ---
 
-### 4.4 const-me/whisper
-
-Zkusit implementovat na Windows rozpoznání podpory pro https://github.com/const-me/whisper,
-ale musí to být na jistotu, protože tato knihovna nemá fallback pro CPU, ale je 3.5x rychlejší v inferenci.
-
-**Co se změní:**
-- je třeba vytvořit C# wrapper,
-- je třeba tuto knihovnu přidat do projektu, detekovat Windows podporu při startu 
-  a podle toho zvolit jak se bude procesovat zvuk,
-- podle podpory nabízet stažení modelů, které pro tento procesing musí být v jiném formátu:
-  https://huggingface.co/ggerganov/whisper.cpp/tree/main
-- procesovat zvuk touto knihovnou a modely.
-
----
-
-## Fáze 5 – Parakeet V3 engine
+## Fáze 7 – Parakeet V3 engine
 
 > Největší nová feature – nový transkripční engine, nová stahovaná data, nová servisní třída, změny settings.
-> Závisí na Fázi 1 (ITranscriptionService), Fázi 2 (SettingsPanel detekce modelů) a Fázi 4 (ORT backendy).
+> Závisí na Fázi 3 (ITranscriptionService), Fázi 4 (SettingsPanel detekce modelů) a Fázi 6 (ORT backendy).
 > U větších modelů nejprve prozkoumat distribuci; preferovat samostatné stažení s potvrzením
 > uživatele nebo instalační skript.
 
 ---
 
-### 5.1 Rozšíření `WhisperWriter/download-models.ps1` o stažení Parakeet V3
+### 7.1 Rozšíření `WhisperWriter/download-models.ps1` o stažení Parakeet V3
 
 **Proč:** Parakeet model je distribuován jako `.tar.gz` archiv (nikoli jako jediný `.bin` soubor jako
 Whisper GGML modely). Po rozbalení vznikne **adresář** s ONNX soubory. Stávající skript umí pouze stáhnout
@@ -243,7 +253,7 @@ a přejmenovat soubor – je třeba přidat rozbalování archivu.
 
 ---
 
-### 5.2 Detekce modelů v `SettingsPanel` dle typu souboru/adresáře
+### 7.2 Detekce modelů v `SettingsPanel` dle typu souboru/adresáře
 
 **Proč:** Stávající `SettingsWindow.BuildModelItems()` kontroluje pouze pevně zadaný seznam 12 `.bin` souborů.
 Po přidání Parakeet je třeba detekovat modely dynamicky a rozlišovat Whisper (`.bin`) od Parakeet (adresář).
@@ -258,7 +268,7 @@ Po přidání Parakeet je třeba detekovat modely dynamicky a rozlišovat Whispe
 
 ---
 
-### 5.3 Implementovat `ParakeetService` (C# + Microsoft.ML.OnnxRuntime)
+### 7.3 Implementovat `ParakeetService` (C# + Microsoft.ML.OnnxRuntime)
 
 **Proč:** Jde o samotný nový transkripční engine – přímá C# implementace inference pipeline
 nad ONNX Runtime, bez závislosti na Rustu nebo externím procesu.
@@ -279,13 +289,13 @@ Soubory v adresáři `parakeet-tdt-0.6b-v3-int8/`:
 5. Vocabulary lookup: token IDs → text přes `vocab.txt` slovník.
 
 **Co se změní:**
-- Vznikne `Services/ParakeetService.cs` implementující `ITranscriptionService` (z bodu 1.1).
-- NuGet: `Microsoft.ML.OnnxRuntime` (přidáno v Fázi 4.2 DirectML nebo 4.3 CUDA).
+- Vznikne `Services/ParakeetService.cs` implementující `ITranscriptionService` (z bodu 3.1).
+- NuGet: `Microsoft.ML.OnnxRuntime` (přidáno v Fázi 6.2 DirectML nebo 6.3 CUDA).
 - `StateChanged` event bude sdílet stejný `TranscriptionState` enum jako `WhisperService`.
 
 ---
 
-### 5.4 Přepínání mezi Whisper a Parakeet engine za běhu
+### 7.4 Přepínání mezi Whisper a Parakeet engine za běhu
 
 **Proč:** `App` musí při startu nebo po změně nastavení vytvořit správnou implementaci `ITranscriptionService`
 dle `AppSettings.EngineType`. Při změně v Settings musí starý engine zlikvidovat a nový inicializovat.
@@ -299,9 +309,9 @@ dle `AppSettings.EngineType`. Při změně v Settings musí starý engine zlikvi
 
 ---
 
-## Fáze 6 – Průzkum a případný přechod na Avalonia
+## Fáze 8 – Průzkum a případný přechod na Avalonia
 
-**Proč:** Do dokončení Fází 0–5 se projekt soustředí na Windows. Teprve potom se vyhodnotí,
+**Proč:** Do dokončení Fází 0–7 se projekt soustředí na Windows. Teprve potom se vyhodnotí,
 které části aplikace lze přenést.
 
 **Co se změní:**
@@ -323,42 +333,81 @@ které části aplikace lze přenést.
   aplikační build v obou konfiguracích: **0 warningů, 0 chyb**.
 - Non-zero návratový kód `dotnet test` při selhání assertion byl ověřen dočasným testem,
   který byl následně odstraněn.
-- Hosted GitHub Actions výsledek zůstává neověřený, protože změny nebyly commitnuty ani pushnuty.
+- Hosted GitHub Actions zatím neběželo, takže výsledek CI na hostovaném runneru zůstává neověřený.
 - Oddíly 1–9 v `AGENTS.md` jsou sladěné s aktuálním stromem, testy, build příkazy a nastaveními;
   Appendix A je označený jako historický kontext.
 - První pozdější změna aplikačního chování musí samostatně projít RED → GREEN → REFACTOR;
   tento krok zůstává odložený, aby Fáze 0 skončila bez zahájení další fáze.
 
+### ✅ Fáze 1 – Vyhodnocení GPU backendu (uzavřeno bez integrace)
+
+- Sestavitelnost a licenční podmínky `Const-me/Whisper` byly ověřeny v izolovaném scratch prostoru.
+- Na 10 českých nahrávkách se stejným modelem `ggml-medium.bin`, jazykem `cs` a promptem
+  byla stávající Whisper.net CUDA cesta rychlejší než Const-me D3D11.
+- Ověřil se běh stávajícího `ggml-medium.bin`; ostatní GGML modely aplikace nebyly
+  v této evaluaci jednotlivě testovány.
+- Součet času přepisu: Whisper.net CUDA **144,040 s**; Const-me přes Media Foundation
+  **148,296 s**; Const-me přes přímý PCM buffer **147,110 s**. Ani jedna varianta Const-me
+  nepřinesla celkovou úsporu času.
+- Vážená WER byla **11,23 %** u Whisper.net i varianty Media Foundation; přímý PCM měl
+  **11,38 %**. CER byla **2,92 %** u Whisper.net, **2,72 %** u Media Foundation
+  a **2,66 %** u přímého PCM. Zlepšení znakové chybovosti je malé a u přímého PCM
+  přibyla jedna slovní chyba.
+- Const-me se podařilo spustit také na lokálním Intel UHD přes Direct3D 11. Tento adaptér
+  je integrovaný a slabý; jeho pomalý výsledek **není zobecněním výkonu D3D11** ani AMD
+  GPU. Na 24,9s nahrávce trval přepis 218,6s, zatímco Whisper.net CPU 19,3s. Smoke test
+  potvrzuje pouze funkčnost této konkrétní karty; žádný AMD GPU ani starší počítač nebyl
+  testován.
+- Závěr: Const-me se neintegruje jako rychlejší backend. Případná širší podpora AMD/Intel
+  je samostatný cíl kompatibility pro pozdější fázi a vyžaduje ověření na reprezentativním
+  hardwaru. Fáze 6.1 už obsahuje Vulkan backend pro Whisper.net.
+- Projekt už obsahuje rozhraní `ITranscription`; roadmapová Fáze 3.1 používá odlišný název
+  `ITranscriptionService`, proto je nutné před další integrací pracovat s aktuálním kontraktem.
+- Čistý .NET single-file publish nezahrnul nativní `Whisper.dll`; integrace by vyžadovala
+  explicitní kopírování nebo ověřené rozbalení nativní knihovny. Balíček je určen pro x64;
+  současný CPU fallback musí zůstat pro x86 a zařízení bez vhodného GPU.
+- Testovaný balíček `WhisperNet 1.12.0` používá `ComLightInterop 1.3.7` a licenci MPL-2.0;
+  před distribucí je třeba zachovat požadované licenční a zdrojové informace.
+- Produkční kód ani NuGet reference se během evaluace nezměnily; fáze se uzavírá jako
+  dokončený průzkum, nikoli jako implementovaná GPU akcelerace.
+- Zdrojový projekt pro tuto evaluaci byl stažen mimo repozitář do
+  `D:\llms\hermes\cache\scratch\const-me-whisper-spike-2026-11-05` (dočasný scratch,
+  může být automaticky odstraněn po 24 hodinách nečinnosti).
+  Použitý commit: `1ce7399704d8bea92429fc429819d32991fe9152`. Trvalý upstream zdroj:
+  [Const-me/Whisper](https://github.com/Const-me/Whisper); nativní projekt je ve `Whisper/`,
+  C# wrapper v `WhisperNet/`.
+- Úplné výsledky a předávací poznámky: `.agents/specs/gpu-backend-benchmark-handoff.md`.
+
 > Starší dokončené položky níže uchovávají historii a mohou používat tehdejší názvy souborů/tříd.
 > Pro aktuální strom použij zdrojový kód a `.agents/specs/phase-0-coverage-inventory.md`.
 
-### ✅ Fáze 1 – Refaktoring a čistota kódu
+### ✅ Fáze 3 – Refaktoring a čistota kódu
 
-#### 1.1 Zavést rozhraní `ITranscriptionService`
+#### 3.1 Zavést rozhraní `ITranscriptionService`
 - Vznikl `Services/ITranscriptionService.cs`.
 - `WhisperService` implementuje `ITranscriptionService`.
 - `App.WhisperService` má typ `ITranscriptionService`.
 
-#### 1.2 Přejmenovat `EtaStatsService` → `EtaService`, `App.EtaStats` → `App.Eta`
+#### 3.2 Přejmenovat `EtaStatsService` → `EtaService`, `App.EtaStats` → `App.Eta`
 - Třída v `EtaStatsService.cs` přejmenována na `EtaService`.
 - `App.EtaStats` → `App.Eta` ve všech souborech.
 
-#### 1.3 Opravit `ContinueWith` + `Unwrap` v `WhisperService.InitializeAsync`
+#### 3.3 Opravit `ContinueWith` + `Unwrap` v `WhisperService.InitializeAsync`
 - Blok přepsán na čistý `await`.
 
-#### 1.4 Vyextrahovat logiku pozicování okna do `Services/WindowPositioner.cs`
+#### 3.4 Vyextrahovat logiku pozicování okna do `Services/WindowPositioner.cs`
 - Vznikl `Services/WindowPositioner.cs` (~150 řádků).
 - `MainWindow.xaml.cs` zkrácen o ~130 řádků.
 
-#### 1.5 Zbavit `TextInjector` přímé závislosti na `App.SettingsService`
+#### 3.5 Zbavit `TextInjector` přímé závislosti na `App.SettingsService`
 - `InjectText` má signaturu `InjectText(string text, IReadOnlyList<int> pttVkCodes)`.
 - Volající `MainWindow.OnPttStopped` předává `HotkeyVkCodes` jako argument.
 
-#### 1.6 Nahradit magická čísla pojmenovanými konstantami
+#### 3.6 Nahradit magická čísla pojmenovanými konstantami
 - `MainWindow.WavBytesPerSecond = 32000` nahrazuje magic number.
 - `WhisperService.MinModelFileSizeBytes` je `public const`.
 
-#### Další opravy coding standards (součást Fáze 1)
+#### Další opravy coding standards (součást Fáze 3)
 - `PowerStatusSnapshot` přesunuto do vlastního souboru `Services/PowerStatusSnapshot.cs` s `public` viditelností.
 - `AudioRecorder`, `HotkeyService`: odstraněno `sealed`, přidáno `this.`/`ClassName.`, opraveno pořadí členů.
 - `SettingsService`: přidáno `this.` pro instance property, `SettingsService.` pro statické členy.

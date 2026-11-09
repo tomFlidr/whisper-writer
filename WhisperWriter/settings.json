@@ -1,6 +1,6 @@
 {
   "ModelPath": "llms/ggml-medium.bin",
-  "Language": "auto",
+  "Language": "cs",
   "Prompt": "Přepis mluvené češtiny, neformální styl, vulgarismy ponechej beze změny. IT termíny piš v angličtině (např. commit, pull request, merge, deploy, backend, frontend, API, Docker, branch, debug, framework, server, build, release, pipeline, dotnet). Nepřekládej, pouze přepisuj.",
   "HotkeyModifiers": 9,
   "HotkeyCodes": [ 164, 91 ],
