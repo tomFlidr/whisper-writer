@@ -7,7 +7,7 @@
 
 Establish a repeatable automated test workflow before implementing the behavior planned in
 later roadmap phases. The active target remains Windows/WPF; cross-platform migration is
-deferred to Phase 6.
+deferred to Phase 8.
 
 ## Initial baseline (before Phase 0)
 
@@ -70,8 +70,7 @@ deferred to Phase 6.
   window, downloaded models, or external network services.
 - Isolate Windows and hardware APIs behind testable boundaries. Keep hardware-dependent checks separate and opt-in.
 - New behavior and fixes follow RED → GREEN → REFACTOR; behavior-preserving refactors start from
-  a passing characterization baseline. The first later product behavior slice must demonstrate
-  the full test-first cycle; that is deferred until its phase begins.
+  a passing characterization baseline. Continue this test-first cycle for every later behavior phase.
 
 ## Completion criteria — verified locally
 
@@ -90,8 +89,9 @@ deferred to Phase 6.
   CI has not been claimed as passing.
 - `AGENTS.md` Sections 1–9 now reflect the current project path, source map, test workflow, and
   settings. Appendix A is explicitly historical and is not current implementation guidance.
-- No new product behavior is part of Phase 0. The first later behavior slice must demonstrate
-  RED → GREEN → REFACTOR; this requirement is deferred until that slice begins so Phase 0 can stop.
+- Phase 0 itself introduced no product behavior. The first subsequent behavior phase, Phase 2,
+  is documented in `.agents/specs/phase-2-parallel-transcription.md` and is complete. Later changes
+  must continue to follow RED → GREEN → REFACTOR.
 - No files were staged or committed as part of Phase 0.
 
 ## Approved framework and runner
