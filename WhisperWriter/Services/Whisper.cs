@@ -76,12 +76,15 @@ public class Whisper : ITranscription, IService, ISingleton {
 	/// Emits StateChanged events for UI feedback and records failures to the log.
 	/// </summary>
 	public async Task InitializeAsync(string modelPath) {
-		this.StateChanged?.Invoke(TranscriptionState.Loading, "Loading model…");
+		this.StateChanged?.Invoke(TranscriptionState.Loading, "GPU Detection…");
 
 		var cudaVersion = this.runtime.DetectCudaVersion();
 		this.log.Info(cudaVersion.HasValue
 			? $"CUDA probe: cudart64_{cudaVersion}.dll + cublas64_{cudaVersion}.dll found — GPU will be used (CUDA {cudaVersion})"
 			: "CUDA probe: no CUDA runtime found (tried versions 13, 12, 11) — falling back to CPU");
+		this.StateChanged?.Invoke(TranscriptionState.Loading, cudaVersion.HasValue
+			? $"Loading model… (CUDA {cudaVersion} detected)"
+			: "Loading model… (CPU)");
 
 		try {
 			// Delete and re-download if the file exists but is clearly truncated.

@@ -171,13 +171,8 @@ public partial class MainWindow : Window, IService, ISingleton {
 		this.etaTimer.Interval = TimeSpan.FromSeconds(1);
 		this.handleQueueStatusChanged(runtime.GetQueueStatus());
 
+		this.setStatus("GPU Detection…");
 		runtime.StartHotkey();
-
-		// Show GPU/CPU backend info in status during startup
-		var cudaVersion = this.windowPlatform.DetectCudaVersion();
-		this.setStatus(cudaVersion.HasValue
-			? $"Loading model… (GPU)"
-			: "Loading model… (CPU)");
 
 		// Fade in
 		this.windowPlatform.BeginStoryboard(this, "FadeIn");

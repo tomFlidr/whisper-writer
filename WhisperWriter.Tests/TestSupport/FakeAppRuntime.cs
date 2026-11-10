@@ -8,6 +8,9 @@ internal class FakeAppRuntime : WhisperWriter.IAppRuntime {
 	public MainWindow? Window { get; set; }
 	public List<string> Effects { get; } = [];
 	public List<(string Message, Exception Exception)> Errors { get; } = [];
+	public ManualResetEventSlim? InitializationGate { get; set; }
+	public TaskCompletionSource<int> WhisperInitializationStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+	public TaskCompletionSource<bool> WhisperInitializationCompleted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 	public Action<string, Exception>? OnLogError { get; set; }
 	public UnhandledExceptionEventHandler? AppDomainUnhandledExceptionHandler { get; private set; }
 
@@ -20,6 +23,9 @@ internal class FakeAppRuntime : WhisperWriter.IAppRuntime {
 	public void ShowMainWindow (MainWindow? window) => this.Effects.Add("show-main-window");
 	public Task InitializeWhisperAsync (string modelPath) {
 		this.Effects.Add($"whisper-initialize:{modelPath}");
+		this.WhisperInitializationStarted.TrySetResult(Environment.CurrentManagedThreadId);
+		this.InitializationGate?.Wait();
+		this.WhisperInitializationCompleted.TrySetResult(true);
 		return Task.CompletedTask;
 	}
 	public void HandleTrayExit () => this.Effects.Add("tray-exit");

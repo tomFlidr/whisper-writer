@@ -41,7 +41,8 @@ public class WhisperTests {
 		await whisper.InitializeAsync(model.Path);
 
 		Assert.Equal(new[] {
-			(TranscriptionState.Loading, "Loading model…"),
+			(TranscriptionState.Loading, "GPU Detection…"),
+			(TranscriptionState.Loading, "Loading model… (CPU)"),
 			(TranscriptionState.Loading, "Downloading model…"),
 			(TranscriptionState.Idle, "Ready"),
 		}, states);
@@ -62,7 +63,8 @@ public class WhisperTests {
 		await whisper.InitializeAsync(model.Path);
 
 		Assert.Equal(new[] {
-			(TranscriptionState.Loading, "Loading model…"),
+			(TranscriptionState.Loading, "GPU Detection…"),
+			(TranscriptionState.Loading, "Loading model… (CPU)"),
 			(TranscriptionState.Idle, "Ready"),
 		}, states);
 		Assert.Equal(0, runtime.DownloadCount);
@@ -80,7 +82,8 @@ public class WhisperTests {
 		await whisper.InitializeAsync(model.Path);
 
 		Assert.Equal(new[] {
-			(TranscriptionState.Loading, "Loading model…"),
+			(TranscriptionState.Loading, "GPU Detection…"),
+			(TranscriptionState.Loading, "Loading model… (CPU)"),
 			(TranscriptionState.Loading, "Downloading model…"),
 			(TranscriptionState.Idle, "Ready"),
 		}, states);
@@ -101,11 +104,35 @@ public class WhisperTests {
 		await whisper.InitializeAsync(model.Path);
 
 		Assert.Equal(new[] {
-			(TranscriptionState.Loading, "Loading model…"),
+			(TranscriptionState.Loading, "GPU Detection…"),
+			(TranscriptionState.Loading, "Loading model… (CPU)"),
 			(TranscriptionState.Loading, "Downloading model…"),
 			(TranscriptionState.Error, "Data load failed: factory failed"),
 		}, states);
 		await Assert.ThrowsAsync<InvalidOperationException>(() => whisper.TranscribeAsync([], "en", ""));
+	}
+
+	[Fact]
+	public async Task InitializeAsync_ReportsGpuDetectionBeforeTheDetectedBackendAndModelLoad () {
+		using var model = new TemporaryModel();
+		using (var file = File.Create(model.Path))
+			file.SetLength(WhisperService.MinModelFileSizeBytes);
+		var runtime = new FakeWhisperRuntime { DetectedCudaVersion = 12 };
+		var whisper = new TestWhisper(runtime, model.Path);
+		var states = captureStates(whisper);
+		bool detectionWasAnnounced = false;
+		runtime.OnBeforeCudaDetection = () => {
+			detectionWasAnnounced = states.Last() == (TranscriptionState.Loading, "GPU Detection…");
+		};
+
+		await whisper.InitializeAsync(model.Path);
+
+		Assert.True(detectionWasAnnounced);
+		Assert.Equal(new[] {
+			(TranscriptionState.Loading, "GPU Detection…"),
+			(TranscriptionState.Loading, "Loading model… (CUDA 12 detected)"),
+			(TranscriptionState.Idle, "Ready"),
+		}, states);
 	}
 
 	[Theory]
@@ -265,9 +292,14 @@ public class WhisperTests {
 		public bool ModelExistedAtDownloadStart { get; private set; }
 		public string? CreatedFactoryPath { get; private set; }
 		public Exception? FactoryCreationException { get; init; }
+		public int? DetectedCudaVersion { get; init; }
+		public Action? OnBeforeCudaDetection { get; set; }
 		public FakeWhisperFactory Factory { get; } = new();
 
-		public int? DetectCudaVersion() => null;
+		public int? DetectCudaVersion() {
+			this.OnBeforeCudaDetection?.Invoke();
+			return this.DetectedCudaVersion;
+		}
 
 		public Task DownloadModelAsync(string modelPath) {
 			this.DownloadCount++;

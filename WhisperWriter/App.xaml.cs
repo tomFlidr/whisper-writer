@@ -49,7 +49,7 @@ public partial class App : System.Windows.Application, IService, ISingleton {
 			AppContext.BaseDirectory,
 			runtime.ModelPath
 		);
-		await runtime.InitializeWhisperAsync(modelPath);
+		await Task.Run(() => runtime.InitializeWhisperAsync(modelPath));
 	}
 
 	/// <summary>

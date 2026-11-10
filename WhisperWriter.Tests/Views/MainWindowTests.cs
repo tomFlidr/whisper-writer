@@ -20,11 +20,11 @@ namespace WhisperWriter.Tests.Views;
 
 public class MainWindowTests {
 	[Fact]
-	public void Activation_IsIdempotentStartsHotkeyAndDisplaysTheDetectedBackend () {
+	public void Activation_IsIdempotentStartsHotkeyAndShowsInitialGpuDetectionState () {
 		MainWindowTests.withWindow(fixture => {
 			Assert.Equal(new[] { "hotkey-set", "hotkey-start" }, fixture.Runtime.Calls);
 			Assert.Equal(new[] { fixture.Runtime.Settings.HotkeyCodes }, fixture.Runtime.SetHotkeyCalls);
-			Assert.Equal("Loading model… (CPU)", MainWindowTests.status(fixture.Window).Text);
+			Assert.Equal("GPU Detection…", MainWindowTests.status(fixture.Window).Text);
 			Assert.Contains((fixture.Window, "FadeIn", false), fixture.Platform.StoryboardBegins);
 
 			MainWindowTests.invoke(fixture.Window, "OnActivated", EventArgs.Empty);

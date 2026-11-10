@@ -9,7 +9,7 @@ namespace WhisperWriter.Tests;
 
 public class AppLifecycleTests {
 	[Fact]
-	public void Startup_LoadsSettingsShowsTheWindowAndInitializesWhisperInOrder () {
+	public async Task Startup_LoadsSettingsShowsTheWindowAndInitializesWhisperInOrder () {
 		var app = WpfTestHost.Application;
 		var runtime = new FakeAppRuntime { ModelPath = "llms/phase0-model.bin", HistorySize = 23 };
 		var originalPath = Environment.GetEnvironmentVariable("PATH");
@@ -25,6 +25,8 @@ public class AppLifecycleTests {
 				Environment.SetEnvironmentVariable("PATH", originalPath);
 			}
 		});
+		await runtime.WhisperInitializationCompleted.Task.WaitAsync(
+			TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
 		Assert.Equal(new[] {
 			"appdomain-handler-register",
@@ -34,6 +36,38 @@ public class AppLifecycleTests {
 			"show-main-window",
 			$"whisper-initialize:{Path.Combine(AppContext.BaseDirectory, "llms/phase0-model.bin")}",
 		}, runtime.Effects);
+	}
+
+	[Fact]
+	public async Task Startup_RunsWhisperInitializationOffDispatcherAndKeepsTheUiResponsive () {
+		var runtime = new FakeAppRuntime();
+		using var gate = new ManualResetEventSlim();
+		runtime.InitializationGate = gate;
+		int uiThreadId = WpfTestHost.ThreadId;
+		string? originalPath = Environment.GetEnvironmentVariable("PATH");
+		Task startup = Task.Run(() => WpfTestHost.Invoke(() => {
+			Environment.SetEnvironmentVariable("PATH", "C:\\phase2-startup-path");
+			WpfTestHost.SetRuntime(runtime);
+			AppLifecycleTests.invoke(WpfTestHost.Application, "OnStartup", (object?)null);
+		}), TestContext.Current.CancellationToken);
+
+		try {
+			CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+			int initializationThreadId = await runtime.WhisperInitializationStarted.Task
+				.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken);
+			Assert.NotEqual(uiThreadId, initializationThreadId);
+
+			Task<bool> dispatcherProbe = Task.Run(() => WpfTestHost.Invoke(() => true));
+			Task completed = await Task.WhenAny(dispatcherProbe, Task.Delay(TimeSpan.FromSeconds(1), cancellationToken));
+			Assert.Same(dispatcherProbe, completed);
+			Assert.True(await dispatcherProbe.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken));
+		} finally {
+			gate.Set();
+			await startup.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+			await runtime.WhisperInitializationCompleted.Task.WaitAsync(
+				TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+			WpfTestHost.Invoke(() => Environment.SetEnvironmentVariable("PATH", originalPath));
+		}
 	}
 
 	[Fact]
