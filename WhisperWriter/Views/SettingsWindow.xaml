@@ -39,6 +39,9 @@
 				<!-- history size -->
 				<RowDefinition Height="12"/>
 				<RowDefinition Height="Auto"/>
+				<!-- transcription queue limits -->
+				<RowDefinition Height="12"/>
+				<RowDefinition Height="Auto"/>
 				<!-- clipboard -->
 				<RowDefinition Height="12"/>
 				<RowDefinition Height="Auto"/>
@@ -206,22 +209,63 @@
 				         PreviewTextInput="_handleTxtHistorySizePreviewTextInput"/>
 			</StackPanel>
 
+			<!-- Transcription queue limits -->
+			<StackPanel Grid.Row="12">
+				<TextBlock Text="Transcription queue limits"
+						   Foreground="{StaticResource TextSecondaryBrush}"
+						   FontSize="11" FontFamily="Segoe UI" Margin="0,0,0,4"/>
+				<Grid>
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="*"/>
+						<ColumnDefinition Width="12"/>
+						<ColumnDefinition Width="*"/>
+					</Grid.ColumnDefinitions>
+					<StackPanel Grid.Column="0">
+						<TextBlock Text="Maximum jobs (active, waiting + recording)"
+								   Foreground="{StaticResource TextSecondaryBrush}"
+								   FontSize="11" FontFamily="Segoe UI" Margin="0,0,0,4"
+								   TextWrapping="Wrap"/>
+						<TextBox x:Name="TxtMaxOutstandingJobs"
+								 Background="#33FFFFFF" Foreground="{StaticResource TextPrimaryBrush}"
+								 BorderBrush="#44FFFFFF" BorderThickness="1"
+								 FontFamily="Segoe UI" FontSize="13" Padding="8,5" MaxLength="10"
+								 CaretBrush="White"
+								 PreviewTextInput="_handleTxtHistorySizePreviewTextInput"/>
+					</StackPanel>
+					<StackPanel Grid.Column="2">
+						<TextBlock Text="Audio budget (MiB)"
+								   Foreground="{StaticResource TextSecondaryBrush}"
+								   FontSize="11" FontFamily="Segoe UI" Margin="0,0,0,4"/>
+						<TextBox x:Name="TxtAudioBufferBudgetMiB"
+								 Background="#33FFFFFF" Foreground="{StaticResource TextPrimaryBrush}"
+								 BorderBrush="#44FFFFFF" BorderThickness="1"
+								 FontFamily="Segoe UI" FontSize="13" Padding="8,5" MaxLength="10"
+								 CaretBrush="White"
+								 PreviewTextInput="_handleTxtHistorySizePreviewTextInput"/>
+					</StackPanel>
+				</Grid>
+				<TextBlock x:Name="TxtAudioBufferBudgetDescription"
+						   Foreground="{StaticResource TextSecondaryBrush}"
+						   FontSize="10" FontFamily="Segoe UI" Margin="0,6,0,0"
+						   TextWrapping="Wrap"/>
+			</StackPanel>
+
 			<!-- Copy to clipboard -->
 			<CheckBox x:Name="ChkCopyToClipboard"
-					  Grid.Row="12"
+					  Grid.Row="14"
 					  Foreground="{StaticResource TextPrimaryBrush}"
 					  FontFamily="Segoe UI" FontSize="13"
 					  Content="Copy every transcription to clipboard"/>
 
 			<!-- Run at startup -->
 			<CheckBox x:Name="ChkRunAtStartup"
-					  Grid.Row="14"
+					  Grid.Row="16"
 					  Foreground="{StaticResource TextPrimaryBrush}"
 					  FontFamily="Segoe UI" FontSize="13"
 					  Content="Run at Windows startup"/>
 
 			<!-- Action buttons -->
-			<StackPanel Grid.Row="16" Orientation="Horizontal" HorizontalAlignment="Right">
+			<StackPanel Grid.Row="18" Orientation="Horizontal" HorizontalAlignment="Right">
 				<Button Style="{StaticResource IconButton}"
 						Content="Cancel"
 						Margin="0,0,8,0"

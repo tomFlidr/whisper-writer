@@ -28,6 +28,17 @@ public partial class SettingsWindow : Window, IService, ITransient {
 	[DllImport("user32.dll")]
 	internal static extern short GetAsyncKeyState (int vKey);
 
+	private const string AudioBufferBudgetDescription =
+		"Audio batches stay in RAM while waiting and until transcription completes. " +
+		"This is a soft admission threshold: a recording already admitted is not cut off by this budget " +
+		"and may push usage over it. Accepted recordings remain queued and are never discarded. " +
+		"Further PTT attempts are declined with Busy while the indicator is gray; try again when it is blue. " +
+		"If usage exceeds the budget, the gray pause remains until all outstanding jobs finish. " +
+		"The job limit counts active and waiting " +
+		"transcriptions plus the current recording reservation. This audio budget is separate from the " +
+		"Whisper model and its inference memory; low available system RAM can reduce the effective budget. " +
+		"Finalizing a recording may briefly use additional memory.";
+
 	// VK codes excluded from capture (they are UI-navigation keys, not hotkey material).
 	private static readonly HashSet<int> _captureExcluded = [
 		0x1B, // Escape – cancels capture
@@ -117,6 +128,7 @@ public partial class SettingsWindow : Window, IService, ITransient {
 	private void _loadSettings () {
 		this._buildModelItems();
 		var s = this.settings.Data;
+		this.TxtAudioBufferBudgetDescription.Text = SettingsWindow.AudioBufferBudgetDescription;
 		foreach (ComboBoxItem item in this.CmbModelPath.Items) {
 			if (item.Tag as string == s.ModelPath) {
 				this.CmbModelPath.SelectedItem = item;
@@ -136,6 +148,8 @@ public partial class SettingsWindow : Window, IService, ITransient {
 		}
 		this.TxtPrompt.Text = s.Prompt;
 		this.TxtHistorySize.Text = s.HistorySize.ToString();
+		this.TxtMaxOutstandingJobs.Text = s.MaxOutstandingTranscriptionJobs.ToString();
+		this.TxtAudioBufferBudgetMiB.Text = s.MaxBufferedAudioMiB.ToString();
 		this.ChkCopyToClipboard.IsChecked = s.CopyToClipboard;
 		this.ChkRunAtStartup.IsChecked = this.windowPlatform.IsRegisteredAtStartup();
 
@@ -155,11 +169,17 @@ public partial class SettingsWindow : Window, IService, ITransient {
 	}
 
 	/// <summary>
-	/// Blocks non-numeric input for the history size text field.
+	/// Blocks non-numeric input for integer-valued settings fields.
 	/// Implemented as a PreviewTextInput handler so invalid characters never appear.
 	/// </summary>
 	private void _handleTxtHistorySizePreviewTextInput (object sender, WpfTextCompositionEventArgs e) {
 		e.Handled = !Regex.IsMatch(e.Text, @"^\d+$");
+	}
+
+	private static int parsePositiveInteger (string text, int fallback) {
+		if (!int.TryParse(text, out int value))
+			return fallback;
+		return Math.Max(1, value);
 	}
 
 	/// <summary>
@@ -283,6 +303,10 @@ public partial class SettingsWindow : Window, IService, ITransient {
 		s.HistorySize = int.TryParse(this.TxtHistorySize.Text, out int historySize) && historySize >= 1
 			? historySize
 			: 1;
+		s.MaxOutstandingTranscriptionJobs = SettingsWindow.parsePositiveInteger(
+			this.TxtMaxOutstandingJobs.Text, s.MaxOutstandingTranscriptionJobs);
+		s.MaxBufferedAudioMiB = SettingsWindow.parsePositiveInteger(
+			this.TxtAudioBufferBudgetMiB.Text, s.MaxBufferedAudioMiB);
 		s.CopyToClipboard = this.ChkCopyToClipboard.IsChecked == true;
 		s.RunAtStartup = this.ChkRunAtStartup.IsChecked == true;
 		this.windowPlatform.SetStartupRegistration(s.RunAtStartup);

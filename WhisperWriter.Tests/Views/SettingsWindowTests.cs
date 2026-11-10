@@ -64,6 +64,43 @@ public class SettingsWindowTests {
 	}
 
 	[Fact]
+	public void QueueLimits_LoadFromAndSaveToSettingsWithExplanatoryText () {
+		WpfTestHost.Invoke(() => {
+			var settings = SettingsWindowTests.createSettings();
+			settings.Data.MaxOutstandingTranscriptionJobs = 12;
+			settings.Data.MaxBufferedAudioMiB = 96;
+			var window = SettingsWindowTests.createWindow(settings, new FakeWindowPlatform());
+			SettingsWindowTests.activate(window);
+			window.Show();
+
+			var maxJobs = window.FindName("TxtMaxOutstandingJobs") as TextBox;
+			var audioBudget = window.FindName("TxtAudioBufferBudgetMiB") as TextBox;
+			var description = window.FindName("TxtAudioBufferBudgetDescription") as TextBlock;
+			Assert.NotNull(maxJobs);
+			Assert.NotNull(audioBudget);
+			Assert.NotNull(description);
+			Assert.Equal("12", maxJobs.Text);
+			Assert.Equal("96", audioBudget.Text);
+			Assert.Contains("waiting", description.Text, StringComparison.OrdinalIgnoreCase);
+			Assert.Contains("transcription completes", description.Text, StringComparison.OrdinalIgnoreCase);
+			Assert.Contains("Whisper model", description.Text, StringComparison.OrdinalIgnoreCase);
+			Assert.Contains("may push usage over it", description.Text, StringComparison.OrdinalIgnoreCase);
+			Assert.Contains("until", description.Text, StringComparison.OrdinalIgnoreCase);
+			Assert.Contains("Busy", description.Text, StringComparison.OrdinalIgnoreCase);
+			Assert.Contains("try again", description.Text, StringComparison.OrdinalIgnoreCase);
+			Assert.Contains("all outstanding jobs finish", description.Text, StringComparison.OrdinalIgnoreCase);
+
+			maxJobs.Text = "7";
+			audioBudget.Text = "64";
+			var save = (Button)window.FindName("BtnSave");
+			save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, save));
+
+			Assert.Equal(7, settings.Data.MaxOutstandingTranscriptionJobs);
+			Assert.Equal(64, settings.Data.MaxBufferedAudioMiB);
+		});
+	}
+
+	[Fact]
 	public void SaveButton_PersistsFormValuesAndRegistryChoiceThroughTheXamlBinding () {
 		WpfTestHost.Invoke(() => {
 			var settings = SettingsWindowTests.createSettings();
@@ -192,18 +229,23 @@ public class SettingsWindowTests {
 	}
 
 	[Fact]
-	public void HistorySizePreviewTextInput_BlocksNonDigitsAndAllowsDigits () {
+	public void NumericSettingsPreviewTextInput_BlocksNonDigitsAndAllowsDigits () {
 		WpfTestHost.Invoke(() => {
 			var window = SettingsWindowTests.createWindow(SettingsWindowTests.createSettings(), new FakeWindowPlatform());
 			SettingsWindowTests.activate(window);
-			TextCompositionEventArgs invalid = SettingsWindowTests.createTextInput(window, "x");
-			TextCompositionEventArgs valid = SettingsWindowTests.createTextInput(window, "7");
-
-			SettingsWindowTests.historySize(window).RaiseEvent(invalid);
-			SettingsWindowTests.historySize(window).RaiseEvent(valid);
-
-			Assert.True(invalid.Handled);
-			Assert.False(valid.Handled);
+			TextBox[] numericFields = [
+				SettingsWindowTests.historySize(window),
+				(TextBox)window.FindName("TxtMaxOutstandingJobs"),
+				(TextBox)window.FindName("TxtAudioBufferBudgetMiB"),
+			];
+			foreach (TextBox field in numericFields) {
+				TextCompositionEventArgs invalid = SettingsWindowTests.createTextInput(window, "x");
+				TextCompositionEventArgs valid = SettingsWindowTests.createTextInput(window, "7");
+				field.RaiseEvent(invalid);
+				field.RaiseEvent(valid);
+				Assert.True(invalid.Handled);
+				Assert.False(valid.Handled);
+			}
 		});
 	}
 
