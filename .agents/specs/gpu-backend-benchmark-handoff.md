@@ -91,7 +91,7 @@ All used the existing `ggml-medium.bin` and the upstream `jfk.wav` sample. These
 
 ## Proposed backend selection policy
 
-- The project currently uses `ITranscription`; the roadmap's Phase 3.1 uses the different name `ITranscriptionService`.
+- The project currently uses `ITranscription`; the roadmap's Phase 4.1 uses the different name `ITranscriptionService`.
 - In `Auto`, use Whisper.net's reported active runtime, not CUDA DLL presence. Keep CUDA when `RuntimeOptions.LoadedLibrary` reports CUDA; preserve its CPU fallback.
 - Do not select Const-me D3D11 solely because an adapter enumerates or model load succeeds. The Intel UHD smoke used a weak integrated GPU; its slow timing is a device-specific curiosity, not representative evidence about D3D11 or AMD GPUs. Offer D3D11 as an explicit experimental choice until representative non-NVIDIA devices prove a useful benefit, or add a carefully bounded hardware calibration before automatic selection.
 - Skip the x64-only candidate in the existing x86 release; keep CPU inference available there. Show the actual engine/device and any fallback reason.

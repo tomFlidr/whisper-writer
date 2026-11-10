@@ -1,30 +1,32 @@
 # GPU inference and model/backend capability analysis
 
-**Status:** Architecture analysis only; no implementation or roadmap decision is made here.
-**Scope:** GPU acceleration, model-specific backend support, Settings UI, future Vulkan/ONNX providers,
-and the concurrency requirements shared with the planned parallel-transcription phase.
+**Status:** Supporting architecture analysis for Roadmap Phase 3; no Phase 3 runtime implementation has started.
+**Scope:** GPU acceleration, model-specific backend support, Settings UI, Vulkan/ONNX providers,
+and concurrency requirements shared with parallel transcription.
+**Phase 3 package/version gates:** `.agents/specs/phase-3-gpu-and-onnx-backends.md`.
 
 ## Conclusion
 
-The Settings dialog should expose acceleration choices, but not as a universal **GPU on/off** checkbox.
-The application needs to distinguish three things:
+Do not model acceleration as a universal **GPU on/off** switch. The application needs to distinguish:
 
 1. **Model/engine:** Whisper GGML, Parakeet, or another model family and its required format/features.
 2. **Execution backend:** Whisper.net CUDA/Vulkan, an ONNX Runtime execution provider, Const-me Whisper,
    or another engine-specific implementation.
 3. **Physical device:** the GPU or CPU device that the selected runtime can actually use.
 
-The recommended default is **Automatic**. Available choices should be computed for the selected model
-and this machine, with the reason for any unavailable option. Persist the user's preference, not a
-cached list of detected GPUs or providers. After initialization, report the backend that really loaded;
-DLL presence or a GPU model name alone is not proof that inference is running on that GPU.
+For Phase 3.1, Whisper.net's ordered runtime loader is the default; report the library that actually
+loaded after initialization. An explicitly selected engine/library is authoritative and must not be
+silently replaced by another engine. `Auto` may choose only among model/engine/provider combinations
+that are actually compatible. Within a selected engine, provider `Auto` uses that runtime's order;
+an explicit provider must either load or be reported unavailable. For ONNX Runtime in Phases 3.2–3.3,
+keep the separate `OrtBackend` preference planned in the Roadmap. DLL presence or a GPU model name alone
+is not proof that inference is running on that provider.
 
 ## Current implementation baseline
 
 - `WhisperWriter.csproj` pins `Whisper.net`, `Whisper.net.Runtime`, and
-  `Whisper.net.Runtime.Cuda` to 1.9.0. The current upstream release list includes 1.9.1, while its
-  README documents Vulkan and a separate Parakeet runtime family. Check package/API availability
-  against the project's pinned version before adopting those options.[1][8]
+  `Whisper.net.Runtime.Cuda` to 1.9.0. The package/runtime inventory and newer stable/preview versions
+  are recorded in the Phase 3 spec; keep related package versions aligned when upgrading.
 - In `WhisperWriter/Services/Whisper.cs`, `Whisper.DetectCudaVersion()` only attempts to load CUDA
   runtime DLLs. `Whisper.InitializeAsync()`
   logs that GPU will be used when those DLLs are found, then calls `WhisperFactory.FromPath()` without
@@ -45,7 +47,7 @@ DLL presence or a GPU model name alone is not proof that inference is running on
   identity from the filename.
 - The `Whisper` transcription service is a singleton with one shared factory. A processor is constructed for each
   call, but the code has no explicit concurrency contract or per-request state identifier. The settings
-  The settings dialog persists a changed model path; `WhisperWriter/Services/TrayMenu.cs` saves settings
+  dialog persists a changed model path; `WhisperWriter/Services/TrayMenu.cs` saves settings
   and refreshes history/hotkey, while `WhisperWriter/App.xaml.cs` initializes Whisper at startup.
   Applying a new model/backend therefore needs an explicit restart or
   reinitialization policy.
@@ -97,29 +99,36 @@ then create the right engine/runtime from the resolved selection. Initialization
 used) so the main window reports what is actually running.
 
 Prefer ordered runtime selection or a validated backend preference over blindly forcing a native
-provider. Current Whisper.net upstream source exposes runtime ordering and a forced-runtime option; the
-forced option bypasses compatibility checks and can cause failures in native code. Verify that behavior
-against 1.9.0 before using it; do not make an unchecked force option the normal UI path.[7]
+provider. The installed Whisper.net 1.9.0 XML documentation confirms `RuntimeOptions.RuntimeLibraryOrder`
+and `RuntimeOptions.LoadedLibrary`; its default order is CUDA, Vulkan, CoreML, OpenVINO, CPU, then
+CPU-NoAVX. `LoadedLibrary` reports the selected runtime, not a physical device name. Do not force a
+provider without checking the selected model and device; retain a tested fallback.[7]
 
-## Settings dialog proposal
+## Settings dialog proposal and scope
 
-Add an **Acceleration** section next to the selected model/engine:
+The current Roadmap requires truthful runtime status for Whisper in Phase 3.1; it does not yet commit
+to a user-facing Whisper provider/device picker. Keep those controls optional unless auto-selection
+fails the compatibility goal. The user's confirmed rule is that an explicit engine/library choice is
+honored; only `Auto` may select another compatible option. Phases 3.2–3.3 separately propose an
+`OrtBackend` setting. If selectors are approved, keep engine and provider as separate controls:
 
 - **Backend:** `Automatic (recommended)` plus only the backends compatible with this model and detected
   runtime. Show unavailable choices disabled with a short reason rather than presenting an unexplained
   global list.
-- **Device:** show a GPU/device picker only when the selected provider exposes a stable device-selection
-  API and more than one suitable device exists. Backend choice and physical-device choice are separate.
+- **Device:** show a GPU/device picker only when the selected provider has a stable device-selection API
+  and a way to map the selected value to a device name. Whisper.net 1.9.0 exposes `GpuDevice` as an
+  index (default 0); the Vulkan smoke did not return the selected device name, so verify index mapping
+  before showing a user-facing picker. Backend choice and physical-device choice are separate.
 - **Status:** show the active provider/device after initialization, plus a visible fallback warning if
   the requested preference could not be honored.
 - **Model-specific controls:** enable, hide, or explain unsupported language/prompt/translation controls
   based on the model engine's feature descriptor.
 
-Persist a stable preference such as `auto` or a provider ID, initially defaulting to `auto`; do not
-persist the detected hardware list. Prefer one preference per engine family (for example Whisper vs.
-Parakeet/ONNX), with a per-model override only if actual model combinations require it. In `Auto`,
-the application may fall back automatically. If the user selected a specific provider, do not silently
-claim it is active when another provider was selected; show the actual provider and the fallback reason.
+Persist stable engine/library and provider IDs, not the detected hardware list. Prefer one provider
+preference per engine family (for example Whisper.net vs. ONNX/Parakeet), with a per-model override only
+if actual model combinations require it. In `Auto`, the application may fall back within a compatible
+engine/provider set. For an explicit engine/library, never cross-fallback to another engine; for an
+explicit provider, report unavailable if that provider did not load rather than claiming it is active.
 
 Changing a model or backend must either recreate the inference service safely or clearly require a
 restart. For the first implementation, a restart-required setting is simpler and matches the current
@@ -128,45 +137,54 @@ implemented for parallel transcriptions.
 
 ## Backend/model compatibility observations
 
-- **Whisper GGML:** The current application uses Whisper.net CPU/CUDA packages. Current upstream
-  documentation also lists a Vulkan runtime; this is a Whisper.net-specific runtime option, not a
-  universal Vulkan switch for every engine.[1]
-- **Parakeet:** Current Whisper.net documentation lists a separate Parakeet runtime family, including
-  CPU, CUDA, and Vulkan variants. It also documents feature gaps including language detection, prompt,
-  translation, and VAD support. Before building the roadmap's custom ONNX service, compare this option
-  with direct ONNX Runtime on the exact model, package version, features, performance, and licensing.[1]
-- **ONNX Runtime on Windows:** Revisit the roadmap's DirectML-first direction before implementation.
-  Microsoft describes DirectML as being in sustained engineering and recommends WinML for new Windows
-  applications; provider choice and availability remain specific to the model/runtime.[3][4]
-- **ONNX Runtime WebGPU:** This is a separate candidate provider, not the same backend as Whisper.net
-  Vulkan. The current ONNX Runtime documentation describes its Windows WebGPU path as D3D12-backed, so
-  the label shown to users should describe the actual provider/API rather than imply Vulkan.[5]
-- **Const-me Whisper:** Treat this as another engine adapter with its own model compatibility and
-  runtime lifecycle. Its published performance example is not a same-build, same-input comparison
-  against the current WhisperWriter path, so it cannot establish the project's ~3× target.[6]
+- **Whisper GGML:** The current app has Whisper.net 1.9.0 CPU/CUDA packages; the pinned runtime's
+  automatic selection order already includes Vulkan after CUDA. The app currently does not include the
+  Vulkan runtime package or report `RuntimeOptions.LoadedLibrary`; see the Phase 3 spec for package
+  versions, OS gates, and the exact status correction.[1]
+- **Const-me Whisper:** Phase 1 completed a same-machine 10-recording comparison. CUDA totaled 144.040 s,
+  versus 148.296 s for Const-me D3D11 Media Foundation and 147.110 s for direct PCM. Neither route was
+  faster overall; the full metrics are in `.agents/specs/gpu-backend-benchmark-handoff.md`. The user
+  clarified that the Intel UHD used for the separate D3D11 smoke is a weak integrated GPU; its timing is
+  device-specific and must not be treated as a general D3D11/Vulkan/AMD performance result.
+- **Parakeet:** The current upstream `main` documents a separate native runtime family and feature gaps
+  such as prompt/translation/VAD support. Published stable package availability must be verified for
+  the version selected by this app. The native family is not automatically compatible with the ONNX
+  int8 model artifacts currently planned for Phase 7.[1][8]
+- **ONNX Runtime on Windows:** DirectML is an ONNX execution provider, not a Whisper.net runtime.
+  Revisit DirectML versus WinML before implementation; provider support can be model/operator-specific,
+  and official Windows guidance should be checked against the target Windows versions.[3][4]
+- **ONNX Runtime WebGPU:** This is a separate provider, not the same backend as Whisper.net Vulkan.
+  The current ONNX Runtime documentation describes its Windows WebGPU path as D3D12-backed; report the
+  actual provider/API instead of implying Vulkan.[5]
+- **OpenVINO / CoreML / Metal:** Whisper.net documents an Intel-oriented OpenVINO runtime and
+  Apple-specific CoreML/Metal packages. They are not substitutes for a cross-vendor Windows Vulkan
+  path; detailed package boundaries are in the Phase 3 spec.[1]
 
 ## Parallel transcription constraints
 
-The parallel-hotkey requirement rules out silently placing recordings in a FIFO work queue. Each
-released recording must become an independent request with immutable audio, its own result/error/state,
-and its own context for inserting the result. A single global `TranscriptionState` event is not enough
-once requests overlap; events need a request/job ID so one job cannot overwrite another job's UI state.
+The user clarified that recording must continue while inference slots are full. Each released audio batch
+becomes an independent immutable job; when no active inference slot is available, the completed job waits
+in an explicit FIFO inference queue. This queue must never delay microphone capture or merge/overwrite
+recordings. Each job also needs its own result/error/state and target focus context. A single global
+`TranscriptionState` event is not enough once requests overlap; events need a request/job ID so one job
+cannot overwrite another job's UI state.
 
 Backend metadata must state whether concurrent calls on one session are supported, whether separate
 sessions are required, and the memory cost/limit. In particular, ONNX Runtime's DirectML documentation
 requires session configuration constraints and does not permit concurrent `Run` calls on the same
 session; separate sessions and their memory cost must be evaluated rather than assuming one shared
-session can serve parallel jobs.[4] Any hard concurrency limit must be explicit: it is a resource limit,
-not permission to queue jobs. If capacity is exceeded, define a visible failure or a verified fallback
-rather than silently changing the user's no-queue behavior.
+session can serve parallel jobs.[4] The active-session semaphore and pending FIFO queue are separate
+limits. Bound queue memory/length and define visible behavior at capacity; never discard a captured
+recording or silently change engine/provider selection.
 
 ## Suggested implementation sequence
 
-1. **Backend spike and benchmark:** compare the current Whisper.net path, the candidate GPU engine, and
-   any Vulkan/ONNX candidate on the same machine, model, audio samples, and settings. Measure cold and
-   warm latency, real-time factor, quality, RAM/VRAM, startup/package size, fallback behavior, and at
-   least two simultaneous requests. Keep ~3× as an acceptance target to measure, not a promise. The
-   Const-me example is useful as a candidate signal, not as the project's baseline.[6]
+1. **Phase 3 provider validation:** Phase 1's Const-me evaluation is closed; do not repeat it as a
+   speed-up candidate. Validate Whisper.net Vulkan and ONNX Runtime providers separately, using the
+   exact available model/provider combination, identical inputs/settings, and confirmed active
+   backends. Record quality, cold/warm latency, memory, package size, and fallback. The weak integrated
+   Intel UHD D3D11 smoke is compatibility evidence for one adapter only, not a Vulkan performance
+   baseline. No generic 3× target is carried forward from Phase 1.
 2. **Model catalog and downloads:** move model metadata out of `SettingsWindow`; fix model-specific
    download mapping before adding additional model families or formats.
 3. **Capability resolver and runtime identity:** add provider probes, compatibility reasons, and actual
@@ -178,22 +196,33 @@ rather than silently changing the user's no-queue behavior.
    verify native-library loading/architecture/licensing, and add opt-in hardware smoke tests. Keep the
    deterministic required test suite independent of a physical GPU.
 6. **Parallel integration:** verify the selected engine's actual concurrent inference behavior, request
-   isolation, per-job UI state, and memory limits without introducing a FIFO transcription queue.
+   isolation, per-job UI state, and memory limits. Use Phase 2's explicit FIFO queue for completed jobs
+   waiting on the active-inference semaphore; never block new audio capture or silently drop jobs.
 
-## Roadmap points to reconcile before implementation
+## Phase 3 implementation gates
 
-These are observations for a later roadmap edit; this analysis does not change `.agents/ROADMAP.md`.
+Phase 3 now contains Whisper.net Vulkan (3.1), ONNX Runtime DirectML (3.2), and ONNX Runtime CUDA (3.3).
+The detailed version matrix and acceptance criteria are in
+`.agents/specs/phase-3-gpu-and-onnx-backends.md`.
 
-- Phase 1 refers to an `ITranscriptionService` from Phase 3.1, while the current source defines
-  `ITranscription` and the roadmap does not currently provide that Phase 3.1 item. Either pull the
-  minimal required abstraction into Phase 1 or correct the dependency.
-- Phase 6.1's proposed `vulkan-1.dll` presence check is not enough to establish that a selected model
-  can initialize on a usable Vulkan device. Resolve and report the actual runtime/device result.
-- Phase 6.2 should compare WinML with DirectML before choosing a new Windows ONNX path.[3][4]
-- Phase 7 should compare Whisper.net's Parakeet runtime with custom ONNX Runtime, including the
-  documented feature gaps and the project's pinned package version.[1][8]
-- Keep the ~3× performance figure as a benchmark criterion against the current application, not as a
-  value inferred from an upstream benchmark using another baseline.[6]
+- For 3.1, replace the old `vulkan-1.dll`-presence probe with actual runtime initialization and
+  `RuntimeOptions.LoadedLibrary` reporting. Vulkan DLL presence alone cannot prove the selected model
+  loaded or that inference used Vulkan.
+- The user confirms Windows 11 or newer as the support floor; Windows 10 is not a target. `AGENTS.md` and
+  `README.md` now reflect this. Validate the pinned runtime on Windows 11 before release.
+- The current `Whisper` and `MainWindow` code derive `GPU`/`CPU` status from CUDA DLL presence. Update
+  them to show the selected runtime; do not add a duplicate `ITranscriptionService` interface solely
+  because the current contract is named `ITranscription`.
+- For 3.2, compare WinML and DirectML and verify provider coverage on the actual Parakeet graph.
+  DirectML session concurrency constraints must fit the parallel-transcription behavior.[3][4]
+- For 3.3, verify the exact ONNX Runtime CUDA/cuDNN package requirements and active provider; do not
+  assume the existing Whisper CUDA DLL-copy target is sufficient.
+- Before Phase 7, compare any published Whisper.net Parakeet package/model family against the planned
+  ONNX int8 files and feature requirements; the upstream `main` branch alone does not prove a matching
+  stable package is available.[1][8]
+- Treat Phase 1's Const-me timings on the weak integrated Intel UHD as device-specific curiosity, not
+  a general D3D11/Vulkan/AMD performance conclusion. Keep backend speed as a measured result, not an
+  assumption from an API or upstream benchmark.[6]
 
 ## Sources
 

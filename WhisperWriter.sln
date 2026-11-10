@@ -7,6 +7,40 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WhisperWriter", "WhisperWri
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WhisperWriter.Tests", "WhisperWriter.Tests\WhisperWriter.Tests.csproj", "{56BA62E7-FFF3-C64A-FA0A-3AA070BEB6F2}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+		.gitignore = .gitignore
+		AGENTS.md = AGENTS.md
+		LICENSE = LICENSE
+		README.md = README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".agents", ".agents", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+	ProjectSection(SolutionItems) = preProject
+		.agents\ROADMAP.md = .agents\ROADMAP.md
+		.agents\SKILLS.md = .agents\SKILLS.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "skills", "skills", "{AADEFC7A-9CA2-4EE7-AE14-78CAC2366090}"
+	ProjectSection(SolutionItems) = preProject
+		.agents\skills\coding-standards.md = .agents\skills\coding-standards.md
+		.agents\skills\commit.md = .agents\skills\commit.md
+		.agents\skills\debugging.md = .agents\skills\debugging.md
+		.agents\skills\new-feature.md = .agents\skills\new-feature.md
+		.agents\skills\refactoring.md = .agents\skills\refactoring.md
+		.agents\skills\release.md = .agents\skills\release.md
+		.agents\skills\testing.md = .agents\skills\testing.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "specs", "specs", "{AC70E0B6-0F3F-4EC3-87B2-B432EE642147}"
+	ProjectSection(SolutionItems) = preProject
+		.agents\specs\gpu-backend-benchmark-handoff.md = .agents\specs\gpu-backend-benchmark-handoff.md
+		.agents\specs\gpu-backend-capability-analysis.md = .agents\specs\gpu-backend-capability-analysis.md
+		.agents\specs\phase-0-automated-testing.md = .agents\specs\phase-0-automated-testing.md
+		.agents\specs\phase-0-coverage-inventory.md = .agents\specs\phase-0-coverage-inventory.md
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,6 +58,11 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{02EA681E-C7D8-13C7-8484-4AC65E1B71E8} = {8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}
+		{AADEFC7A-9CA2-4EE7-AE14-78CAC2366090} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{AC70E0B6-0F3F-4EC3-87B2-B432EE642147} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {9860A866-4BE5-4DA5-9D32-C9F4A68BEDEA}
