@@ -29,6 +29,8 @@ public class SettingsTests {
 			settings.Data.Prompt = "domain vocabulary";
 			settings.Data.HotkeyCodes = [0xA4, 0x5B, 0x20];
 			settings.Data.HistorySize = 7;
+			settings.Data.MaxOutstandingTranscriptionJobs = 8;
+			settings.Data.MaxBufferedAudioMiB = 64;
 			settings.Data.CopyToClipboard = false;
 			settings.Data.RunAtStartup = true;
 			settings.Data.WindowLeft = 321.5;
@@ -43,10 +45,23 @@ public class SettingsTests {
 			Assert.Equal("domain vocabulary", loaded.Data.Prompt);
 			Assert.Equal(new[] { 0xA4, 0x5B, 0x20 }, loaded.Data.HotkeyCodes);
 			Assert.Equal(7, loaded.Data.HistorySize);
+			Assert.Equal(8, loaded.Data.MaxOutstandingTranscriptionJobs);
+			Assert.Equal(64, loaded.Data.MaxBufferedAudioMiB);
 			Assert.False(loaded.Data.CopyToClipboard);
 			Assert.True(loaded.Data.RunAtStartup);
 			Assert.Equal(321.5, loaded.Data.WindowLeft);
 			Assert.Equal(54.25, loaded.Data.WindowBottom);
+		});
+	}
+
+	[Fact]
+	public void Load_LegacySettingsUsesConfiguredQueueDefaults () {
+		SettingsTests.withSettingsFile("{\"ModelPath\":\"llms/test-model.bin\"}", path => {
+			var settings = new TestSettings(path);
+			settings.Load();
+
+			Assert.Equal(10, settings.Data.MaxOutstandingTranscriptionJobs);
+			Assert.Equal(128, settings.Data.MaxBufferedAudioMiB);
 		});
 	}
 

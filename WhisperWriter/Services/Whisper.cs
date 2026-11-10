@@ -18,6 +18,8 @@ public class Whisper : ITranscription, IService, ISingleton {
 
 	public event Action<TranscriptionState, string>? StateChanged;
 
+	public string? ActiveProvider => this.runtime.ActiveLibrary;
+
 	[Inject]
 	protected Settings settings { get; set; } = null!;
 	[Inject]

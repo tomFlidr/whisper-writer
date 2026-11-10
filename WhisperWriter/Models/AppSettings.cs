@@ -21,6 +21,12 @@ public class AppSettings {
     // How many transcriptions to keep in transcriptionHistory
     public int HistorySize { get; set; } = 30;
 
+    // Maximum total transcription jobs, including active, queued, and reserved recordings.
+    public int MaxOutstandingTranscriptionJobs { get; set; } = 10;
+
+    // Soft RAM admission threshold, in MiB, for audio batches retained until transcription completes.
+    public int MaxBufferedAudioMiB { get; set; } = 128;
+
     // If true, every transcription result is also copied to the clipboard
     public bool CopyToClipboard { get; set; } = true;
 

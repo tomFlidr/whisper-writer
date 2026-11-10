@@ -10,6 +10,9 @@ public interface ITranscription: IAsyncDisposable {
 	/// <summary>Raised when the backend state changes (loading, transcribing, done, error).</summary>
 	event Action<TranscriptionState, string>? StateChanged;
 
+	/// <summary>Actual loaded provider for the initialized engine, if known.</summary>
+	string? ActiveProvider => null;
+
 	/// <summary>Initialises the model from disk. Call once at startup.</summary>
 	/// <summary>
 	/// Initializes the transcription backend with the provided model path.

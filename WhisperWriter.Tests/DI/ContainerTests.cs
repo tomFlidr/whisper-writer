@@ -27,4 +27,16 @@ public class ContainerTests {
 			container.Provider.Dispose();
 		}
 	}
+
+	[Fact]
+	public void Constructor_ResolvesTranscriptionQueueWithTheSettingsService () {
+		var container = new Container();
+		try {
+			TranscriptionQueue queue = container.Provider.Resolve<TranscriptionQueue>();
+
+			Assert.Equal(128L * 1024L * 1024L, queue.GetStatus().BufferedAudioBudgetBytes);
+		} finally {
+			container.Provider.Dispose();
+		}
+	}
 }

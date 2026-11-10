@@ -1,6 +1,7 @@
 using System.IO;
 using Whisper.net;
 using Whisper.net.Ggml;
+using Whisper.net.LibraryLoader;
 
 namespace WhisperWriter.Services;
 
@@ -9,6 +10,7 @@ namespace WhisperWriter.Services;
 /// </summary>
 public interface IWhisperRuntime {
 	int? DetectCudaVersion();
+	string? ActiveLibrary => null;
 	Task DownloadModelAsync(string modelPath);
 	IWhisperFactory CreateFactory(string modelPath);
 	bool IsModelLoadException(Exception exception);
@@ -26,6 +28,7 @@ public interface IWhisperFactory : IDisposable {
 /// </summary>
 internal sealed class WhisperNetRuntime : IWhisperRuntime {
 	public int? DetectCudaVersion() => global::WhisperWriter.Services.Whisper.DetectCudaVersion();
+	public string? ActiveLibrary => RuntimeOptions.LoadedLibrary?.ToString();
 
 	public async Task DownloadModelAsync(string modelPath) {
 		using var httpClient = new System.Net.Http.HttpClient();
