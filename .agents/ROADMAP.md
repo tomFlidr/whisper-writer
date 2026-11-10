@@ -21,43 +21,105 @@ Hosted GitHub Actions zatím neběželo; výsledek zůstává neověřený.
 
 ---
 
-## Fáze 2 – Paralelní nahrávání a transkripce přes hotkey
+## Fáze 3 – Další GPU backendy a ONNX Runtime
 
-**Proč:** Uživatel chce po ukončení nahrávky ihned pokračovat dalším úsekem, i když se
-předchozí úsek ještě přepisuje. Každá dávka má být konvertována samostatně a souběžně,
-ne čekat ve frontě na dokončení předchozí konverze.
-
-**Co se změní:**
-- Každé uvolnění hotkey uzavře vlastní audio dávku a okamžitě spustí její transkripci
-  jako samostatnou souběžnou úlohu; nesmí čekat na dokončení starších úloh ani se pouze
-  zařadit za ně do FIFO fronty.
-- Další stisk hotkey zahájí nové nahrávání, i když jedna nebo více předchozích transkripcí
-  právě běží. Opakování tohoto cyklu nesmí předchozí nahrávku přepsat, zrušit ani ztratit
-  a ani ztratit cílové pole kam se text má vepsat.
-- Každá úloha bude mít vlastní neměnná audio data, stav, chybu a kontext potřebný pro
-  vložení výsledku. Sdílený mutable stav nesmí propojit obsah různých nahrávek.
-- Ověřit, že transkripční engine skutečně podporuje současná inference volání; případně
-  vytvořit nezávislé inference kontexty. Stanovit bezpečný stupeň souběhu s ohledem na
-  CPU/GPU paměť, ale neřešit další dávky jejich serializací do čekací fronty.
-- Výsledek musí zůstat přiřazen ke správné nahrávce. Chování vkládání výsledků, pokud
-  se paralelní úlohy dokončí v jiném pořadí, upřesní specifikace před implementací.
-- Automatizované testy ověří, že druhý přepis začne před dokončením prvního, že další
-  nahrávání zůstane dostupné a že žádná audio dávka ani výsledek není zaměněn nebo ztracen.
+> Další backendy pro Whisper.net a ONNX Runtime; tato fáze musí proběhnout před
+> implementací Parakeet (Fáze 7). Nezávisí na Fázích 5 a 6.
+> U větších runtime balíčků nejprve prozkoumat distribuci; preferovat stažení s potvrzením
+> uživatele při instalaci nebo samostatný instalační skript.
+> Technické podklady a ověřovací podmínky: `.agents/specs/phase-3-gpu-and-onnx-backends.md`;
+> společná architektura: `.agents/specs/gpu-backend-capability-analysis.md`.
+>
+> **Výběr:** `Auto` použije ověřené pořadí backendů zvoleného engine. Výslovně zvolená knihovna/provider
+> je autoritativní; aplikace ji nesmí potichu nahradit jiným enginem. `Auto` může vybírat jen kompatibilní
+> kombinace modelu, knihovny a provideru.
 
 ---
 
-## Fáze 3 – dodělat hrubý refactoring
+### 3.1 Vulkan backend pro Whisper.net
+
+**Proč:** Aplikace má k dispozici Whisper.net CUDA pro kompatibilní NVIDIA hardware. Vulkan je
+kandidát na rozšíření kompatibility na další GPU výrobce; konkrétní podporu a rychlost musí ověřit test na cílovém
+hardware. Fáze 1 neprokázala rychlostní přínos Const-me a slabá integrovaná Intel UHD karta
+z jejího D3D11 smoke testu není reprezentativní pro Vulkan.
+
+**Předběžné ověření:** Scratch probe z 9. 11. 2026 s Whisper.net 1.9.0 na Windows 11 x64
+načetla režim Auto jako CUDA a po Vulkan-prioritním výběru načetla Vulkan a přepsala `01.wav`.
+Byl vyžádán i Vulkan `GpuDevice=1`; `vulkaninfo` na hostu uvádí Intel UHD jako GPU 1. Whisper.net
+však nevrátil název fyzického zařízení, takže toto mapování není přímo potvrzené. Žádná AMD karta
+nebyla testována. Podrobnosti a omezení jsou v `.agents/specs/phase-3-gpu-and-onnx-backends.md`.
+
+**Co se změní:**
+- Před produkční integrací ověřit čistý publish, podporovaný runtime/ovladač a požadavky Vulkan
+  balíčku na Windows 11 x64; zachovat CPU-only cestu pro `win-x86`.
+- Přidat `Whisper.net.Runtime.Vulkan` ve stejné verzi jako ostatní Whisper.net balíčky, případně
+  nejprve schválit a společně aktualizovat všechny runtime reference.
+- Použít automatický výběr Whisper.net; po inicializaci načíst skutečný backend přes
+  `RuntimeOptions.LoadedLibrary`. Samotná přítomnost `vulkan-1.dll` ani CUDA DLL není důkazem,
+  že daný backend skutečně inicializoval model.
+- Upravit aktuální `Whisper`/`IWhisperRuntime` a status v `MainWindow`: současná aplikace odvozuje
+  `GPU`/`CPU` pouze z CUDA DLL probe, takže by mohla Vulkan chybně označit jako CPU.
+- Ověřit fallback na CPU, načtení a přepis modelu i čistý single-file publish na skutečných
+  Windows x64 GPU; zvlášť otestovat reprezentativní AMD/Intel hardware před tvrzením o jeho podpoře.
+
+---
+
+### 3.2 DirectML backend pro ONNX Runtime (příprava pro Parakeet)
+
+**Proč:** DirectML je samostatný execution provider ONNX Runtime pro plánovaný Parakeet engine
+(Fáze 7), nikoli Whisper.net backend. Jeho použitelnost závisí na podporovaném Windows/GPU/ovladači
+a pokrytí operátorů modelem; nelze předpokládat akceleraci na každém Windows 11 počítači.
+Před výběrem DirectML porovnat také aktuální doporučení Microsoftu pro WinML.
+
+**Co se změní:**
+- Přidat `Microsoft.ML.OnnxRuntime.DirectML` jen po ověření dostupnosti a kompatibility jeho zvolené
+  verze s hlavním `Microsoft.ML.OnnxRuntime` balíčkem a podporovanými modely/zařízeními (`win-x64`).
+- Do `AppSettings` přidat vlastnost `OrtBackend` s hodnotami `Auto`, `Cpu`, `DirectMl`.
+  (`CUDA` přijde v 3.3.) Výchozí hodnota: `Auto`.
+- `Auto` zkusí nakonfigurovat DirectML a při nedostupnosti použije CPU; log/status musí potvrdit
+  skutečný execution provider, nikoli jen přítomnost DLL.
+- Pokud uživatel výslovně zvolí `DirectMl` a provider nejde inicializovat, zobrazit chybu/nedostupnost;
+  nesmí se potichu přejít na jiný provider nebo engine. Automatický fallback patří pouze do `Auto`.
+- DirectML vyžaduje speciální nastavení session (`parallel_execution = false`, `memory_pattern = false`) –
+  tato nastavení budou zdokumentována komentáři přímo v kódu `ParakeetService`.
+- Ověřit, jak pokrytí ONNX operátorů DirectML ovlivňuje skutečný model a paralelní požadavky;
+  plné využití GPU ani souběh na jedné session se nesmí předpokládat.
+- Do `SettingsWindow` / `SettingsPanel` přidat volbu backendu pro ORT.
+
+---
+
+### 3.3 CUDA backend pro ONNX Runtime
+
+**Proč:** CUDA je další ONNX Runtime provider pro kompatibilní NVIDIA zařízení. Jeho rychlostní
+výhoda proti DirectML je hypotéza, kterou je nutné změřit na Parakeet modelu a cílovém hardware.
+
+**Co se změní:**
+- Přidat `Microsoft.ML.OnnxRuntime.Gpu` jako CUDA provider pouze pro `win-x64` po ověření, že je
+  správným balíčkem pro zvolenou verzi ONNX Runtime; všechny ORT reference verzovat kompatibilně.
+- Rozšířit `OrtBackend` enum o hodnotu `Cuda`.
+- Při inicializaci ověřit skutečné vytvoření CUDA execution provideru; samotná existence
+  `onnxruntime_providers_cuda.dll` není potvrzením, že session používá CUDA.
+- Při výslovné volbě `CUDA` nepřejít potichu na jiný provider/engine; fallback je řízený pouze
+  nastavením `Auto` a skutečně načtený provider musí být viditelný.
+- Zjistit přesné CUDA/cuDNN a nativní DLL požadavky vybraného ORT balíčku. Nepředpokládat,
+  že současný `CopyCudaRuntimeDlls` target pro Whisper pokryje závislosti ONNX Runtime.
+- Porovnat CUDA, DirectML/WinML a CPU na stejném modelu; zaznamenat rychlost, kvalitu,
+  paměť, balení a fallback místo předpokladu, že CUDA bude vždy rychlejší.
+
+---
+
+## Fáze 4 – dodělat hrubý refactoring
 
 Původní refaktorovací položky jsou v sekci **Dokončeno**. Přechod na Avalonia je odložen do Fáze 8.
 
-## Fáze 4 – Sjednocení sekundárních oken do jednoho tabbed okna
+## Fáze 5 – Sjednocení sekundárních oken do jednoho tabbed okna
 
 > Výrazný dopad na kód – kompletně přestrukturuje složku `Views/`,
 > odstraní tři samostatná okna a nahradí je `UserControl` panely uvnitř jednoho `AppWindow`.
 
 ---
 
-### 4.1 Refaktorovat stávající okna na `UserControl` panely
+### 5.1 Refaktorovat stávající okna na `UserControl` panely
 
 **Proč:** Aktuálně existují tři samostatná WPF okna – `SettingsWindow`, `HistoryWindow`, `AboutWindow`.
 Každé se otevírá zvlášť přes tray menu a vzájemně se navzájem zavírají (`CloseSecondaryWindow`).
@@ -73,23 +135,23 @@ Uživatel chce, aby tato okna byla pohromadě jako záložky v jednom okně, nik
 
 ---
 
-### 4.2 Vytvořit nové `AppWindow` se záložkami
+### 5.2 Vytvořit nové `AppWindow` se záložkami
 
 **Proč:** Potřebujeme nové hostitelské okno, které drží `TabControl` se záložkami Settings, Transcriptions, About.
 
 **Co se změní:**
 - Vznikne `Views/AppWindow.xaml` + `.cs` s `TabControl`.
-- Záložky budou hostovat příslušné panely z 4.1.
+- Záložky budou hostovat příslušné panely z 5.1.
 - `AppWindow` bude singleton – druhé volání jen přepne záložku a aktivuje okno, neotvírá novou instanci.
 - Veřejná metoda `Show(int tabIndex)` umožní tray menu otevřít okno rovnou na správné záložce.
 - Tlačítka Save / Cancel pro nastavení budou v patičce `AppWindow` (sdílená pro celé okno), ne uvnitř panelu.
 - Při odchodu na jinou záložku nebo zavření `AppWindow` s neuloženými změnami nabídnout
   jejich uložení a pokračování, nebo zahození změn a pokračování.
-- Podrobné chování potvrzovacího dialogu bude popsáno ve specifikaci Fáze 4 před implementací.
+- Podrobné chování potvrzovacího dialogu bude popsáno ve specifikaci Fáze 5 před implementací.
 
 ---
 
-### 4.3 Aktualizovat `App.xaml.cs` – nahradit `ShowAbout/History/Settings` voláním `AppWindow`
+### 5.3 Aktualizovat `App.xaml.cs` – nahradit `ShowAbout/History/Settings` voláním `AppWindow`
 
 **Co se změní:**
 - `App.ShowAbout()`, `App.ShowHistory()`, `App.ShowSettings()` budou všechny volat `AppWindow.Show(tabIndex)`.
@@ -98,7 +160,7 @@ Uživatel chce, aby tato okna byla pohromadě jako záložky v jednom okně, nik
 
 ---
 
-### 4.4 Zajistit viditelnost `AppWindow` v Alt+Tab
+### 5.4 Zajistit viditelnost `AppWindow` v Alt+Tab
 
 **Proč:** Uživatel chce, aby se sekundární okna (Settings, History, About) zobrazovala v Alt+Tab
 přepínači jako normální aplikační okna. Zároveň `MainWindow` nesmí být nikdy v Alt+Tab vidět.
@@ -110,14 +172,14 @@ přepínači jako normální aplikační okna. Zároveň `MainWindow` nesmí bý
 
 ---
 
-## Fáze 5 – Malé izolované změny
+## Fáze 6 – Malé izolované změny
 
 > Nejmenší dopad na kód – každá změna je nezávislá na ostatních.
 > Lze implementovat v libovolném pořadí, ideálně mezi většími fázemi.
 
 ---
 
-### 5.1 Přidat 300 ms ticha na začátek nahrávky pro Whisper
+### 6.1 Přidat 300 ms ticha na začátek nahrávky pro Whisper
 
 **Proč:** Whisper občas zahodí první písmeno nebo slabiku nahrávky, pokud neexistuje žádný náběhový čas.
 Přidání 300 ms ticha (nulové PCM bajty) před skutečnou nahrávku tento artifact eliminuje.
@@ -130,7 +192,7 @@ Přidání 300 ms ticha (nulové PCM bajty) před skutečnou nahrávku tento art
 
 ---
 
-### 5.2 Přidat do tray menu položku „Kopírovat poslední přepis"
+### 6.2 Přidat do tray menu položku „Kopírovat poslední přepis"
 
 **Proč:** Uživatel chce rychle zkopírovat poslední přepis do schránky přímo z tray menu, bez nutnosti
 otevírat okno Historie.
@@ -143,7 +205,7 @@ otevírat okno Historie.
 
 ---
 
-### 5.3 Zvukové upozornění při selhání injektáže textu
+### 6.3 Zvukové upozornění při selhání injektáže textu
 
 **Proč:** Když se `SendInput` nepovede (vrátí méně odeslaných eventů než očekáváme), uživatel se to
 nijak nedozví – text se nezobrazí v cílovém okně a aplikace jen tiše selže. Krátký systémový zvuk
@@ -159,68 +221,17 @@ okamžitě upozorní, že text se nevložil.
 
 ---
 
-### 5.4 Do nastavení přidat volbu pro překlad
+### 6.4 Do nastavení přidat volbu pro překlad
 
 Cílem je, aby šel překlad skutečně používat přímo v aplikaci. Výchozí stav překladu musí být vypnutý.
 Konkrétní režim, cílový jazyk a ovládání se určí po průzkumu a v samostatné specifikaci.
 
 ---
 
-## Fáze 6 – Další GPU backendy a ONNX Runtime
-
-> Další backendy pro Whisper.net a ONNX Runtime; tato fáze musí proběhnout před
-> implementací Parakeet (Fáze 7). Nezávisí na Fázích 4 a 5.
-> U větších runtime balíčků nejprve prozkoumat distribuci; preferovat stažení s potvrzením
-> uživatele při instalaci nebo samostatný instalační skript.
-
----
-
-### 6.1 Vulkan backend pro Whisper.net
-
-**Proč:** Aplikace aktuálně na GPU funguje pouze přes CUDA. Vulkan je cross-vendor GPU API,
-které funguje i na AMD a Intel GPU. Whisper.net má pro Vulkan samostatný runtime balíček.
-
-**Co se změní:**
-- Přidat NuGet balíček `Whisper.net.Runtime.Vulkan` do `.csproj` (ověřit kompatibilitu s verzí 1.9.0).
-- Rozšířit `WhisperService` o metodu nebo enum `DetectWhisperBackend()` vracející `WhisperBackend { Cuda, Vulkan, Cpu }`.
-  Nejprve probe CUDA (stávající logika), pak probe `vulkan-1.dll` přes `LoadLibraryEx`.
-- Status label v `MainWindow` zobrazí `"Ready (GPU/Vulkan)"` nebo `"Ready (GPU/CUDA)"` nebo `"Ready (CPU)"`.
-- `WhisperFactory.FromPath` vybírá runtime backend automaticky dle přítomnosti NuGet runtime balíčků – žádná ruční konfigurace session není nutná.
-
----
-
-### 6.2 DirectML backend pro ONNX Runtime (příprava pro Parakeet)
-
-**Proč:** ONNX Runtime, který bude Parakeet Service využívat (Fáze 7), nativně podporuje DirectML –
-GPU akceleraci dostupnou na každém Windows 10/11 systému bez závislosti na CUDA nebo specifickém vendoru.
-
-**Co se změní:**
-- Přidat NuGet balíček `Microsoft.ML.OnnxRuntime.DirectML` jako podmíněný balíček (pouze `win-x64`).
-- Do `AppSettings` přidat vlastnost `OrtBackend` s hodnotami `Auto`, `Cpu`, `DirectMl`.
-  (`Cuda` přijde v 6.3.) Výchozí hodnota: `Auto`.
-- `Auto` bude znamenat: zkus DirectML, fallback CPU.
-- DirectML vyžaduje speciální nastavení session (`parallel_execution = false`, `memory_pattern = false`) –
-  tato nastavení budou zdokumentována komentáři přímo v kódu `ParakeetService`.
-- Do `SettingsWindow` / `SettingsPanel` přidat volbu backendu pro ORT.
-
----
-
-### 6.3 CUDA backend pro ONNX Runtime
-
-**Proč:** Pro uživatele s NVIDIA GPU a CUDA toolkitem bude CUDA inference výrazně rychlejší než DirectML.
-
-**Co se změní:**
-- Přidat NuGet balíček `Microsoft.ML.OnnxRuntime.Gpu` jako podmíněný balíček (pouze `win-x64`).
-- Rozšířit `OrtBackend` enum o hodnotu `Cuda`.
-- Probe: zkontrolovat existenci `onnxruntime_providers_cuda.dll` v adresáři `runtimes/cuda/win-x64`.
-- Aktualizovat MSBuild target `CopyCudaRuntimeDlls` v `.csproj`, aby zkopíroval i ORT CUDA DLL soubory.
-
----
-
 ## Fáze 7 – Parakeet V3 engine
 
 > Největší nová feature – nový transkripční engine, nová stahovaná data, nová servisní třída, změny settings.
-> Závisí na Fázi 3 (ITranscriptionService), Fázi 4 (SettingsPanel detekce modelů) a Fázi 6 (ORT backendy).
+> Závisí na Fázi 3 (ORT backendy), Fázi 4 (ITranscriptionService) a Fázi 5 (SettingsPanel detekce modelů).
 > U větších modelů nejprve prozkoumat distribuci; preferovat samostatné stažení s potvrzením
 > uživatele nebo instalační skript.
 
@@ -289,8 +300,8 @@ Soubory v adresáři `parakeet-tdt-0.6b-v3-int8/`:
 5. Vocabulary lookup: token IDs → text přes `vocab.txt` slovník.
 
 **Co se změní:**
-- Vznikne `Services/ParakeetService.cs` implementující `ITranscriptionService` (z bodu 3.1).
-- NuGet: `Microsoft.ML.OnnxRuntime` (přidáno v Fázi 6.2 DirectML nebo 6.3 CUDA).
+- Vznikne `Services/ParakeetService.cs` implementující `ITranscriptionService` (z bodu 4.1).
+- NuGet: `Microsoft.ML.OnnxRuntime` (přidáno v Fázi 3.2 DirectML nebo 3.3 CUDA).
 - `StateChanged` event bude sdílet stejný `TranscriptionState` enum jako `WhisperService`.
 
 ---
@@ -336,11 +347,15 @@ které části aplikace lze přenést.
 - Hosted GitHub Actions zatím neběželo, takže výsledek CI na hostovaném runneru zůstává neověřený.
 - Oddíly 1–9 v `AGENTS.md` jsou sladěné s aktuálním stromem, testy, build příkazy a nastaveními;
   Appendix A je označený jako historický kontext.
-- První pozdější změna aplikačního chování musí samostatně projít RED → GREEN → REFACTOR;
-  tento krok zůstává odložený, aby Fáze 0 skončila bez zahájení další fáze.
+- Fáze 0 sama skončila bez produktového chování; požadavek RED → GREEN → REFACTOR platí pro
+  pozdější implementační změny.
 
 ### ✅ Fáze 1 – Vyhodnocení GPU backendu (uzavřeno bez integrace)
 
+**Zadání:** Vyhodnotit backend Const-me/Whisper jako alternativu k Whisper.net CUDA.
+Ověřit sestavitelnost a licenci a porovnat rychlost i přesnost na českých nahrávkách.
+
+**Výsledky:**
 - Sestavitelnost a licenční podmínky `Const-me/Whisper` byly ověřeny v izolovaném scratch prostoru.
 - Na 10 českých nahrávkách se stejným modelem `ggml-medium.bin`, jazykem `cs` a promptem
   byla stávající Whisper.net CUDA cesta rychlejší než Const-me D3D11.
@@ -360,8 +375,8 @@ které části aplikace lze přenést.
   testován.
 - Závěr: Const-me se neintegruje jako rychlejší backend. Případná širší podpora AMD/Intel
   je samostatný cíl kompatibility pro pozdější fázi a vyžaduje ověření na reprezentativním
-  hardwaru. Fáze 6.1 už obsahuje Vulkan backend pro Whisper.net.
-- Projekt už obsahuje rozhraní `ITranscription`; roadmapová Fáze 3.1 používá odlišný název
+  hardwaru. Fáze 3.1 už obsahuje Vulkan backend pro Whisper.net.
+- Projekt už obsahuje rozhraní `ITranscription`; roadmapová Fáze 4.1 používá odlišný název
   `ITranscriptionService`, proto je nutné před další integrací pracovat s aktuálním kontraktem.
 - Čistý .NET single-file publish nezahrnul nativní `Whisper.dll`; integrace by vyžadovala
   explicitní kopírování nebo ověřené rozbalení nativní knihovny. Balíček je určen pro x64;
@@ -378,36 +393,52 @@ které části aplikace lze přenést.
   C# wrapper v `WhisperNet/`.
 - Úplné výsledky a předávací poznámky: `.agents/specs/gpu-backend-benchmark-handoff.md`.
 
+### ✅ Fáze 2 – Paralelní nahrávání a transkripce přes hotkey
+
+**Dokončeno:** 10. listopadu 2026.
+
+- Přidána FIFO fronta dokončených audio dávek a adaptivní inference kapacita. Každý job zachovává
+  vlastní audio, nastavení a focus snapshot; pro stejné cílové okno se zachová pořadí nahrávání.
+- Nastavitelné výchozí limity jsou 10 outstanding jobů a 128 MiB retained audio. Audio limit je
+  měkký: přijatá nahrávka se nezkrátí, nezahodí ani nemusí opakovat. Při překročení se pozastaví
+  pouze další PTT pokusy až do dokončení všech outstanding jobů; po uvolnění kapacity se indikátor
+  automaticky vrátí z šedé do modré.
+- Widget zobrazuje až tři ETA v pořadí výsledků a oddělené počty aktivních a čekajících přepisů.
+  Při startu ukazuje `GPU Detection…`; CUDA/model inicializace běží mimo WPF Dispatcher.
+- Ověřeno lokálně: Debug i Release **217/217 testů**, oba aplikační buildy **0 warningů, 0 chyb**.
+  Read-only DXGI smoke test proběhl; živý mikrofon/PTT v produkční aplikaci nebyl otestován.
+- Podrobný návrh, rozhodnutí, akceptační testy a omezení: `.agents/specs/phase-2-parallel-transcription.md`.
+
 > Starší dokončené položky níže uchovávají historii a mohou používat tehdejší názvy souborů/tříd.
 > Pro aktuální strom použij zdrojový kód a `.agents/specs/phase-0-coverage-inventory.md`.
 
-### ✅ Fáze 3 – Refaktoring a čistota kódu
+### ✅ Fáze 4 – Refaktoring a čistota kódu
 
-#### 3.1 Zavést rozhraní `ITranscriptionService`
+#### 4.1 Zavést rozhraní `ITranscriptionService`
 - Vznikl `Services/ITranscriptionService.cs`.
 - `WhisperService` implementuje `ITranscriptionService`.
 - `App.WhisperService` má typ `ITranscriptionService`.
 
-#### 3.2 Přejmenovat `EtaStatsService` → `EtaService`, `App.EtaStats` → `App.Eta`
+#### 4.2 Přejmenovat `EtaStatsService` → `EtaService`, `App.EtaStats` → `App.Eta`
 - Třída v `EtaStatsService.cs` přejmenována na `EtaService`.
 - `App.EtaStats` → `App.Eta` ve všech souborech.
 
-#### 3.3 Opravit `ContinueWith` + `Unwrap` v `WhisperService.InitializeAsync`
+#### 4.3 Opravit `ContinueWith` + `Unwrap` v `WhisperService.InitializeAsync`
 - Blok přepsán na čistý `await`.
 
-#### 3.4 Vyextrahovat logiku pozicování okna do `Services/WindowPositioner.cs`
+#### 4.4 Vyextrahovat logiku pozicování okna do `Services/WindowPositioner.cs`
 - Vznikl `Services/WindowPositioner.cs` (~150 řádků).
 - `MainWindow.xaml.cs` zkrácen o ~130 řádků.
 
-#### 3.5 Zbavit `TextInjector` přímé závislosti na `App.SettingsService`
+#### 4.5 Zbavit `TextInjector` přímé závislosti na `App.SettingsService`
 - `InjectText` má signaturu `InjectText(string text, IReadOnlyList<int> pttVkCodes)`.
 - Volající `MainWindow.OnPttStopped` předává `HotkeyVkCodes` jako argument.
 
-#### 3.6 Nahradit magická čísla pojmenovanými konstantami
+#### 4.6 Nahradit magická čísla pojmenovanými konstantami
 - `MainWindow.WavBytesPerSecond = 32000` nahrazuje magic number.
 - `WhisperService.MinModelFileSizeBytes` je `public const`.
 
-#### Další opravy coding standards (součást Fáze 3)
+#### Další opravy coding standards (součást Fáze 4)
 - `PowerStatusSnapshot` přesunuto do vlastního souboru `Services/PowerStatusSnapshot.cs` s `public` viditelností.
 - `AudioRecorder`, `HotkeyService`: odstraněno `sealed`, přidáno `this.`/`ClassName.`, opraveno pořadí členů.
 - `SettingsService`: přidáno `this.` pro instance property, `SettingsService.` pro statické členy.

@@ -36,6 +36,7 @@ Hold a keyboard shortcut, speak, release — the transcribed text is instantly t
 
 - 🎙️ **Push-to-talk** recording with a **configurable hotkey** — default is `Left Alt + Left Win`
 - 🤖 **Local AI transcription** via [Whisper.net](https://github.com/sandrohanea/whisper.net) (whisper.cpp backend) — no cloud, no API key
+- 🎧 **Overlapping recordings** — record another clip while earlier jobs are transcribed or wait in a FIFO queue
 - ⚡ **CUDA GPU acceleration** — automatic if an NVIDIA GPU is present
 - 🌍 **57 languages** supported, including auto-detection
 - 🪟 **Floating pill widget** — stays on top, draggable, remembers position
@@ -50,7 +51,7 @@ Hold a keyboard shortcut, speak, release — the transcribed text is instantly t
 
 | Component | Minimum |
 |---|---|
-| OS | Windows 10 or Windows 11 (64-bit) |
+| OS | Windows 11 or newer (64-bit) |
 | Runtime | [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) |
 | RAM | 4 GB (8 GB+ recommended for large models) |
 | Disk | 78 MB – 3 GB depending on the chosen model |
@@ -122,7 +123,8 @@ On the very first launch:
 1. The app checks for `llms\ggml-large-v2.bin` by default.
 2. If the model file is **not found**, it automatically downloads `ggml-medium` (~1.5 GB) from the official Hugging Face repository. This may take a few minutes depending on your connection.
 3. The app also creates a local SQLite database `llms\eta-time-stats.db` for ETA timing statistics.
-4. The floating pill widget appears at the bottom-center of your screen showing **"Loading…"** while the model is being loaded into memory (or downloaded).
+4. The floating pill widget appears at the bottom-center of your screen immediately showing
+   **"GPU Detection…"**. It then reports whether CUDA or CPU was detected while the model loads (or downloads).
 5. Once it shows **"Ready"**, you can start transcribing.
 
 ---
@@ -133,8 +135,13 @@ On the very first launch:
 
 1. **Click into any text field** — a browser address bar, Notepad, Word, chat app, anywhere.
 2. **Hold your push-to-talk hotkey** — by default `Left Alt + Left Win`. The widget turns red and shows "Recording…". Speak clearly into your microphone.
-3. **Release the keys** — the widget shows "Transcribing…". Starting from the **second matching transcription** for the same model and runtime environment, it also shows an ETA countdown like `~Xs`.
-4. The transcribed text is **automatically typed** into the window that had focus before you started recording.
+3. **Release the keys** — that clip starts transcribing or waits in the FIFO queue. You can begin
+   another recording while earlier clips are processing; when a configured limit blocks it, the
+   widget shows **Busy**.
+4. The widget shows ETA estimates for the next result-ready transcriptions when matching timing data is
+   available. With multiple jobs it shows up to three times in recording order, e.g.
+   `~8s; ~17s; ~25s; +N`; active and queued counts appear separately.
+5. The transcribed text is **automatically typed** into the window that had focus before you started recording.
 
 > ⚠️ Make sure to click into the target text field *before* pressing the hotkey. The app saves the focus at the moment you press the keys.
 
@@ -158,8 +165,19 @@ Open Settings via the **tray icon → Settings**.
 | **Prompt** | Optional hint text for Whisper. Use it to teach the model uncommon words, names or formatting. Example: `Whisper, GPT-4, OpenAI, CUDA`. |
 | **Push-to-talk hotkey** | Configurable directly in Settings. Click **Change…**, hold the desired key combination, then release it to save. Default is `Left Alt + Left Win`. |
 | **History size** | Maximum number of transcriptions kept in memory during a session (1 to 2,147,483,647). |
+| **Maximum jobs** | Maximum active, waiting and currently-recording jobs. Default: 10. |
+| **Audio budget (MiB)** | RAM threshold for audio batches. Default: 128 MiB. See the note below. |
 
 Click **Save** to apply changes. The model is reloaded automatically if you change it.
+
+The audio budget is a soft admission threshold: audio remains in RAM until its transcription completes,
+and a recording already admitted is not cut off if it exceeds the threshold. A PTT attempt that cannot
+be admitted is declined with **Busy**; try again when the indicator returns to blue. Accepted
+recordings stay queued and are not discarded or repeated. If an admitted recording pushes the audio
+buffer above the budget, the gray pause remains until all outstanding jobs drain; a pause caused only
+by the job count clears when a slot opens. Low system RAM may reduce the effective budget; the audio
+budget excludes the Whisper model and its inference memory. Finalizing a recording may briefly require
+extra memory. The indicator returns to blue automatically when recording can resume.
 
 ---
 
@@ -283,7 +301,7 @@ WhisperWriter stores ETA timing data in a local SQLite database:
 ### Prerequisites
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) (or any newer .NET SDK — 9, 10, … all work)
-- Windows 10/11
+- Windows 11 or newer
 - Visual Studio 2022 (optional, for IDE support)
 - CUDA Toolkit 11, 12 or 13 (optional, for GPU acceleration — not needed to compile)
 

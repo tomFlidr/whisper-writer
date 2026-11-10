@@ -196,21 +196,23 @@ Covered by `MainWindowTests`: activation/reload, close and disposal paths, PTT s
 paths and call order, Whisper state changes, ETA countdown, amplitude/recording UI, display/size
 handling, XAML mouse behavior, status brushes, and background-injection error logging. The
 production scheduler is independently covered by
-`MainWindowRuntimeTests.RunBackground_ExecutesWorkOffTheCallingThread`.
+`MainWindowRuntimeTests.RunBackground_ExecutesWorkOffTheDispatcherThread`.
 
 ## XAML event-binding map
 
-All 15 routed-event assignments across the four view XAML files map to tests. The repeated
+The Phase 0 baseline had 15 routed-event assignments. Phase 2 adds two numeric `PreviewTextInput`
+bindings in Settings, for 17 current assignments across the four view XAML files. The repeated
 Cancel and Close bindings are separate assignments and are each exercised through their XAML
 controls.
 
 - `MainWindow.xaml`: `MouseLeftButtonDown`, `MouseEnter`, `MouseLeave` —
   `MainWindowTests.XamlMouseBindingsDelegateDragAndHoverEventsWithoutPhysicalInput`.
 - `SettingsWindow.xaml`: title-bar `MouseLeftButtonDown`, hotkey-capture `Click`,
-  history-size `PreviewTextInput`, two Cancel `Click` bindings, and Save `Click` —
+  `PreviewTextInput` on history size and both queue-limit fields, two Cancel `Click` bindings,
+  and Save `Click` —
   `SettingsWindowTests.TitleBarMouseDown_DelegatesOnlyPressedDragsToTheInjectedPlatform`,
   `HotkeyCapture_AcceptsTheSimultaneouslyHeldKeysAndEscapeRestoresTheSavedCombo`,
-  `HistorySizePreviewTextInput_BlocksNonDigitsAndAllowsDigits`,
+  `NumericSettingsPreviewTextInput_BlocksNonDigitsAndAllowsDigits`,
   `CancelButton_DoesNotApplyEditedSettingsAndReturnsFalseThroughTheXamlBinding`,
   `CloseGlyph_CancelsThroughItsXamlClickBinding`, and
   `SaveButton_PersistsFormValuesAndRegistryChoiceThroughTheXamlBinding`.
@@ -224,6 +226,35 @@ controls.
   `CloseButton_ClosesTheAboutWindowThroughItsXamlClickBinding`.
 - `App.xaml` has no event-handler assignments. History item-template copy behavior and rendered
   text/metadata bindings are asserted by the History tests.
+
+## Phase 2 additions (November 10, 2026)
+
+These behavior contracts extend the Phase 0 baseline; they do not change its historical 95-contract
+and 185-test counts.
+
+- `Services/TranscriptionQueue.cs`: active-slot scheduling, FIFO waiting, per-target result order,
+  queue status/ETA, recording reservations, configurable outstanding-job admission, the soft audio
+  budget and its one-recording overshoot behavior. Covered by `TranscriptionQueueTests`.
+- `Services/InferenceCapacityPolicy.cs`, `InferenceCapacityManager.cs`,
+  `InferenceCapacityProfileStore.cs`, and `WindowsInferenceMemoryMonitor.cs`: adaptive capacity,
+  resource-failure retry feedback, persisted profiles, and memory-signal fallbacks. Covered by the
+  corresponding `InferenceCapacityPolicyTests`, `InferenceCapacityManagerTests`,
+  `InferenceCapacityProfileStoreTests`, and `WindowsInferenceMemoryMonitorTests`.
+- `Views/MainWindow.xaml.cs`: queue admission, per-recording settings/focus snapshot, queue status/ETA,
+  and ordered result injection. Covered by `MainWindowTests` and the queue service tests.
+- `App.xaml.cs` / `Services/Whisper.cs`: startup initialization is dispatched to a background task;
+  the pill shows `GPU Detection…` before the CUDA probe, then a detected CUDA/CPU loading status.
+  The Dispatcher responsiveness is covered by
+  `AppLifecycleTests.Startup_RunsWhisperInitializationOffDispatcherAndKeepsTheUiResponsive`; status
+  ordering is covered by `WhisperTests` and `MainWindowTests`.
+- `Views/SettingsWindow.xaml` / `.xaml.cs`: configurable job count and audio-buffer budget, numeric
+  input, persistence into `AppSettings`, and user-facing explanation. Covered by
+  `SettingsWindowTests`, `SettingsTests`, and `AppSettingsTests`.
+- `TranscriptionQueue.Enqueue` takes ownership of the WAV byte array; the caller must not mutate it
+  after enqueue. This avoids an extra full-size queue copy and is tested by
+  `TranscriptionQueueTests.Enqueue_TransfersTheOwnedAudioBufferWithoutCopyingIt`.
+- Current local verification on November 10, 2026: **217/217 Debug tests** and **217/217 Release
+  tests** passed; Debug and Release application builds each completed with 0 warnings/errors.
 
 ## Data-only members and shared contracts
 
@@ -272,7 +303,6 @@ do not require committing secrets, downloading a model, or depending on physical
   The workflow can run when the user later publishes or opens a PR for these changes.
 - `AGENTS.md` Sections 1–9 now reflect the current project and test setup. Appendix A is explicitly
   historical; use the source tree, this inventory, and updated `.agents` guidance for current truth.
-- No new product behavior was implemented as part of Phase 0. The first later behavior slice
-  must independently demonstrate RED → GREEN → REFACTOR; that requirement is deferred until
-  that slice begins so Phase 0 can stop without starting another roadmap phase.
-- No files were staged or committed.
+- Phase 0 itself introduced no product behavior. Later product changes must use RED → GREEN → REFACTOR
+  and are documented separately; this inventory preserves the Phase 0 characterization baseline.
+- At the Phase 0 checkpoint, no files had been staged or committed.

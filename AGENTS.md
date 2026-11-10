@@ -33,7 +33,7 @@ No data leaves the computer. CUDA GPU acceleration is automatic.
 
 | Item | Value |
 |---|---|
-| Platform | Windows 10/11, .NET 8, WPF + WinForms (NotifyIcon) |
+| Platform | Windows 11 or newer, .NET 8, WPF + WinForms (NotifyIcon) |
 | Version | 1.2.0.0 |
 | Project | `D:\tec\cs\whisper-writer-wpf\WhisperWriter\WhisperWriter.csproj` |
 | Inference | Whisper.net; CPU path available, CUDA runtime optional |
@@ -52,8 +52,8 @@ No data leaves the computer. CUDA GPU acceleration is automatic.
 
 ## 3. Project structure
 
-The production project contains 52 C# files and 5 XAML files. The sibling Phase 0 test project
-contains 30 C# files (25 test sources and 5 support files); see the coverage inventory for the map.
+The production project contains 72 C# files and 5 XAML files. The test project contains 35 C# files;
+see the coverage inventory for the baseline and current behavior-to-test mappings.
 
 ```
 D:\tec\cs\whisper-writer-wpf\
@@ -102,17 +102,26 @@ D:\tec\cs\whisper-writer-wpf\
 - `Program.cs` bootstraps Autofac through `DI/Container.cs`, resolves `App`, initializes WPF, and
   runs it. `IProgramRuntime` and `IAppRuntime` expose deterministic startup/lifecycle boundaries.
 - `App.xaml.cs` loads settings, configures global exception handlers, shows `MainWindow`, and starts
-  Whisper initialization. It disposes ETA resources and flushes logging on exit.
+  Whisper initialization through a background task so synchronous native/model loading does not block
+  the Dispatcher. The widget immediately reports `GPU Detection…`, then the detected CUDA/CPU path.
+  The app disposes ETA resources and flushes logging on exit.
 - Core services live in `Services/`: `Settings`, `TranscriptionHistory`, `AudioRecorder`, `Hotkey`,
-  `Whisper`, `EtaCalc`, `TextInjector`, `TrayMenu`, and `Log`. Platform seams keep native/device
+  `Whisper`, `EtaCalc`, `TextInjector`, `TranscriptionQueue`, `InferenceCapacityManager`,
+  `WindowsInferenceMemoryMonitor`, `TrayMenu`, and `Log`. Platform seams keep native/device
   effects testable while production defaults remain unchanged.
+- `TranscriptionQueue` uses configurable `AppSettings.MaxOutstandingTranscriptionJobs` and
+  `MaxBufferedAudioMiB`. The audio budget is a soft admission threshold; an admitted recording is
+  retained until inference completes and may exceed it. After an overshoot, new PTT attempts remain
+  paused until all outstanding jobs drain; a pause caused only by the job-count limit clears when
+  a slot opens.
 - `Services/MainWindows/` contains `Position` and `Style`; `Models/` contains `AppSettings` and
   `TranscriptionEntry`; shared enums and marker interfaces are under `Utils/Enums/` and
   `Utils/Interfaces/`.
 - `Views/` contains `MainWindow`, `SettingsWindow`, `HistoryWindow`, and `AboutWindow` plus runtime
   and Windows-platform adapters. XAML event behavior is mapped in the Phase 0 inventory.
 - `WhisperWriter.Tests/` uses xUnit v3 with VSTest and targets `net8.0-windows7.0`.
-  The inventory maps 95 behavior-bearing contracts and all 15 view XAML event assignments.
+  The Phase 0 baseline mapped 95 behavior-bearing contracts and 15 XAML event assignments;
+  the inventory also records Phase 2 queue, settings and UI additions.
 - Phase 0 was locally verified on November 4, 2026: 185/185 tests passed in both Debug and Release;
   application builds completed with zero warnings and zero errors. Hosted GitHub Actions has not run.
 - Irreducible physical integrations (real microphone, global focus/input, clipboard/registry writes,
