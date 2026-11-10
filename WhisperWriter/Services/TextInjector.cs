@@ -34,7 +34,7 @@ public class TextInjector: IService, ISingleton {
 	private static readonly ushort _virtualKeyShiftLeft		= 0xA0;
 	private static readonly ushort _virtualKeyShiftRight	= 0xA1;
 	
-	private static IntPtr _savedHwnd = IntPtr.Zero;
+	private FocusTarget _lastFocus;
 	private readonly ITextInjectorPlatform _platform;
 
 	public TextInjector () : this(new NativeTextInjectorPlatform()) {
@@ -44,6 +44,33 @@ public class TextInjector: IService, ISingleton {
 		ArgumentNullException.ThrowIfNull(platform);
 		this._platform = platform;
 	}
+
+	public FocusTarget CaptureFocus () {
+		IntPtr foregroundWindow = this._platform.GetForegroundWindow();
+		IntPtr focusedWindow = foregroundWindow == IntPtr.Zero
+			? IntPtr.Zero
+			: this._platform.GetFocusedWindow(foregroundWindow);
+		return new FocusTarget(foregroundWindow, focusedWindow);
+	}
+
+	/// <summary>Restores the foreground window and child control captured for one recording.</summary>
+	public void RestoreFocus (FocusTarget target) {
+		if (target.ForegroundWindow == IntPtr.Zero) return;
+
+		uint targetThread = this._platform.GetWindowThreadProcessId(target.ForegroundWindow);
+		uint currentThread = this._platform.GetCurrentThreadId();
+		bool attached = targetThread != currentThread &&
+			this._platform.AttachThreadInput(currentThread, targetThread, true);
+		try {
+			this._platform.SetForegroundWindow(target.ForegroundWindow);
+			this._platform.BringWindowToTop(target.ForegroundWindow);
+			if (target.FocusedWindow != IntPtr.Zero && target.FocusedWindow != target.ForegroundWindow)
+				this._platform.SetFocus(target.FocusedWindow);
+		} finally {
+			if (attached)
+				this._platform.AttachThreadInput(currentThread, targetThread, false);
+		}
+	}
 	
 	/// <summary>Call this just before we steal focus (when PTT key is pressed).</summary>
 	/// <summary>
@@ -51,7 +78,7 @@ public class TextInjector: IService, ISingleton {
 	/// Also verifies that the managed Input struct matches the native layout expected by SendInput.
 	/// </summary>
 	public void SaveFocus () {
-		TextInjector._savedHwnd = this._platform.GetForegroundWindow();
+		this._lastFocus = this.CaptureFocus();
 		// Verify struct layout matches Win32 at runtime (40 bytes on 64-bit, 28 on 32-bit).
 		int expected = IntPtr.Size == 8 ? 40 : 28;
 		int actual = this._platform.InputSize;
@@ -72,20 +99,11 @@ public class TextInjector: IService, ISingleton {
 	/// AttachThreadInput requires the caller to have a message pump.
 	/// </summary>
 	public void RestoreFocus () {
-		if (TextInjector._savedHwnd == IntPtr.Zero) return;
-		uint targetThread = this._platform.GetWindowThreadProcessId(TextInjector._savedHwnd);
-		uint currentThread = this._platform.GetCurrentThreadId();
-		bool attached = (
-			targetThread != currentThread &&
-			this._platform.AttachThreadInput(
-				currentThread, targetThread, true
-			)
-		);
-		this._platform.SetForegroundWindow(TextInjector._savedHwnd);
-		this._platform.BringWindowToTop(TextInjector._savedHwnd);
-		if (attached)
-			this._platform.AttachThreadInput(currentThread, targetThread, false);
+		this.RestoreFocus(this._lastFocus);
 	}
+
+	public void InjectText (string text, IReadOnlyList<int> pttVkCodes) =>
+		this.InjectText(text, pttVkCodes, this._lastFocus);
 
 	/// <summary>
 	/// Waits for PTT modifier keys to be physically released, then injects text.
@@ -99,7 +117,7 @@ public class TextInjector: IService, ISingleton {
 	/// Must be called from a background thread because it waits for physical key release
 	/// and performs Thread.Sleep to allow the target window to receive focus.
 	/// </summary>
-	public void InjectText (string text, IReadOnlyList<int> pttVkCodes) {
+	public void InjectText (string text, IReadOnlyList<int> pttVkCodes, FocusTarget target) {
 		if (string.IsNullOrEmpty(text)) return;
 
 		// Wait until Win and Ctrl are physically released (up to 2 s).
@@ -111,6 +129,14 @@ public class TextInjector: IService, ISingleton {
 		// Release all modifier keys via synthetic keyup events.
 		// Win keys require _keyEventFExtendKey or the keyup is ignored.
 		this._releaseModifierKeys();
+
+		// A later job can change foreground focus while this request waits for key release.
+		if (target.ForegroundWindow != IntPtr.Zero && this._platform.GetForegroundWindow() != target.ForegroundWindow) {
+			this._platform.SetForegroundWindow(target.ForegroundWindow);
+			this._platform.BringWindowToTop(target.ForegroundWindow);
+			if (target.FocusedWindow != IntPtr.Zero && target.FocusedWindow != target.ForegroundWindow)
+				this._platform.SetFocus(target.FocusedWindow);
+		}
 
 		// Small pause so the target window has time to process the focus change
 		// that RestoreFocus() already requested on the UI thread.
@@ -240,11 +266,17 @@ public class TextInjector: IService, ISingleton {
 		[DllImport("user32.dll", EntryPoint = "GetForegroundWindow")]
 		private static extern IntPtr GetForegroundWindowNative ();
 
+		[DllImport("user32.dll", EntryPoint = "GetGUIThreadInfo", SetLastError = true)]
+		private static extern bool GetGUIThreadInfoNative (uint threadId, ref GuiThreadInfo info);
+
 		[DllImport("user32.dll", EntryPoint = "SetForegroundWindow")]
 		private static extern bool SetForegroundWindowNative (IntPtr hWnd);
 
 		[DllImport("user32.dll", EntryPoint = "BringWindowToTop")]
 		private static extern bool BringWindowToTopNative (IntPtr hWnd);
+
+		[DllImport("user32.dll", EntryPoint = "SetFocus")]
+		private static extern IntPtr SetFocusNative (IntPtr hWnd);
 
 		[DllImport("user32.dll", EntryPoint = "AttachThreadInput")]
 		private static extern bool AttachThreadInputNative (uint idAttach, uint idAttachTo, bool attach);
@@ -270,8 +302,22 @@ public class TextInjector: IService, ISingleton {
 			return NativeTextInjectorPlatform.GetForegroundWindowNative();
 		}
 
+		public IntPtr GetFocusedWindow (IntPtr foregroundWindow) {
+			uint threadId = NativeTextInjectorPlatform.GetWindowThreadProcessIdNative(foregroundWindow, out _);
+			var info = new GuiThreadInfo {
+				Size = (uint)Marshal.SizeOf<GuiThreadInfo>(),
+			};
+			return NativeTextInjectorPlatform.GetGUIThreadInfoNative(threadId, ref info)
+				? info.FocusWindow
+				: IntPtr.Zero;
+		}
+
 		public bool SetForegroundWindow (IntPtr hWnd) {
 			return NativeTextInjectorPlatform.SetForegroundWindowNative(hWnd);
+		}
+
+		public void SetFocus (IntPtr hWnd) {
+			NativeTextInjectorPlatform.SetFocusNative(hWnd);
 		}
 
 		public bool BringWindowToTop (IntPtr hWnd) {
@@ -322,6 +368,27 @@ public class TextInjector: IService, ISingleton {
 
 		public int GetLastError () {
 			return Marshal.GetLastWin32Error();
+		}
+
+		[StructLayout(LayoutKind.Sequential)]
+		private struct GuiThreadInfo {
+			public uint Size;
+			public uint Flags;
+			public IntPtr ActiveWindow;
+			public IntPtr FocusWindow;
+			public IntPtr CaptureWindow;
+			public IntPtr MenuOwner;
+			public IntPtr MoveSizeWindow;
+			public IntPtr CaretWindow;
+			public Rect CaretRect;
+		}
+
+		[StructLayout(LayoutKind.Sequential)]
+		private struct Rect {
+			public int Left;
+			public int Top;
+			public int Right;
+			public int Bottom;
 		}
 	}
 }

@@ -9,6 +9,7 @@ using System.Windows.Threading;
 using WhisperWriter.DI;
 using WhisperWriter.Models;
 using WhisperWriter.Services;
+using WhisperWriter.Services.TextInjectors;
 using WhisperWriter.Utils.Enums;
 using WhisperWriter.Utils.Interfaces;
 // Alias to avoid ambiguity with System.Windows.Forms.Application
@@ -46,6 +47,8 @@ public partial class MainWindow : Window, IService, ISingleton {
 	protected AudioRecorder audioRecorder { get; set; } = null!;
 	[Inject]
 	protected Hotkey hotkey { get; set; } = null!;
+	[Inject]
+	protected TranscriptionQueue transcriptionQueue { get; set; } = null!;
 
 	// ctor injection
 	protected Services.MainWindows.Style windowStyle { get; set; } = null!;
@@ -59,6 +62,13 @@ public partial class MainWindow : Window, IService, ISingleton {
 
 	private DateTime _transcribeStarted;
 	private double _etaSeconds;
+	private RecordingContext? _recordingContext;
+	private bool _recordingRejected;
+	private bool _isRecording;
+	private long _recordingSequence;
+	private readonly object _resultPipelineLock = new();
+	private Task _resultPipeline = Task.CompletedTask;
+	private int _pendingInjections;
 
 	// True once the initial Loaded positioning has been applied.
 	private bool _positionApplied;
@@ -101,7 +111,8 @@ public partial class MainWindow : Window, IService, ISingleton {
 			this.textInjector,
 			this.settings,
 			this.audioRecorder,
-			this.hotkey
+			this.hotkey,
+			this.transcriptionQueue
 		);
 	}
 
@@ -143,6 +154,8 @@ public partial class MainWindow : Window, IService, ISingleton {
 
 		var runtime = this.getRuntime();
 		runtime.StateChanged += this.handleWhisperStateChanged;
+		runtime.QueueStatusChanged += this.handleQueueStatusChanged;
+		runtime.JobCompleted += this.handleJobCompleted;
 		
 		var settings = runtime.Settings;
 		runtime.SetHotkeyCodes(settings.HotkeyCodes);
@@ -155,6 +168,8 @@ public partial class MainWindow : Window, IService, ISingleton {
 			Interval = TimeSpan.FromMilliseconds(MainWindow._etaTimerMiliseconds)
 		};
 		this.etaTimer.Tick += this.handleEtaTick;
+		this.etaTimer.Interval = TimeSpan.FromSeconds(1);
+		this.handleQueueStatusChanged(runtime.GetQueueStatus());
 
 		runtime.StartHotkey();
 
@@ -236,72 +251,100 @@ public partial class MainWindow : Window, IService, ISingleton {
 	}
 
 	/// <summary>
-	/// Called when the hotkey press is detected. Saves focus, shows recording UI and starts audio capture.
+	/// Called when the hotkey press is detected. Reserves queue space and snapshots the destination/settings
+	/// before starting a fresh audio capture.
 	/// </summary>
 	protected void handlePush2TalkStarted () {
-		this.getRuntime().SaveFocus();
+		var runtime = this.getRuntime();
+		FocusTarget target = runtime.CaptureFocus();
 		this.Dispatcher.Invoke(() => {
-			this.setRecordingState(true);
-			this.getRuntime().StartRecording();
+			if (this._isRecording)
+				return;
+			if (!runtime.TryReserveRecording()) {
+				this._recordingRejected = true;
+				this.setStatus("Busy · transcription queue full");
+				this.RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["TextSecondaryBrush"];
+				return;
+			}
+
+			AppSettings settings = runtime.Settings;
+			this._recordingContext = new RecordingContext(
+				target,
+				settings.Language,
+				settings.Prompt,
+				settings.ModelPath,
+				settings.HotkeyCodes.ToArray(),
+				settings.CopyToClipboard,
+				new DateTimeOffset(this.windowPlatform.UtcNow),
+				Interlocked.Increment(ref this._recordingSequence));
+			try {
+				this.setRecordingState(true);
+				runtime.StartRecording();
+			} catch (Exception exception) {
+				this._recordingContext = null;
+				this.setRecordingState(false);
+				runtime.CancelRecordingReservation();
+				runtime.LogError("Recording start failed", exception);
+				this.setStatus($"Error: {exception.Message}", isError: true);
+			}
 		});
 	}
 
 	/// <summary>
-	/// Called when the hotkey release is detected. Stops recording, optionally starts ETA countdown,
-	/// invokes the transcription service and handles injection of the result back to the focused app.
+	/// Called when the hotkey release is detected. Stops recording and hands the immutable batch to the
+	/// inference queue; the UI thread never waits for transcription.
 	/// </summary>
 	protected void handlePush2TalkStopped () {
-		this.Dispatcher.Invoke(async () => {
-			var runtime = this.getRuntime();
-			var wav = runtime.StopRecording();
-			this.setRecordingState(false);
-
-			if (wav == null || wav.Length < 1000)
+		var runtime = this.getRuntime();
+		RecordingContext? context = null;
+		byte[]? wav = null;
+		this.Dispatcher.Invoke(() => {
+			if (this._recordingRejected) {
+				this._recordingRejected = false;
+				this.updateQueueUi(runtime.GetQueueStatus());
 				return;
-
-			// WAV bytes: 16000 samples/s × 2 bytes = 32000 bytes/s
-			double recordedSeconds = wav.Length / MainWindow._wavBytesPerSecond;
-			// Returns the model key used for ETA stats lookups (filename without extension).
-			var modelKey = System.IO.Path.GetFileNameWithoutExtension(runtime.Settings.ModelPath);
-			var estimatedSeconds = runtime.EstimateProcessingSeconds(modelKey, recordedSeconds);
-			if (estimatedSeconds.HasValue)
-				this.startEtaCountdown(estimatedSeconds.Value);
-
-			var settings = runtime.Settings;
-			try {
-				var sw = System.Diagnostics.Stopwatch.StartNew();
-				var text = await runtime.TranscribeAsync(
-					wav, settings.Language, settings.Prompt);
-
-				this.stopEtaCountdown();
-
-				if (!string.IsNullOrWhiteSpace(text)) {
-					runtime.AddHistory(new TranscriptionEntry {
-						Text = text,
-						Duration = sw.Elapsed,
-					});
-					runtime.LogTranscription(text, sw.Elapsed);
-					if (settings.CopyToClipboard)
-						this.windowPlatform.SetClipboardText(text);
-					// RestoreFocus must be called on the UI thread (owns message pump).
-					// InjectText (_waitForPhysicalRelease + SendInput) runs on a background
-					// thread so Thread.Sleep does not block the UI.
-					runtime.RestoreFocus();
-					_ = runtime.RunBackground(() => {
-						runtime.InjectText(text, runtime.Settings.HotkeyCodes);
-						// Record total time from recording stop to injection complete.
-						runtime.Record(modelKey, recordedSeconds, sw.Elapsed.TotalSeconds);
-					}).ContinueWith(t => {
-						if (t.IsFaulted)
-							runtime.LogError("InjectText failed", t.Exception?.InnerException);
-					});
-				}
-			} catch (Exception ex) {
-				this.stopEtaCountdown();
-				runtime.LogError("Transcription failed", ex);
-				this.setStatus($"Error: {ex.Message}", isError: true);
 			}
+			context = this._recordingContext;
+			this._recordingContext = null;
+			if (context is null)
+				return;
+			wav = runtime.StopRecording();
+			this.setRecordingState(false);
 		});
+
+		if (context is null)
+			return;
+		if (wav is null || wav.Length < 1000) {
+			runtime.CancelRecordingReservation();
+			this.Dispatcher.Invoke(() => this.updateQueueUi(runtime.GetQueueStatus()));
+			return;
+		}
+
+		try {
+			double recordedSeconds = wav.Length / MainWindow._wavBytesPerSecond;
+			string modelKey = System.IO.Path.GetFileNameWithoutExtension(context.ModelPath);
+			var job = new TranscriptionJob {
+				Id = Guid.NewGuid(),
+				Sequence = context.Sequence,
+				CapturedAt = context.CapturedAt,
+				AudioBytes = wav,
+				Target = context.Target,
+				Language = context.Language,
+				Prompt = context.Prompt,
+				ModelPath = context.ModelPath,
+				ModelKey = modelKey,
+				HotkeyCodes = context.HotkeyCodes,
+				CopyToClipboard = context.CopyToClipboard,
+				AudioSeconds = recordedSeconds,
+				EstimatedProcessingSeconds = runtime.EstimateProcessingSeconds(modelKey, recordedSeconds),
+			};
+			runtime.EnqueueTranscription(job);
+			this.Dispatcher.Invoke(() => this.updateQueueUi(runtime.GetQueueStatus()));
+		} catch (Exception exception) {
+			runtime.CancelRecordingReservation();
+			runtime.LogError("Failed to queue transcription", exception);
+			this.Dispatcher.BeginInvoke(() => this.setStatus($"Error: {exception.Message}", isError: true));
+		}
 	}
 	
 	protected void handleRecordingAmplitudeChanged (float rms) {
@@ -315,40 +358,149 @@ public partial class MainWindow : Window, IService, ISingleton {
 		});
 	}
 
+	protected void handleQueueStatusChanged (TranscriptionQueueStatus status) {
+		if (this.Dispatcher.CheckAccess()) {
+			this.updateQueueUi(status);
+			return;
+		}
+		this.Dispatcher.BeginInvoke(() => this.updateQueueUi(status));
+	}
+
+	protected void handleJobCompleted (TranscriptionJobResult result) {
+		Interlocked.Increment(ref this._pendingInjections);
+		lock (this._resultPipelineLock)
+			this._resultPipeline = this.processJobAfterAsync(this._resultPipeline, result);
+	}
+
+	private async Task processJobAfterAsync (Task previous, TranscriptionJobResult result) {
+		try { await previous.ConfigureAwait(false); } catch { }
+		await this.processJobResultAsync(result).ConfigureAwait(false);
+	}
+
+	private async Task processJobResultAsync (TranscriptionJobResult result) {
+		var runtime = this.getRuntime();
+		bool preserveErrorStatus = result.Error is not null;
+		try {
+			if (result.Error is not null) {
+				runtime.LogError("Transcription failed", result.Error);
+				this.Dispatcher.Invoke(() => {
+					TranscriptionQueueStatus status = runtime.GetQueueStatus();
+					if (status.ActiveCount == 0 && status.QueuedCount == 0)
+						this.setStatus($"Error: {result.Error.Message}", isError: true);
+					else
+						this.updateQueueUi(status);
+				});
+				return;
+			}
+
+			string? text = result.Text;
+			if (string.IsNullOrWhiteSpace(text))
+				return;
+
+			this.Dispatcher.Invoke(() => {
+				runtime.AddHistory(new TranscriptionEntry {
+					Timestamp = result.Job.CapturedAt.LocalDateTime,
+					Text = text,
+					Duration = result.ProcessingTime,
+				});
+				runtime.LogTranscription(text, result.ProcessingTime);
+				if (result.Job.CopyToClipboard)
+					this.windowPlatform.SetClipboardText(text);
+				// Restore the captured target on the UI thread before background SendInput.
+				runtime.RestoreFocus(result.Job.Target);
+			});
+			await runtime.RunBackground(() => {
+				runtime.InjectText(text, result.Job.HotkeyCodes, result.Job.Target);
+				runtime.Record(result.Job.ModelKey, result.Job.AudioSeconds, result.ProcessingTime.TotalSeconds);
+			});
+		} catch (Exception exception) {
+			preserveErrorStatus = true;
+			runtime.LogError("InjectText failed", exception);
+			this.Dispatcher.Invoke(() => this.setStatus($"Error: {exception.Message}", isError: true));
+		} finally {
+			Interlocked.Decrement(ref this._pendingInjections);
+			TranscriptionQueueStatus status = runtime.GetQueueStatus();
+			if (!preserveErrorStatus || status.ActiveCount > 0 || status.QueuedCount > 0 || Volatile.Read(ref this._pendingInjections) > 0)
+				this.Dispatcher.Invoke(() => this.updateQueueUi(status));
+		}
+	}
+
 	protected void handleWhisperStateChanged (TranscriptionState state, string msg) {
 		this.Dispatcher.Invoke(() => {
-			var cudaVer = this.windowPlatform.DetectCudaVersion();
-			var backend = cudaVer.HasValue ? $"GPU" : "CPU";
 			switch (state) {
 				case TranscriptionState.Loading:
 					this.setStatus(msg);
 					this.RecDot.Fill = new SolidColorBrush(WpfColor.FromRgb(0xFF, 0xCC, 0x00));
-					break;
-				case TranscriptionState.Transcribing:
-					this.setStatus("Transcribing…");
-					this.RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
-					break;
-				case TranscriptionState.Done:
-					this.setStatus($"Ready ({backend})");
-					this.RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
 					break;
 				case TranscriptionState.Error:
 					this.setStatus(msg, isError: true);
 					this.RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentRecordingBrush"];
 					break;
 				default:
-					this.setStatus($"Ready ({backend})");
-					this.RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
+					this.updateQueueUi(this.getRuntime().GetQueueStatus());
 					break;
 			}
 		});
 	}
 
+	private TranscriptionQueueStatus _queueStatus = new(0, 0, 0, 0, 0, 2, Array.Empty<TimeSpan?>(), 0);
+
+	private void updateQueueUi (TranscriptionQueueStatus status) {
+		this._queueStatus = status;
+		if (this._isRecording)
+			return;
+
+		int pendingInjections = Volatile.Read(ref this._pendingInjections);
+		int maxOutstandingJobs = Math.Max(1, this.getRuntime().Settings.MaxOutstandingTranscriptionJobs);
+		bool admissionPaused = status.AdmissionPaused || status.BufferedAudioBudgetBytes <= 0 ||
+			status.BufferedAudioBytes >= status.BufferedAudioBudgetBytes || status.OutstandingCount >= maxOutstandingJobs;
+		bool hasWork = status.ActiveCount > 0 || status.QueuedCount > 0 ||
+			status.OutstandingCount > 0 || pendingInjections > 0 || admissionPaused;
+		if (!hasWork) {
+			this.stopEtaCountdown();
+			string backend = this.getRuntime().ActiveProvider ??
+				(this.windowPlatform.DetectCudaVersion().HasValue ? "GPU" : "CPU");
+			this.setStatus($"Ready ({backend})");
+			this.RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
+			return;
+		}
+
+		var statusParts = new List<string>();
+		if (status.ActiveCount > 0)
+			statusParts.Add($"Transcribing {status.ActiveCount}");
+		if (status.QueuedCount > 0)
+			statusParts.Add($"Queued {status.QueuedCount}");
+		if (pendingInjections > 0)
+			statusParts.Add($"Inserting {pendingInjections}");
+		if (admissionPaused)
+			statusParts.Add("Paused");
+		this.setStatus(statusParts.Count > 0 ? string.Join(" · ", statusParts) : "Processing…");
+
+		var etaParts = status.NextResultReadyEtas.Select(eta => eta.HasValue
+			? $"~{Math.Max(0, (int)Math.Ceiling(eta.Value.TotalSeconds))}s"
+			: "—").ToList();
+		if (status.AdditionalEtaCount > 0)
+			etaParts.Add($"+{status.AdditionalEtaCount}");
+		this.EtaLabel.Text = string.Join("; ", etaParts);
+		this.EtaLabel.Visibility = etaParts.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+		if (status.ActiveCount > 0 || status.QueuedCount > 0)
+			this.etaTimer.Start();
+		else if (etaParts.Count == 0)
+			this.etaTimer.Stop();
+		this.RecDot.Fill = admissionPaused
+			? (SolidColorBrush)WpfApp.Current.Resources["TextSecondaryBrush"]
+			: (SolidColorBrush)WpfApp.Current.Resources["AccentBrush"];
+	}
+
 	protected void handleEtaTick (object? sender, EventArgs e) {
-		this.updateEtaLabel();
+		if (this._queueStatus.ActiveCount > 0 || this._queueStatus.QueuedCount > 0)
+			this.updateQueueUi(this.getRuntime().GetQueueStatus());
+		else
+			this.updateEtaLabel();
 	}
 
 	protected void setRecordingState (bool recording) {
+		this._isRecording = recording;
 		if (recording) {
 			this.RecDot.Fill = (SolidColorBrush)WpfApp.Current.Resources["AccentRecordingBrush"];
 			this.windowPlatform.BeginStoryboard(this, "PulseAnim", controllable: true);
@@ -394,5 +546,16 @@ public partial class MainWindow : Window, IService, ISingleton {
 		this.etaTimer.Stop();
 		this.EtaLabel.Visibility = Visibility.Collapsed;
 	}
+
+	private sealed record RecordingContext (
+		FocusTarget Target,
+		string Language,
+		string Prompt,
+		string ModelPath,
+		IReadOnlyList<int> HotkeyCodes,
+		bool CopyToClipboard,
+		DateTimeOffset CapturedAt,
+		long Sequence
+	);
 
 }

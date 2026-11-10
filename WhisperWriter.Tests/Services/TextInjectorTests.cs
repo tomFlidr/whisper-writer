@@ -4,6 +4,7 @@ using Autofac;
 using Serilog.Core;
 using Serilog.Events;
 using WhisperWriter.Services;
+using WhisperWriter.Services.TextInjectors;
 using Xunit;
 
 namespace WhisperWriter.Tests.Services;
@@ -46,6 +47,7 @@ public class TextInjectorTests {
 
 		Assert.Equal(new[] {
 			"GetForegroundWindow",
+			"GetFocusedWindow:1234",
 			"GetWindowThreadProcessId:1234",
 			"GetCurrentThreadId",
 			"AttachThreadInput:12:34:True",
@@ -55,6 +57,47 @@ public class TextInjectorTests {
 		}, platform.Calls);
 	}
 
+	[Fact]
+	public void CaptureFocusSnapshots_AllowOverlappingJobsToRestoreTheirOwnTargetIndependently() {
+		var platform = new FakePlatform {
+			ForegroundWindow = new IntPtr(0x1234),
+			FocusedWindow = new IntPtr(0x1111),
+		};
+		var injector = new TestTextInjector(platform);
+
+		var firstTarget = injector.CaptureFocus();
+		platform.ForegroundWindow = new IntPtr(0x2345);
+		platform.FocusedWindow = new IntPtr(0x2222);
+		var secondTarget = injector.CaptureFocus();
+
+		injector.RestoreFocus(firstTarget);
+		injector.RestoreFocus(secondTarget);
+
+		Assert.Equal(new[] {
+			(new IntPtr(0x1234), new IntPtr(0x1111)),
+			(new IntPtr(0x2345), new IntPtr(0x2222)),
+		}, platform.RestoredFocusTargets);
+	}
+	[Fact]
+	public void InjectText_ReassertsTheJobTargetAfterWaitBeforeSendingKeys() {
+		var platform = new FakePlatform {
+			ForegroundWindow = new IntPtr(0x1234),
+			FocusedWindow = new IntPtr(0x1111),
+		};
+		using var logCapture = new LogCapture();
+		var injector = new TestTextInjector(platform, logCapture.Log);
+		FocusTarget target = injector.CaptureFocus();
+		platform.ForegroundWindow = new IntPtr(0x2345);
+		platform.FocusedWindow = new IntPtr(0x2222);
+		platform.Calls.Clear();
+
+		injector.InjectText("x", Array.Empty<int>(), target);
+
+		int restoreIndex = platform.Calls.IndexOf("SetForegroundWindow:1234");
+		int sendIndex = platform.Calls.LastIndexOf("SendInput:2");
+		Assert.True(restoreIndex >= 0 && restoreIndex < sendIndex);
+		Assert.Contains("BringWindowToTop:1234", platform.Calls);
+	}
 	[Fact]
 	public void InjectText_WaitsForPhysicalKeyReleaseBeforeSendingInput() {
 		using var logCapture = new LogCapture();
@@ -208,6 +251,7 @@ public class TextInjectorTests {
 
 	private class FakePlatform : ITextInjectorPlatform {
 		public IntPtr ForegroundWindow { get; set; } = new IntPtr(0x1234);
+		public IntPtr FocusedWindow { get; set; }
 		public uint TargetThreadId { get; set; } = 34;
 		public uint CurrentThreadId { get; set; } = 12;
 		public bool AttachResult { get; set; } = true;
@@ -216,17 +260,31 @@ public class TextInjectorTests {
 		public Func<int, short> KeyStateReader { get; set; } = _ => 0;
 		public List<string> Calls { get; } = new();
 		public List<int> Delays { get; } = new();
+		public List<(IntPtr Foreground, IntPtr Focus)> RestoredFocusTargets { get; } = new();
 		public Queue<uint> SendInputResults { get; } = new();
 		public List<(uint Count, ITextInjectorPlatform.InputEvent[] Inputs, int InputSize)> SendInputCalls { get; } = new();
 		public int GetLastErrorCallCount { get; private set; }
+
+		private IntPtr _currentForegroundWindow;
 
 		public IntPtr GetForegroundWindow () {
 			this.Calls.Add("GetForegroundWindow");
 			return this.ForegroundWindow;
 		}
 
+		public IntPtr GetFocusedWindow (IntPtr foregroundWindow) {
+			this.Calls.Add($"GetFocusedWindow:{foregroundWindow.ToInt64():X}");
+			return this.FocusedWindow;
+		}
+
+		public void SetFocus (IntPtr hWnd) {
+			this.Calls.Add($"SetFocus:{hWnd.ToInt64():X}");
+			this.RestoredFocusTargets.Add((this._currentForegroundWindow, hWnd));
+		}
+
 		public bool SetForegroundWindow (IntPtr hWnd) {
 			this.Calls.Add($"SetForegroundWindow:{hWnd.ToInt64():X}");
+			this._currentForegroundWindow = hWnd;
 			return true;
 		}
 

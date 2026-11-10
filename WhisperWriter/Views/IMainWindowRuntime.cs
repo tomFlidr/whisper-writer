@@ -1,5 +1,6 @@
 using WhisperWriter.Models;
 using WhisperWriter.Services;
+using WhisperWriter.Services.TextInjectors;
 using WhisperWriter.Utils.Enums;
 
 namespace WhisperWriter.Views;
@@ -9,7 +10,10 @@ public interface IMainWindowRuntime {
 	event Action? PushToTalkStarted;
 	event Action? PushToTalkStopped;
 	event Action<float>? AmplitudeChanged;
+	event Action<TranscriptionQueueStatus>? QueueStatusChanged;
+	event Action<TranscriptionJobResult>? JobCompleted;
 	AppSettings Settings { get; }
+	string? ActiveProvider { get; }
 	void SetHotkeyCodes (IReadOnlyList<int> virtualKeyCodes);
 	void UpdateHotkeyKeys (IReadOnlyList<int> virtualKeyCodes);
 	void StartHotkey ();
@@ -17,6 +21,13 @@ public interface IMainWindowRuntime {
 	void DisposeAudioRecorder ();
 	void StartRecording ();
 	byte[]? StopRecording ();
+	FocusTarget CaptureFocus ();
+	bool TryReserveRecording ();
+	void CancelRecordingReservation ();
+	void EnqueueTranscription (TranscriptionJob job);
+	TranscriptionQueueStatus GetQueueStatus ();
+	void RestoreFocus (FocusTarget target);
+	void InjectText (string text, IReadOnlyList<int> virtualKeyCodes, FocusTarget target);
 	void SaveFocus ();
 	void RestoreFocus ();
 	void InjectText (string text, IReadOnlyList<int> virtualKeyCodes);

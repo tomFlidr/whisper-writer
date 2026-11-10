@@ -1,4 +1,6 @@
 using WhisperWriter.Models;
+using WhisperWriter.Services;
+using WhisperWriter.Services.TextInjectors;
 using WhisperWriter.Utils.Enums;
 using WhisperWriter.Views;
 
@@ -9,14 +11,20 @@ internal class FakeMainWindowRuntime : IMainWindowRuntime {
 	public event Action? PushToTalkStarted;
 	public event Action? PushToTalkStopped;
 	public event Action<float>? AmplitudeChanged;
+	public event Action<TranscriptionQueueStatus>? QueueStatusChanged;
+	public event Action<TranscriptionJobResult>? JobCompleted;
 
 	public AppSettings Settings { get; set; } = new();
+	public string? ActiveProvider { get; set; } = "Cpu";
 	public byte[]? Recording { get; set; }
+	public bool CanReserveRecording { get; set; } = true;
+	public TranscriptionQueueStatus QueueStatus { get; set; } = new(0, 0, 0, 0, 128L * 1024 * 1024, 2, Array.Empty<TimeSpan?>(), 0);
 	public string TranscribedText { get; set; } = "recognized text";
 	public Exception? TranscriptionException { get; set; }
 	public Exception? BackgroundException { get; set; }
 	public double? EstimatedProcessingSeconds { get; set; }
 	public Action<string, Exception?>? OnLogError { get; set; }
+	public Action? OnInjected { get; set; }
 	public List<string> Calls { get; } = [];
 	public List<IReadOnlyList<int>> SetHotkeyCalls { get; } = [];
 	public List<IReadOnlyList<int>> UpdateHotkeyCalls { get; } = [];
@@ -26,6 +34,12 @@ internal class FakeMainWindowRuntime : IMainWindowRuntime {
 	public List<(string Text, IReadOnlyList<int> HotkeyCodes)> Injections { get; } = [];
 	public List<(string ModelKey, double AudioSeconds, double ProcessingSeconds)> RecordedEstimates { get; } = [];
 	public List<string> TranscriptionArguments { get; } = [];
+	public Queue<FocusTarget> FocusTargets { get; } = new();
+	public List<FocusTarget> CapturedFocusTargets { get; } = [];
+	public List<FocusTarget> RestoredFocusTargets { get; } = [];
+	public List<FocusTarget> InjectionTargets { get; } = [];
+	public List<TranscriptionJob> EnqueuedJobs { get; } = [];
+	public int ReservationCount { get; private set; }
 
 	public void SetHotkeyCodes (IReadOnlyList<int> virtualKeyCodes) {
 		this.Calls.Add("hotkey-set");
@@ -45,6 +59,49 @@ internal class FakeMainWindowRuntime : IMainWindowRuntime {
 	public byte[]? StopRecording () {
 		this.Calls.Add("recording-stop");
 		return this.Recording;
+	}
+
+	public FocusTarget CaptureFocus () {
+		this.Calls.Add("focus-capture");
+		FocusTarget target = this.FocusTargets.Count > 0 ? this.FocusTargets.Dequeue() : default;
+		this.CapturedFocusTargets.Add(target);
+		return target;
+	}
+
+	public bool TryReserveRecording () {
+		this.Calls.Add("recording-reserve");
+		if (this.CanReserveRecording)
+			this.ReservationCount++;
+		return this.CanReserveRecording;
+	}
+
+	public void CancelRecordingReservation () {
+		this.Calls.Add("recording-reservation-cancel");
+		this.ReservationCount = Math.Max(0, this.ReservationCount - 1);
+	}
+
+	public void EnqueueTranscription (TranscriptionJob job) {
+		this.Calls.Add("job-enqueue");
+		this.EnqueuedJobs.Add(job);
+		this.ReservationCount = Math.Max(0, this.ReservationCount - 1);
+		this.QueueStatus = new TranscriptionQueueStatus(
+			0, this.EnqueuedJobs.Count, this.EnqueuedJobs.Count, this.EnqueuedJobs.Sum(item => item.AudioBytes.LongLength),
+			128L * 1024 * 1024, 2, [TimeSpan.FromSeconds(1)], 0);
+		this.QueueStatusChanged?.Invoke(this.QueueStatus);
+	}
+
+	public TranscriptionQueueStatus GetQueueStatus () => this.QueueStatus;
+
+	public void RestoreFocus (FocusTarget target) {
+		this.Calls.Add("focus-restore-target");
+		this.RestoredFocusTargets.Add(target);
+	}
+
+	public void InjectText (string text, IReadOnlyList<int> virtualKeyCodes, FocusTarget target) {
+		this.Calls.Add("text-inject-target");
+		this.InjectionTargets.Add(target);
+		this.Injections.Add((text, virtualKeyCodes.ToArray()));
+		this.OnInjected?.Invoke();
 	}
 
 	public void SaveFocus () => this.Calls.Add("focus-save");
@@ -106,4 +163,13 @@ internal class FakeMainWindowRuntime : IMainWindowRuntime {
 	public void RaisePushToTalkStarted () => this.PushToTalkStarted?.Invoke();
 	public void RaisePushToTalkStopped () => this.PushToTalkStopped?.Invoke();
 	public void RaiseAmplitudeChanged (float rms) => this.AmplitudeChanged?.Invoke(rms);
+	public void RaiseQueueStatusChanged (TranscriptionQueueStatus status) {
+		this.QueueStatus = status;
+		this.QueueStatusChanged?.Invoke(status);
+	}
+	public void RaiseJobCompleted (TranscriptionJobResult result) {
+		this.QueueStatus = new TranscriptionQueueStatus(0, 0, 0, 0, 128L * 1024 * 1024, 2, Array.Empty<TimeSpan?>(), 0);
+		this.QueueStatusChanged?.Invoke(this.QueueStatus);
+		this.JobCompleted?.Invoke(result);
+	}
 }

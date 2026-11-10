@@ -91,32 +91,136 @@ public class MainWindowTests {
 		MainWindowTests.withWindow(fixture => {
 			fixture.Runtime.RaisePushToTalkStarted();
 
-			Assert.Equal(new[] { "focus-save", "recording-start" }, fixture.Runtime.Calls.TakeLast(2));
+			Assert.Equal(new[] { "focus-capture", "recording-reserve", "recording-start" }, fixture.Runtime.Calls.TakeLast(3));
 			Assert.Equal("Recording…", MainWindowTests.status(fixture.Window).Text);
 			Assert.Equal(Visibility.Visible, MainWindowTests.amplitudeRow(fixture.Window).Visibility);
 		});
 	}
 
 	[Fact]
-	public void PushToTalkStop_IgnoresNullOrTooShortAudioAndReturnsToProcessingState () {
+	public void PushToTalkStart_WhenQueueCannotReserveCapacityShowsBusyWithoutCapturing () {
 		MainWindowTests.withWindow(fixture => {
-			fixture.Runtime.Recording = new byte[999];
+			fixture.Runtime.CanReserveRecording = false;
+			fixture.Runtime.RaisePushToTalkStarted();
+
+			Assert.Equal(new[] { "focus-capture", "recording-reserve" }, fixture.Runtime.Calls.TakeLast(2));
+			Assert.Equal("Busy · transcription queue full", MainWindowTests.status(fixture.Window).Text);
+			Assert.Equal(Visibility.Collapsed, MainWindowTests.amplitudeRow(fixture.Window).Visibility);
+			Assert.Same(WpfTestHost.Application.Resources["TextSecondaryBrush"], MainWindowTests.recordingDot(fixture.Window).Fill);
+			Assert.DoesNotContain("recording-start", fixture.Runtime.Calls);
+
 			fixture.Runtime.RaisePushToTalkStopped();
 
-			Assert.Equal("recording-stop", fixture.Runtime.Calls[^1]);
+			Assert.DoesNotContain("recording-stop", fixture.Runtime.Calls);
+			Assert.DoesNotContain("job-enqueue", fixture.Runtime.Calls);
+			Assert.Same(WpfTestHost.Application.Resources["AccentBrush"], MainWindowTests.recordingDot(fixture.Window).Fill);
+		});
+	}
+
+	[Fact]
+	public void PushToTalkStop_EnqueuesAnImmutableRequestWithTheFocusAndSettingsCapturedAtStart() {
+		MainWindowTests.withWindow(fixture => {
+			var target = new WhisperWriter.Services.TextInjectors.FocusTarget(
+				new IntPtr(0x1234), new IntPtr(0x5678));
+			fixture.Runtime.FocusTargets.Enqueue(target);
+			fixture.Runtime.Recording = new byte[32000];
+			fixture.Runtime.Settings.ModelPath = "llms/ggml-medium.bin";
+			fixture.Runtime.Settings.Language = "cs-CZ";
+			fixture.Runtime.Settings.Prompt = "first prompt";
+			fixture.Runtime.Settings.HotkeyCodes = [0xA4, 0x5B];
+			fixture.Runtime.Settings.CopyToClipboard = false;
+			fixture.Runtime.RaisePushToTalkStarted();
+
+			fixture.Runtime.Settings.Language = "en";
+			fixture.Runtime.Settings.Prompt = "changed prompt";
+			fixture.Runtime.Settings.HotkeyCodes = [0x41];
+			fixture.Runtime.Settings.CopyToClipboard = true;
+			fixture.Runtime.RaisePushToTalkStopped();
+
+			var job = Assert.Single(fixture.Runtime.EnqueuedJobs);
+			Assert.Equal(target, job.Target);
+			Assert.Equal("cs-CZ", job.Language);
+			Assert.Equal("first prompt", job.Prompt);
+			Assert.Equal(new[] { 0xA4, 0x5B }, job.HotkeyCodes);
+			Assert.False(job.CopyToClipboard);
+			Assert.Equal(32000, job.AudioBytes.Length);
 			Assert.DoesNotContain("transcribe", fixture.Runtime.Calls);
+		});
+	}
+
+	[Fact]
+	public void OverlappingRecordings_KeepTheirOwnAudioSettingsAndTargetsWhenCompletedInReverseOrder () {
+		MainWindowTests.withWindow(fixture => {
+			var firstTarget = new WhisperWriter.Services.TextInjectors.FocusTarget(
+				new IntPtr(0x1111), new IntPtr(0x1112));
+			var secondTarget = new WhisperWriter.Services.TextInjectors.FocusTarget(
+				new IntPtr(0x2221), new IntPtr(0x2222));
+			fixture.Runtime.FocusTargets.Enqueue(firstTarget);
+			fixture.Runtime.FocusTargets.Enqueue(secondTarget);
+			fixture.Runtime.Recording = new byte[32000];
+			fixture.Runtime.Settings.ModelPath = "llms/first-model.bin";
+			fixture.Runtime.Settings.Language = "cs";
+			fixture.Runtime.Settings.Prompt = "first prompt";
+			fixture.Runtime.Settings.HotkeyCodes = [0xA4, 0x5B];
+			fixture.Runtime.Settings.CopyToClipboard = false;
+			fixture.Runtime.RaisePushToTalkStarted();
+			fixture.Runtime.RaisePushToTalkStopped();
+			TranscriptionJob first = Assert.Single(fixture.Runtime.EnqueuedJobs);
+
+			fixture.Runtime.Recording = new byte[64000];
+			fixture.Runtime.Settings.ModelPath = "llms/second-model.bin";
+			fixture.Runtime.Settings.Language = "en";
+			fixture.Runtime.Settings.Prompt = "second prompt";
+			fixture.Runtime.Settings.HotkeyCodes = [0x41];
+			fixture.Runtime.Settings.CopyToClipboard = true;
+			fixture.Runtime.RaisePushToTalkStarted();
+			fixture.Runtime.RaisePushToTalkStopped();
+			TranscriptionJob second = fixture.Runtime.EnqueuedJobs[^1];
+
+			Assert.Equal(32000, first.AudioBytes.Length);
+			Assert.Equal(64000, second.AudioBytes.Length);
+			Assert.NotSame(first.AudioBytes, second.AudioBytes);
+			Assert.Equal(firstTarget, first.Target);
+			Assert.Equal(secondTarget, second.Target);
+			Assert.Equal("first prompt", first.Prompt);
+			Assert.Equal("second prompt", second.Prompt);
+
+			fixture.Runtime.RaiseJobCompleted(new TranscriptionJobResult(
+				second, "second result", null, TimeSpan.FromMilliseconds(500), false));
+			fixture.Runtime.RaiseJobCompleted(new TranscriptionJobResult(
+				first, "first result", null, TimeSpan.FromMilliseconds(600), false));
+
+			Assert.Equal(new[] { secondTarget, firstTarget }, fixture.Runtime.RestoredFocusTargets);
+			Assert.Equal(new[] { secondTarget, firstTarget }, fixture.Runtime.InjectionTargets);
+			Assert.Equal(new[] { "second result", "first result" }, fixture.Runtime.Injections.Select(item => item.Text));
+			Assert.Equal(new[] { "second-model", "first-model" }, fixture.Runtime.RecordedEstimates.Select(item => item.ModelKey));
+			Assert.Equal(new[] { "second result" }, fixture.Platform.ClipboardTexts);
+		});
+	}
+
+	[Fact]
+	public void PushToTalkStop_IgnoresNullOrTooShortAudioAndReturnsToReadyState () {
+		MainWindowTests.withWindow(fixture => {
+			fixture.Runtime.Recording = new byte[999];
+			fixture.Runtime.RaisePushToTalkStarted();
+			fixture.Runtime.RaisePushToTalkStopped();
+
+			Assert.Equal(new[] { "recording-stop", "recording-reservation-cancel" }, fixture.Runtime.Calls.TakeLast(2));
+			Assert.DoesNotContain("transcribe", fixture.Runtime.Calls);
+			Assert.DoesNotContain("job-enqueue", fixture.Runtime.Calls);
 			Assert.DoesNotContain("eta-estimate", fixture.Runtime.Calls);
-			Assert.Equal("Processing…", MainWindowTests.status(fixture.Window).Text);
+			Assert.Equal("Ready (Cpu)", MainWindowTests.status(fixture.Window).Text);
 			Assert.Equal(Visibility.Collapsed, MainWindowTests.amplitudeRow(fixture.Window).Visibility);
 
 			fixture.Runtime.Recording = null;
+			fixture.Runtime.RaisePushToTalkStarted();
 			fixture.Runtime.RaisePushToTalkStopped();
 			Assert.DoesNotContain("transcribe", fixture.Runtime.Calls);
 		});
 	}
 
 	[Fact]
-	public void PushToTalkStop_TranscribesAddsHistoryCopiesAndInjectsTheNonblankResult () {
+	public void PushToTalkStop_QueuesTheBatchAndInjectsItsCompletedResult () {
 		MainWindowTests.withWindow(fixture => {
 			fixture.Runtime.Recording = new byte[32000];
 			fixture.Runtime.EstimatedProcessingSeconds = 2.2;
@@ -126,28 +230,39 @@ public class MainWindowTests {
 			fixture.Runtime.Settings.CopyToClipboard = true;
 			fixture.Runtime.Settings.HotkeyCodes = [0xA4, 0x5B];
 
+			fixture.Runtime.RaisePushToTalkStarted();
 			fixture.Runtime.RaisePushToTalkStopped();
 
 			Assert.Contains("eta:ggml-small:1", fixture.Runtime.TranscriptionArguments);
-			Assert.Contains("32000:fr:medical context", fixture.Runtime.TranscriptionArguments);
+			var job = Assert.Single(fixture.Runtime.EnqueuedJobs);
+			Assert.Equal(32000, job.AudioBytes.Length);
+			Assert.Equal("fr", job.Language);
+			Assert.Equal("medical context", job.Prompt);
+			Assert.Empty(fixture.Runtime.HistoryEntries);
+
+			var target = job.Target;
+			fixture.Runtime.RaiseJobCompleted(new TranscriptionJobResult(
+				job, "recognized text", null, TimeSpan.FromSeconds(1.2), false));
+
 			var entry = Assert.Single(fixture.Runtime.HistoryEntries);
 			Assert.Equal("recognized text", entry.Text);
+			Assert.Equal(job.CapturedAt.LocalDateTime, entry.Timestamp);
 			Assert.Single(fixture.Runtime.TranscriptionLogs);
 			Assert.Equal(new[] { "recognized text" }, fixture.Platform.ClipboardTexts);
 			Assert.Equal(new[] {
-				"recording-stop", "eta-estimate", "transcribe", "history-add", "transcription-log",
-				"focus-restore", "background-run", "text-inject", "eta-record",
-			}, fixture.Runtime.Calls.TakeLast(9));
-			Assert.Equal("focus-restore", fixture.Runtime.Calls[^4]);
+				"history-add", "transcription-log", "focus-restore-target", "background-run", "text-inject-target", "eta-record",
+			}, fixture.Runtime.Calls.TakeLast(6));
+			Assert.Equal(new[] { target }, fixture.Runtime.RestoredFocusTargets);
 			var injection = Assert.Single(fixture.Runtime.Injections);
 			Assert.Equal("recognized text", injection.Text);
 			Assert.Equal(new[] { 0xA4, 0x5B }, injection.HotkeyCodes);
+			Assert.Equal(new[] { target }, fixture.Runtime.InjectionTargets);
 			var estimate = Assert.Single(fixture.Runtime.RecordedEstimates);
 			Assert.Equal("ggml-small", estimate.ModelKey);
 			Assert.Equal(1, estimate.AudioSeconds);
-			Assert.True(estimate.ProcessingSeconds >= 0);
+			Assert.Equal(1.2, estimate.ProcessingSeconds, 3);
 			Assert.Equal(Visibility.Collapsed, MainWindowTests.etaLabel(fixture.Window).Visibility);
-			Assert.Equal("Processing…", MainWindowTests.status(fixture.Window).Text);
+			Assert.Equal("Ready (Cpu)", MainWindowTests.status(fixture.Window).Text);
 		});
 	}
 
@@ -155,15 +270,20 @@ public class MainWindowTests {
 	public void PushToTalkStop_SuppressesBlankTextAndReportsTranscriptionErrors () {
 		MainWindowTests.withWindow(fixture => {
 			fixture.Runtime.Recording = new byte[32000];
-			fixture.Runtime.TranscribedText = " \r\n ";
+			fixture.Runtime.RaisePushToTalkStarted();
 			fixture.Runtime.RaisePushToTalkStopped();
+			var blankJob = Assert.Single(fixture.Runtime.EnqueuedJobs);
+			fixture.Runtime.RaiseJobCompleted(new TranscriptionJobResult(blankJob, " \r\n ", null, TimeSpan.FromSeconds(1), false));
 			Assert.Empty(fixture.Runtime.HistoryEntries);
-			Assert.DoesNotContain("focus-restore", fixture.Runtime.Calls);
+			Assert.DoesNotContain("focus-restore-target", fixture.Runtime.Calls);
 			Assert.Empty(fixture.Platform.ClipboardTexts);
 
-			fixture.Runtime.TranscriptionException = new InvalidOperationException("decoder failed");
-			fixture.Runtime.TranscribedText = string.Empty;
+			fixture.Runtime.Recording = new byte[32000];
+			fixture.Runtime.RaisePushToTalkStarted();
 			fixture.Runtime.RaisePushToTalkStopped();
+			var failedJob = fixture.Runtime.EnqueuedJobs[^1];
+			fixture.Runtime.RaiseJobCompleted(new TranscriptionJobResult(
+				failedJob, null, new InvalidOperationException("decoder failed"), TimeSpan.FromSeconds(1), false));
 
 			var error = Assert.Single(fixture.Runtime.Errors);
 			Assert.Equal("Transcription failed", error.Message);
@@ -181,7 +301,11 @@ public class MainWindowTests {
 			created.Runtime.Recording = new byte[32000];
 			created.Runtime.BackgroundException = new InvalidOperationException("injection failed");
 			created.Runtime.OnLogError = (message, exception) => logged.TrySetResult((message, exception));
+			created.Runtime.RaisePushToTalkStarted();
 			created.Runtime.RaisePushToTalkStopped();
+			var job = Assert.Single(created.Runtime.EnqueuedJobs);
+			created.Runtime.RaiseJobCompleted(new TranscriptionJobResult(
+				job, "recognized text", null, TimeSpan.FromSeconds(1), false));
 			return created;
 		});
 
@@ -200,22 +324,63 @@ public class MainWindowTests {
 	}
 
 	[Fact]
-	public void WhisperStateEvents_UpdateStatusAndRecordingIndicatorForEveryState () {
+	public void QueueStatus_ShowsActiveAndQueuedCountsWithThreeOrderedEtas () {
 		MainWindowTests.withWindow(fixture => {
-			fixture.Platform.CudaVersion = 12;
+			fixture.Runtime.ActiveProvider = "Cuda";
 			fixture.Runtime.RaiseStateChanged(TranscriptionState.Loading, "Loading model…");
 			Assert.Equal("Loading model…", MainWindowTests.status(fixture.Window).Text);
 			Assert.Equal(Color.FromRgb(0xFF, 0xCC, 0x00), ((SolidColorBrush)MainWindowTests.recordingDot(fixture.Window).Fill).Color);
 
+			fixture.Runtime.RaiseQueueStatusChanged(new TranscriptionQueueStatus(
+				2, 1, 3, 1024, 128L * 1024 * 1024, 2,
+				[TimeSpan.FromSeconds(8), TimeSpan.FromSeconds(17), TimeSpan.FromSeconds(25)], 2));
+			Assert.Equal("Transcribing 2 · Queued 1", MainWindowTests.status(fixture.Window).Text);
+			Assert.Equal("~8s; ~17s; ~25s; +2", MainWindowTests.etaLabel(fixture.Window).Text);
+			Assert.Equal(Visibility.Visible, MainWindowTests.etaLabel(fixture.Window).Visibility);
+
+			// Legacy engine-wide transcribe states must not overwrite the queue's per-job state.
 			fixture.Runtime.RaiseStateChanged(TranscriptionState.Transcribing, "ignored");
-			Assert.Equal("Transcribing…", MainWindowTests.status(fixture.Window).Text);
 			fixture.Runtime.RaiseStateChanged(TranscriptionState.Done, "ignored");
-			Assert.Equal("Ready (GPU)", MainWindowTests.status(fixture.Window).Text);
+			Assert.Equal("Transcribing 2 · Queued 1", MainWindowTests.status(fixture.Window).Text);
+
+			fixture.Runtime.RaiseQueueStatusChanged(new TranscriptionQueueStatus(
+				0, 0, 0, 0, 128L * 1024 * 1024, 2, Array.Empty<TimeSpan?>(), 0));
+			Assert.Equal("Ready (Cuda)", MainWindowTests.status(fixture.Window).Text);
+			Assert.Equal(Visibility.Collapsed, MainWindowTests.etaLabel(fixture.Window).Visibility);
+
 			fixture.Runtime.RaiseStateChanged(TranscriptionState.Error, "model failure");
 			Assert.Equal("model failure", MainWindowTests.status(fixture.Window).Text);
 			Assert.Same(WpfTestHost.Application.Resources["AccentRecordingBrush"], MainWindowTests.status(fixture.Window).Foreground);
 			fixture.Runtime.RaiseStateChanged((TranscriptionState)999, "ignored");
-			Assert.Equal("Ready (GPU)", MainWindowTests.status(fixture.Window).Text);
+			Assert.Equal("Ready (Cuda)", MainWindowTests.status(fixture.Window).Text);
+		});
+	}
+
+	[Fact]
+	public void QueueStatus_DimsAdmissionWhenFullAndRestoresBlueWhenCapacityReturns () {
+		MainWindowTests.withWindow(fixture => {
+			fixture.Runtime.RaiseQueueStatusChanged(new TranscriptionQueueStatus(
+				2, 1, 3, 96L * 1024L * 1024L, 128L * 1024L * 1024L, 2,
+				[TimeSpan.FromSeconds(8)], 0));
+			Assert.DoesNotContain("Paused", MainWindowTests.status(fixture.Window).Text);
+			Assert.Same(WpfTestHost.Application.Resources["AccentBrush"], MainWindowTests.recordingDot(fixture.Window).Fill);
+
+			fixture.Runtime.RaiseQueueStatusChanged(new TranscriptionQueueStatus(
+				2, 2, 4, 146L * 1024L * 1024L, 128L * 1024L * 1024L, 2,
+				[TimeSpan.FromSeconds(8)], 1) { AdmissionPaused = true });
+			Assert.Contains("Paused", MainWindowTests.status(fixture.Window).Text);
+			Assert.Same(WpfTestHost.Application.Resources["TextSecondaryBrush"], MainWindowTests.recordingDot(fixture.Window).Fill);
+
+			fixture.Runtime.RaiseQueueStatusChanged(new TranscriptionQueueStatus(
+				1, 1, 2, 96L * 1024L * 1024L, 128L * 1024L * 1024L, 2,
+				[TimeSpan.FromSeconds(8)], 0) { AdmissionPaused = true });
+			Assert.Contains("Paused", MainWindowTests.status(fixture.Window).Text);
+			Assert.Same(WpfTestHost.Application.Resources["TextSecondaryBrush"], MainWindowTests.recordingDot(fixture.Window).Fill);
+
+			fixture.Runtime.RaiseQueueStatusChanged(new TranscriptionQueueStatus(
+				0, 0, 0, 0, 128L * 1024L * 1024L, 2, Array.Empty<TimeSpan?>(), 0));
+			Assert.Equal("Ready (Cpu)", MainWindowTests.status(fixture.Window).Text);
+			Assert.Same(WpfTestHost.Application.Resources["AccentBrush"], MainWindowTests.recordingDot(fixture.Window).Fill);
 		});
 	}
 

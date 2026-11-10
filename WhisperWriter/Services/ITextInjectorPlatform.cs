@@ -14,7 +14,9 @@ public interface ITextInjectorPlatform {
 	);
 
 	IntPtr GetForegroundWindow ();
+	IntPtr GetFocusedWindow (IntPtr foregroundWindow);
 	bool SetForegroundWindow (IntPtr hWnd);
+	void SetFocus (IntPtr hWnd);
 	bool BringWindowToTop (IntPtr hWnd);
 	bool AttachThreadInput (uint idAttach, uint idAttachTo, bool attach);
 	uint GetWindowThreadProcessId (IntPtr hWnd);
