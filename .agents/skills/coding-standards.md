@@ -23,7 +23,7 @@ The entire codebase uses **K&R style** as its foundation. This means:
 
 ```csharp
 // CORRECT – K&R
-public void Foo() {
+public void Foo () {
     if (condition) {
         DoSomething();
     } else {
@@ -37,7 +37,7 @@ public void Foo() {
 }
 
 // WRONG – Allman
-public void Foo()
+public void Foo ()
 {
     if (condition)
     {
@@ -76,13 +76,13 @@ Use **file-scoped namespaces** (C# 10+). One namespace per file, no extra indent
 // CORRECT
 namespace WhisperWriter.Services;
 
-public sealed class MyService {
+public class MyService {
     ...
 }
 
 // WRONG – block namespace adds one indentation level
 namespace WhisperWriter.Services {
-    public sealed class MyService {
+    public class MyService {
         ...
     }
 }
@@ -113,17 +113,17 @@ namespace WhisperWriter.Services {
 ```csharp
 public class AudioRecorder {
     private bool _recording;
-    private static readonly int SampleRate = 16000;
+    private static readonly int _sampleRate = 16000;
 
-    public void StartRecording() {
+    public void StartRecording () {
         this._recording = true;                    // CORRECT – this. for instance field
-        int rate = AudioRecorder.SampleRate;        // CORRECT – ClassName. for static
+        int rate = AudioRecorder._sampleRate;        // CORRECT – ClassName. for static
     }
 
     // WRONG – omitting this. and class name
-    public void Bad() {
+    public void Bad () {
         _recording = true;                         // missing this.
-        int rate = SampleRate;                     // missing ClassName.
+        int rate = _sampleRate;                     // missing ClassName.
     }
 }
 ```
@@ -139,13 +139,13 @@ Examples:
 
 ```csharp
 // CORRECT – single-line branch allowed (no else/else if)
-public void MaybeLog() {
+public void MaybeLog () {
     if (condition)
         this.Log();
 }
 
 // CORRECT – braces always allowed and preferred
-public void DoWork() {
+public void DoWork () {
     if (condition) {
         DoSomething();
     } else {
@@ -154,7 +154,7 @@ public void DoWork() {
 }
 
 // WRONG – branch without braces when else exists
-public void Bad() {
+public void Bad () {
     if (condition)
         DoSomething();
     else
@@ -246,15 +246,15 @@ public class MyService {
     public static string DefaultName { get; } = "default";
     public string Name { get; protected set; } = string.Empty;
 
-    protected static readonly int MaxRetries = 3;
-    protected bool _initialized;
+    protected static readonly int maxRetries = 3;
+    protected bool initialized;
 
-    public MyService() {
+    public MyService () {
     }
 
-    public static MyService Create() => new MyService();
-    public void Initialize() { }
-    protected void OnStateChanged(string state) { }
+    public static MyService Create () => new MyService();
+    public void Initialize () { }
+    protected void onStateChanged (string state) { }
 }
 ```
 
@@ -291,7 +291,7 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 - Keep P/Invoke declarations non-public and behind a narrow platform adapter; use a nested native
   API type when that keeps the interop boundary cohesive.
 - P/Invoke must not leak outside the owning boundary. `TextInjector` owns its native input declarations,
-  `Hotkey` polls global key state, and `WindowStyleNativeApi` owns HWND/style calls.
+  `Hotkey` polls global key state, and `NativeApi` owns HWND/style calls.
 - Document every non-obvious flag or field offset with an inline comment.
 - `INPUT` struct on 64-bit Windows: union field (`ki`/`mi`) at `[FieldOffset(8)]`. `sizeof(INPUT)` = 40 bytes (64-bit) / 28 bytes (32-bit).
 
@@ -328,7 +328,8 @@ Task.Run(() => this._transcriptionService.InitializeAsync(modelPath));
 
 **Interfaces** are placed as close as possible to where they are implemented or primarily used:
 - Next to the implementing class (same folder) – preferred when the interface is specific to one class or one area.
-- In the folder where it is most commonly implemented (e.g. `Services/` for `ITranscription`).
+- In the nearest shared contract folder when multiple services implement it (for example,
+  `Contracts/` for `ITranscription`).
 - In `Utils/Interfaces/` only for genuinely shared marker/interface contracts with no better home.
 
 **Enums** – group shared enums under `Utils/Enums/` when that matches their role.
@@ -375,3 +376,30 @@ Do **not** use visual separator comments of any form to divide members into sect
 ```
 
 These decorative lines add noise without providing information that cannot be inferred from member types and XML `<summary>` docs. Use XML doc comments (`/// <summary>`) on individual members instead.
+
+---
+
+## 20. Component and Directory Organization
+
+- Prefer singular names for classes that represent one service, model, view, or other object. Preserve established
+  framework/domain names only when a singular form would be misleading or incompatible.
+- Keep one top-level type per source file, as required by Section 16.
+- When helper/support types or inheritance-derived types are used only by one owning class, keep the owning
+  class in its role-based folder and place those dependent types in a sibling folder named with the plural of
+  the owning class. Example: `Services/Whisper.cs` may own helper types in `Services/Whispers/`.
+- If helper/support or derived types are used by multiple classes, place them in a shared folder under the
+  nearest common ancestor directory of all consumers. Do not duplicate a type into each consumer's folder.
+- Namespaces must mirror the folder path relative to the project namespace. For example, a type in
+  `WhisperWriter/Services/Whispers/RuntimeAdapter.cs` uses `WhisperWriter.Services.Whispers`.
+- Do not repeat an enclosing folder name in a type name when the namespace already supplies that context.
+  Prefer `RuntimeAdapter` in `Services/Whispers/` over `WhisperRuntimeAdapter`; keep a repeated word only when
+  it is required by an external contract or prevents a real naming ambiguity.
+- Keep each authored source-code folder to approximately 8–10 direct files and 8–10 immediate subfolders
+  (about 16–20 direct entries maximum). When a source folder exceeds that limit, split it by cohesive
+  responsibility rather than combining unrelated types or creating arbitrary folders. Do not split project
+  metadata, generated directories, or a cohesive resource/fixture dataset solely to satisfy this count; those
+  need a structural reason to move.
+- Exceptions are allowed only for a documented structural reason (for example, a framework/XAML convention,
+  a generated-code boundary, a cohesive fixture dataset, native interop declarations that must remain beside
+  their owning boundary, or private test fakes kept with one suite to avoid spreading test-only types through
+  production folders). Convenience or an intentionally disorganized layout is not a valid reason.

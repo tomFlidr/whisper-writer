@@ -6,7 +6,7 @@ namespace WhisperWriter.Tests.DI;
 
 public class AutofacExtensionsTests {
 	[Fact]
-	public void InjectProtectedProperties_ResolvesMarkedPropertiesFromTheScope() {
+	public void InjectProtectedProperties_ResolvesMarkedPropertiesFromTheScope () {
 		var builder = new ContainerBuilder();
 		builder.RegisterType<InjectedDependency>().AsSelf().SingleInstance();
 		builder.RegisterType<InjectedComponent>()
@@ -23,9 +23,9 @@ public class AutofacExtensionsTests {
 	}
 
 	public class InjectedComponent {
+		public InjectedDependency? Dependency => this.injectedDependency;
+
 		[Inject]
 		protected InjectedDependency? injectedDependency { get; set; }
-
-		public InjectedDependency? Dependency => this.injectedDependency;
 	}
 }

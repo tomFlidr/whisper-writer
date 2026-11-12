@@ -26,7 +26,7 @@ public class VirtualKeyCodeHelperTests {
 
 	[Theory]
 	[MemberData(nameof(VirtualKeyCodeHelperTests.FriendlyNameCases))]
-	public void GetName_ReturnsFriendlyNameForConfiguredKeys(int virtualKey, string expected) {
+	public void GetName_ReturnsFriendlyNameForConfiguredKeys (int virtualKey, string expected) {
 		Assert.Equal(expected, VirtualKeyCodeHelper.GetName(virtualKey));
 	}
 
@@ -38,7 +38,7 @@ public class VirtualKeyCodeHelperTests {
 	}
 
 	[Fact]
-	public void GetName_UsesHexFallbackForUnknownVirtualKey() {
+	public void GetName_UsesHexFallbackForUnknownVirtualKey () {
 		Assert.Equal("0xFFFF", VirtualKeyCodeHelper.GetName(0xFFFF));
 	}
 

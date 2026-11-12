@@ -5,8 +5,14 @@ using Xunit;
 namespace WhisperWriter.Tests.Services;
 
 public class HotkeyTests {
+	private static short readKeyState (ConcurrentDictionary<int, bool> pressed, int virtualKey) {
+		return pressed.TryGetValue(virtualKey, out bool isPressed) && isPressed
+			? unchecked((short)0x8000)
+			: (short)0;
+	}
+
 	[Fact]
-	public void SetVirtualKeyCodes_ReturnsTheHotkeyInstance() {
+	public void SetVirtualKeyCodes_ReturnsTheHotkeyInstance () {
 		var hotkey = new Hotkey();
 
 		Hotkey result = hotkey.SetVirtualKeyCodes(new[] { 0xA4, 0x5B });
@@ -15,7 +21,7 @@ public class HotkeyTests {
 	}
 
 	[Fact]
-	public async Task Polling_RaisesTransitionsAndUsesCopiedKeysThenUpdatedKeys() {
+	public async Task Polling_RaisesTransitionsAndUsesCopiedKeysThenUpdatedKeys () {
 		var pressed = new ConcurrentDictionary<int, bool>();
 		pressed[1] = true;
 		pressed[2] = true;
@@ -52,7 +58,7 @@ public class HotkeyTests {
 	}
 
 	[Fact]
-	public async Task UpdateKeys_StopsAnActiveHoldImmediately() {
+	public async Task UpdateKeys_StopsAnActiveHoldImmediately () {
 		var pressed = new ConcurrentDictionary<int, bool>();
 		pressed[1] = true;
 		var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -99,7 +105,7 @@ public class HotkeyTests {
 	}
 
 	[Fact]
-	public async Task Stop_PreventsFurtherPollingTransitions() {
+	public async Task Stop_PreventsFurtherPollingTransitions () {
 		var pressed = new ConcurrentDictionary<int, bool>();
 		pressed[1] = true;
 		int startCount = 0;
@@ -122,11 +128,5 @@ public class HotkeyTests {
 		} finally {
 			hotkey.Dispose();
 		}
-	}
-
-	private static short readKeyState(ConcurrentDictionary<int, bool> pressed, int virtualKey) {
-		return pressed.TryGetValue(virtualKey, out bool isPressed) && isPressed
-			? unchecked((short)0x8000)
-			: (short)0;
 	}
 }

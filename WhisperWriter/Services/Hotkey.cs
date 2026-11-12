@@ -13,10 +13,7 @@ namespace WhisperWriter.Services;
 /// Polling-based hotkey detector. Monitors a configurable set of virtual-key codes
 /// by calling GetAsyncKeyState on a background thread and raises start/stop events.
 /// </summary>
-public class Hotkey: IDisposable, IService, ISingleton {
-	[DllImport("user32.dll")]
-	internal static extern short GetAsyncKeyState(int vKey);
-
+public class Hotkey : IDisposable, IService, ISingleton {
 	public event Action? Push2TalkStarted;
 	public event Action? Push2TalkStopped;
 
@@ -40,13 +37,16 @@ public class Hotkey: IDisposable, IService, ISingleton {
 		this._keyStateReader = keyStateReader;
 		this._pollIntervalMilliseconds = pollIntervalMilliseconds;
 	}
-	
+
+	[DllImport("user32.dll")]
+	internal static extern short GetAsyncKeyState (int vKey);
+
 	/// <summary>
 	/// Sets the virtual-key codes that constitute the push-to-talk hotkey.
 	/// The provided list is copied and used by the poll loop.
 	/// </summary>
 	public Hotkey SetVirtualKeyCodes (IReadOnlyList<int> virtualKeyCodes) {
-		this._virtualKeyCodes = [..virtualKeyCodes];
+		this._virtualKeyCodes = [.. virtualKeyCodes];
 		return this;
 	}
 
@@ -61,7 +61,7 @@ public class Hotkey: IDisposable, IService, ISingleton {
 	/// </summary>
 	public void UpdateKeys (IReadOnlyList<int> vkCodes) {
 		lock (this._keysLock) {
-			this._virtualKeyCodes = [..vkCodes];
+			this._virtualKeyCodes = [.. vkCodes];
 		}
 		// If the old combo was being held, synthesise a release so recording stops cleanly.
 		if (this._isHeld) {
@@ -94,7 +94,8 @@ public class Hotkey: IDisposable, IService, ISingleton {
 	/// Disposes the service and stops the poll thread.
 	/// </summary>
 	public void Dispose () {
-		if (this._disposed) return;
+		if (this._disposed)
+			return;
 		this._disposed = true;
 		this.Stop();
 	}

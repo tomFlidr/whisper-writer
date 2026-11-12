@@ -5,6 +5,10 @@ using Xunit;
 namespace WhisperWriter.Tests.Services;
 
 public class LogTests {
+	private static string createLogDirectory () {
+		return Path.Combine(Path.GetTempPath(), $"WhisperWriter.LogTests-{Guid.NewGuid():N}");
+	}
+
 #if DEBUG
 	[Fact]
 	public void LoggingMethods_WriteToExpectedIsolatedSinks_AndFlushesOnClose () {
@@ -79,11 +83,7 @@ public class LogTests {
 	}
 #endif
 
-	private static string createLogDirectory () {
-		return Path.Combine(Path.GetTempPath(), $"WhisperWriter.LogTests-{Guid.NewGuid():N}");
-	}
-
-	private class TestLog: Log {
+	private class TestLog : Log {
 		public TestLog (string logDirectory) : base(logDirectory) {
 		}
 	}

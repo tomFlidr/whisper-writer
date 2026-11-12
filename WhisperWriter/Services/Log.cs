@@ -11,7 +11,7 @@ namespace WhisperWriter.Services;
 /// Application-wide logging facade backed by Serilog.
 /// All logging is active in DEBUG builds only; Release builds are no-ops.
 /// </summary>
-public class Log: IService, ISingleton {
+public class Log : IService, ISingleton {
 	/// <summary>Directory where log files are written.</summary>
 	public string LogDirectory { get; }
 
@@ -63,8 +63,10 @@ public class Log: IService, ISingleton {
 
 	public void Warning (string message, Exception? ex = null) {
 #if DEBUG
-		if (ex is null) Serilog.Log.Warning(message);
-		else Serilog.Log.Warning(ex, message);
+		if (ex is null)
+			Serilog.Log.Warning(message);
+		else
+			Serilog.Log.Warning(ex, message);
 #endif
 	}
 

@@ -39,7 +39,7 @@ a different recording.
   `StartRecording()` can create a new capture. Each released batch can therefore own its audio bytes.
 - `TranscriptionHistory.Add()` is thread-safe and inserts at the top when a result completes. With
   overlap, history order will otherwise reflect completion time rather than recording order.
-- `MainWindowTests` currently uses immediately completed fake transcriptions, so it does not prove a
+- `MainWindowTest` currently uses immediately completed fake transcriptions, so it does not prove a
   second job starts before a first delayed job completes.
 
 ## Required behavior

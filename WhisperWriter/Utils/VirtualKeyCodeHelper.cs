@@ -12,12 +12,6 @@ namespace WhisperWriter.Utils;
 /// Provides human readable names for VK codes and formatting helpers used in the UI.
 /// </summary>
 public static class VirtualKeyCodeHelper {
-	[DllImport("user32.dll")]
-	internal static extern uint MapVirtualKey (uint uCode, uint uMapType);
-
-	[DllImport("user32.dll", CharSet = CharSet.Unicode)]
-	internal static extern int GetKeyNameText (int lParam, StringBuilder lpString, int nSize);
-
 	// Hand-crafted names for keys that GetKeyNameText returns poorly or not at all.
 	private static readonly Dictionary<int, string> _overrides = new() {
 		{ 0x5B, "L Win" },
@@ -111,4 +105,10 @@ public static class VirtualKeyCodeHelper {
 			return "(none)";
 		return string.Join(" + ", vkCodes.Select(GetName));
 	}
+
+	[DllImport("user32.dll")]
+	internal static extern uint MapVirtualKey (uint uCode, uint uMapType);
+
+	[DllImport("user32.dll", CharSet = CharSet.Unicode)]
+	internal static extern int GetKeyNameText (int lParam, StringBuilder lpString, int nSize);
 }

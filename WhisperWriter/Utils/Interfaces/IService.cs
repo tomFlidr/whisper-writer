@@ -5,5 +5,6 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace WhisperWriter.Utils.Interfaces;
+
 public interface IService {
 }

@@ -7,5 +7,5 @@ using System.Threading.Tasks;
 namespace WhisperWriter.DI;
 
 [AttributeUsage(AttributeTargets.Property)]
-public class InjectAttribute: Attribute {
+public class InjectAttribute : Attribute {
 }

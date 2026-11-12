@@ -1,11 +1,11 @@
-using WhisperWriter.Utils;
+using WhisperWriter.Utils.Enums;
 using Xunit;
 
-namespace WhisperWriter.Tests.Utils;
+namespace WhisperWriter.Tests.Utils.Enums;
 
 public class HotkeyModifiersTests {
 	[Fact]
-	public void ModifierValues_AreStableBitFlags() {
+	public void ModifierValues_AreStableBitFlags () {
 		Assert.Equal(0, (int)HotkeyModifiers.None);
 		Assert.Equal(1, (int)HotkeyModifiers.Alt);
 		Assert.Equal(2, (int)HotkeyModifiers.Control);

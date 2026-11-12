@@ -49,18 +49,21 @@ Start-Process ".\WhisperWriter\bin\Debug\net8.0-windows7.0\WhisperWriter.exe"
 
 ### Text not injected / mouse broken after PTT
 - Root cause: PTT keys still physically held when `SendInput` runs, or Win key shell hook active.
-- Check: `TextInjector.WaitForPhysicalRelease()` and `ReleaseModifierKeys()` in `WhisperWriter/Services/TextInjector.cs`.
+- Check `TextInjector.WaitForPhysicalRelease()` and `ReleaseModifierKeys()` in
+  `WhisperWriter/Services/TextOutput/TextInjector.cs`.
 - Key gotcha: `INPUT` struct union field must be at `[FieldOffset(8)]` on 64-bit. Wrong offset = silent failure.
 - Key gotcha: Win key keyup requires `KEYEVENTF_EXTENDEDKEY` flag, otherwise the shell hook stays active.
 
 ### Transcription never starts / stays on "Loading…"
 - Check: model file exists and is > 70 MB (`MinModelFileSizeBytes` in `WhisperWriter/Services/Whisper.cs`).
-- Check: `Whisper.StateChanged` is wired in `WhisperWriter/Views/MainWindow.xaml.cs`.
+- Check: `Whisper.StateChanged` is wired in `WhisperWriter/Views/Screens/MainWindow.xaml.cs`.
 - Check: CUDA DLLs are present in `WhisperWriter\bin\Debug\net8.0-windows7.0\runtimes\cuda\win-x64\`.
 
-### CUDA not detected
-- Check: `Whisper.DetectCudaVersion()` probes supported `cudart64_N.dll` and `cublas64_N.dll` pairs.
-- Run `WhisperWriter/setup-dev.ps1` to copy CUDA DLLs to the correct location.
+### CUDA is not the active Whisper runtime
+- Check the verified runtime after model initialization through `Whisper.ActiveBackend` or
+  `RuntimeOptions.LoadedLibrary`; DLL presence alone does not prove CUDA loaded.
+- Confirm runtime DLLs are available in the app-local CUDA folder or configured native search path.
+- Run `WhisperWriter/setup-dev.ps1` to copy installed CUDA DLLs to the app runtime folder, then restart.
 
 ### ETA never appears
 - ETA is shown only from the **second** matching transcription onward (same model + same environment).
@@ -68,7 +71,8 @@ Start-Process ".\WhisperWriter\bin\Debug\net8.0-windows7.0\WhisperWriter.exe"
 - Environment fingerprint is in `Environments.value` (JSON) – check if hardware/power state changed.
 
 ### Window off-screen after monitor change
-- `WhisperWriter/Services/MainWindows/Position.cs` handles position clamping; `Style` forwards display-change events.
+- `WhisperWriter/Services/MainWindows/Positions/Position.cs` handles position clamping;
+  `WhisperWriter/Services/MainWindows/Styles/Style.cs` forwards display-change events.
 - If the window is invisible: delete `WindowLeft` and `WindowBottom` from `settings.json` (set to `-1`) to reset to default position.
 
 ### Settings not saved
