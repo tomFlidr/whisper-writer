@@ -3,28 +3,29 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using WhisperWriter;
+using WhisperWriter.Apps;
 
 namespace WhisperWriter.Tests.TestSupport;
 
 internal static class WpfTestHost {
-	private static readonly Lazy<Host> _host = new(WpfTestHost.Start);
-
 	public static int ThreadId => WpfTestHost._host.Value.ThreadId;
 	public static App Application => WpfTestHost._host.Value.Application;
+
+	private static readonly Lazy<Host> _host = new(WpfTestHost.Start);
 
 	public static void SetRuntime (IAppRuntime runtime) {
 		WpfTestHost.setRuntime(WpfTestHost.Application, runtime);
 	}
 
-	public static void Invoke(Action action) {
+	public static void Invoke (Action action) {
 		WpfTestHost._host.Value.Dispatcher.Invoke(action);
 	}
 
-	public static T Invoke<T>(Func<T> action) {
+	public static T Invoke<T> (Func<T> action) {
 		return WpfTestHost._host.Value.Dispatcher.Invoke(action);
 	}
 
-	private static Host Start() {
+	private static Host Start () {
 		using var ready = new ManualResetEventSlim();
 		Host? host = null;
 		var thread = new Thread(() => {
@@ -58,14 +59,14 @@ internal static class WpfTestHost {
 	}
 
 	private class Host {
-		public Host(App application, Dispatcher dispatcher, int threadId) {
+		public App Application { get; }
+		public Dispatcher Dispatcher { get; }
+		public int ThreadId { get; }
+
+		public Host (App application, Dispatcher dispatcher, int threadId) {
 			this.Application = application;
 			this.Dispatcher = dispatcher;
 			this.ThreadId = threadId;
 		}
-
-		public App Application { get; }
-		public Dispatcher Dispatcher { get; }
-		public int ThreadId { get; }
 	}
 }

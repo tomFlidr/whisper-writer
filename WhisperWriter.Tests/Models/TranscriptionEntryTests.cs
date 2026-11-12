@@ -5,7 +5,7 @@ namespace WhisperWriter.Tests.Models;
 
 public class TranscriptionEntryTests {
 	[Fact]
-	public void Constructor_SetsEmptyTextZeroDurationAndCurrentTimestamp() {
+	public void Constructor_SetsEmptyTextZeroDurationAndCurrentTimestamp () {
 		var before = DateTime.Now;
 		var entry = new TranscriptionEntry();
 		var after = DateTime.Now;
@@ -16,7 +16,7 @@ public class TranscriptionEntryTests {
 	}
 
 	[Fact]
-	public void Initializer_PreservesProvidedValues() {
+	public void Initializer_PreservesProvidedValues () {
 		var timestamp = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Local);
 		var duration = TimeSpan.FromMilliseconds(1234);
 		var entry = new TranscriptionEntry {

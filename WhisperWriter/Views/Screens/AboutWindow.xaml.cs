@@ -1,0 +1,22 @@
+using System.Windows;
+using WhisperWriter.Utils.Interfaces;
+using WhisperWriter.Views.Adapters;
+
+namespace WhisperWriter.Views.Screens;
+
+/// <summary>
+/// Simple informational about dialog.
+/// </summary>
+public partial class AboutWindow : Window, IService, ITransient {
+	protected IPlatform windowPlatform { get; set; } = new WindowsPlatform();
+	/// <summary>
+	/// Initializes UI components of the about window.
+	/// </summary>
+	public AboutWindow () {
+		this.InitializeComponent();
+	}
+
+	private void _handleTitleBarMouseLeftButtonDown (object sender, System.Windows.Input.MouseButtonEventArgs e) => this.windowPlatform.DragMove(this);
+
+	private void _handleBtnCloseClick (object sender, RoutedEventArgs e) => this.Close();
+}

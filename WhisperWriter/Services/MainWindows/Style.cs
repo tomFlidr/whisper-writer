@@ -1,7 +1,6 @@
 using System.Windows;
 using WhisperWriter.Services.MainWindows.Styles;
 using WhisperWriter.Utils.Interfaces;
-using WhisperWriter.Views;
 
 namespace WhisperWriter.Services.MainWindows;
 /// <summary>
@@ -9,17 +8,17 @@ namespace WhisperWriter.Services.MainWindows;
 /// appear as a tool window (no taskbar entry) and listens for display change messages.
 /// The WindowDisplayChange event is raised when the system notifies of a display configuration change.
 /// </summary>
-public class Style: IService, ISingleton {
+public class Style : IService, ISingleton {
 
 	public event EventHandler? WindowDisplayChange;
 
 	protected Window window = null!;
-	protected readonly IWindowStyleNativeApi nativeApi;
+	protected readonly INativeApi nativeApi;
 
-	public Style () : this(new WindowStyleNativeApi()) {
+	public Style () : this(new NativeApi()) {
 	}
 
-	protected Style (IWindowStyleNativeApi nativeApi) {
+	protected Style (INativeApi nativeApi) {
 		this.nativeApi = nativeApi;
 	}
 

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Interop;
 using WhisperWriter.Services.MainWindows;
+using WhisperWriter.Services.MainWindows.Styles;
 using WhisperWriter.Tests.TestSupport;
 using Xunit;
 
@@ -11,7 +12,7 @@ public class StyleTests {
 	public void SetWindow_ReturnsTheSameStyleInstance () {
 		WpfTestHost.Invoke(() => {
 			var window = new Window();
-			var style = new TestStyle(new FakeWindowStyleNativeApi());
+			var style = new TestStyle(new FakeNativeApi());
 
 			Assert.Same(style, style.SetWindow(window));
 		});
@@ -21,7 +22,7 @@ public class StyleTests {
 	public void InitializeSystemEvents_AddsToolWindowStyleAndClearsAppWindowStyle () {
 		WpfTestHost.Invoke(() => {
 			var window = new Window();
-			var api = new FakeWindowStyleNativeApi { InitialStyle = 0x00040004 };
+			var api = new FakeNativeApi { InitialStyle = 0x00040004 };
 			var style = new TestStyle(api).SetWindow(window);
 
 			style.InitializeSystemEvents(window, EventArgs.Empty);
@@ -37,7 +38,7 @@ public class StyleTests {
 	[Fact]
 	public void NativeHook_ForwardsDisplayChangeWithoutMarkingTheMessageHandled () {
 		WpfTestHost.Invoke(() => {
-			var api = new FakeWindowStyleNativeApi();
+			var api = new FakeNativeApi();
 			var style = new TestStyle(api).SetWindow(new Window());
 			int eventCount = 0;
 			object? eventSender = null;
@@ -67,11 +68,11 @@ public class StyleTests {
 	}
 
 	private class TestStyle : WhisperWriter.Services.MainWindows.Style {
-		public TestStyle (IWindowStyleNativeApi api) : base(api) {
+		public TestStyle (INativeApi api) : base(api) {
 		}
 	}
 
-	private class FakeWindowStyleNativeApi : IWindowStyleNativeApi {
+	private class FakeNativeApi : INativeApi {
 		public IntPtr Handle { get; } = new(1234);
 		public int InitialStyle { get; init; }
 		public Window? Window { get; private set; }

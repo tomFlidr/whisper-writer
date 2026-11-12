@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using WhisperWriter.Models;
 using WhisperWriter.DI;
 using WhisperWriter.Services.EtaCalcs;
 using WhisperWriter.Utils.Interfaces;
@@ -30,13 +31,13 @@ namespace WhisperWriter.Services;
 /// model/environment. ETA is shown only when at least two matching samples exist.
 /// </summary>
 public class EtaCalc : IDisposable, IService, ISingleton {
+	protected static string currentDatabaseVersion => typeof(App).Assembly.GetName().Version?.ToString()!;
+
 	[Inject]
 	protected Log log { get; set; } = null!;
 
 	private static readonly int _maxRecordsPerModelEnvironment = 1000;
 	private static readonly int _minimumSamplesForEta = 1;
-
-	protected static string currentDatabaseVersion => typeof(App).Assembly.GetName().Version?.ToString()!;
 
 	protected readonly string dbPath;
 	protected SqliteConnection? connection;
@@ -55,35 +56,18 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 		this.dbPath = databasePath;
 	}
 
-	protected bool initConnection () {
-		if (this.connection != null)
-			return true;
-		bool result = false;
-		try {
-			this.connection = new SqliteConnection($"Data Source={this.dbPath}");
-			this.connection.Open();
-			this.ensureSchema();
-			this.log.Info($"EtaCalcs: database opened at {this.dbPath}");
-			result = true;
-		} catch (Exception ex) {
-			this.log.Error("EtaCalcs: failed to open database", ex);
-			this.connection?.Dispose();
-			this.connection = null;
-		}
-		return result;
-	}
-
 	/// <summary>
-	/// Estimates processing time for a given model and audio duration using historical
-	/// samples gathered for the current environment fingerprint. Returns null when
-	/// insufficient data or the DB is unavailable.
+	/// Estimates processing time only for the verified engine/runtime/providers used by this job.
+	/// Returns null when backend identity is unavailable or the DB has insufficient matching samples.
 	/// </summary>
-	public double? EstimateProcessingSeconds (string modelKey, double audioSeconds) {
-		if (!this.initConnection() || audioSeconds <= 0)
+	public double? EstimateProcessingSeconds (
+		string modelKey, double audioSeconds, ActiveBackendInfo? activeBackend
+	) {
+		if (activeBackend is null || !this.initConnection() || audioSeconds <= 0)
 			return null;
 
 		try {
-			var environmentId = this.findOrCreateEnvironmentId();
+			var environmentId = this.findOrCreateEnvironmentId(activeBackend);
 			var modelId = this.findModelId(modelKey);
 			if (modelId == null)
 				return null;
@@ -108,17 +92,18 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 	}
 
 	/// <summary>
-	/// Records a completed transcription timing sample into the DB and trims old rows
-	/// to keep the per-model/environment sample set bounded.
+	/// Records a timing sample only when the active engine/runtime/providers were verified.
 	/// </summary>
-	public void Record (string modelKey, double audioSeconds, double processingSeconds) {
-		if (!this.initConnection())
+	public void Record (
+		string modelKey, double audioSeconds, double processingSeconds, ActiveBackendInfo? activeBackend
+	) {
+		if (activeBackend is null || !this.initConnection())
 			return;
 		if (audioSeconds <= 0 || processingSeconds <= 0)
 			return;
 
 		try {
-			var environmentId = this.findOrCreateEnvironmentId();
+			var environmentId = this.findOrCreateEnvironmentId(activeBackend);
 			var modelId = this.findOrCreateModelId(modelKey);
 
 			using var tx = this.connection!.BeginTransaction();
@@ -166,6 +151,24 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 	public void Dispose () {
 		this.connection?.Dispose();
 		this.connection = null;
+	}
+
+	protected bool initConnection () {
+		if (this.connection != null)
+			return true;
+		bool result = false;
+		try {
+			this.connection = new SqliteConnection($"Data Source={this.dbPath}");
+			this.connection.Open();
+			this.ensureSchema();
+			this.log.Info($"EtaCalcs: database opened at {this.dbPath}");
+			result = true;
+		} catch (Exception ex) {
+			this.log.Error("EtaCalcs: failed to open database", ex);
+			this.connection?.Dispose();
+			this.connection = null;
+		}
+		return result;
 	}
 
 	/// <summary>
@@ -219,7 +222,7 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 	/// Returns null when not enough samples are available.
 	/// </summary>
 	protected double? estimateForWindow (
-		long modelId, long environmentId, double minAudioSeconds, 
+		long modelId, long environmentId, double minAudioSeconds,
 		double maxAudioSeconds, double currentAudioSeconds
 	) {
 		using var cmd = this.connection!.CreateCommand();
@@ -278,8 +281,8 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 		return currentAudioSeconds * ratio;
 	}
 
-	protected long findOrCreateEnvironmentId () {
-		var json = this.buildEnvironmentJson();
+	protected long findOrCreateEnvironmentId (ActiveBackendInfo activeBackend) {
+		var json = this.buildEnvironmentJson(activeBackend);
 		var fingerprint = this.computeFingerprint(json);
 
 		using var cmd = this.connection!.CreateCommand();
@@ -298,12 +301,17 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 		return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
 	}
 
-	protected virtual string buildEnvironmentJson () {
+	protected virtual string buildEnvironmentJson (ActiveBackendInfo activeBackend) {
 		var cpuModel = this.readWmiString("Win32_Processor", "Name") ?? "Unknown CPU";
 		var cpuPhysicalCores = this.readWmiInt("Win32_Processor", "NumberOfCores") ?? Environment.ProcessorCount;
 		var gpus = this.readGpuModels();
-		var cudaVersion = this.detectCudaVersion();
-		var backend = cudaVersion.HasValue ? "GPU" : "CPU";
+		var backend = new {
+			device = activeBackend.Device,
+			engine = activeBackend.Engine,
+			runtime = activeBackend.Runtime,
+			providers = activeBackend.Providers,
+			cudaVersion = activeBackend.CudaVersion,
+		};
 		var ramBytes = this.readWmiLong("Win32_ComputerSystem", "TotalPhysicalMemory") ?? 0L;
 		var ramTotalGb = ramBytes > 0 ? Math.Round(ramBytes / 1024d / 1024d / 1024d, 2) : 0d;
 		var osVersion = Environment.OSVersion.VersionString;
@@ -317,7 +325,6 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 			cpuPhysicalCores,
 			gpus,
 			backend,
-			cudaVersion,
 			ramTotalGb,
 			osVersion,
 			osBuild,
@@ -345,7 +352,6 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 		];
 	}
 
-	protected virtual int? detectCudaVersion () => Whisper.DetectCudaVersion();
 
 	protected virtual IReadOnlyList<object?> readWmiValues (string className, string propertyName) {
 		using var searcher = new ManagementObjectSearcher($"SELECT {propertyName} FROM {className}");
@@ -372,7 +378,7 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 				if (
 					skipMicrosoftBasicDisplayAdapter &&
 					value.Contains(
-						"Microsoft Basic Display Adapter", 
+						"Microsoft Basic Display Adapter",
 						StringComparison.OrdinalIgnoreCase
 					)
 				) {
@@ -403,7 +409,7 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 				if (
 					skipMicrosoftBasicDisplayAdapter &&
 					value.Contains(
-						"Microsoft Basic Display Adapter", 
+						"Microsoft Basic Display Adapter",
 						StringComparison.OrdinalIgnoreCase
 					)
 				) {
@@ -453,7 +459,7 @@ public class EtaCalc : IDisposable, IService, ISingleton {
 		var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(json));
 		return Convert.ToHexString(bytes);
 	}
-	
+
 	protected virtual bool getSystemPowerStatus (out SystemPowerStatus status) =>
 		NativeMethods.GetSystemPowerStatus(out status);
 

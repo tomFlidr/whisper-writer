@@ -1,10 +1,12 @@
 using Autofac;
 using System.Windows;
 using System.Windows.Threading;
+using WhisperWriter.Apps;
 using WhisperWriter.DI;
 using WhisperWriter.Services;
+using WhisperWriter.Services.Persistence;
 using WhisperWriter.Utils.Interfaces;
-using WhisperWriter.Views;
+using WhisperWriter.Views.Screens;
 
 namespace WhisperWriter;
 
@@ -13,18 +15,28 @@ public partial class App : System.Windows.Application, IService, ISingleton {
 	public new MainWindow? MainWindow { get; protected set; } = null!;
 
 	[Inject]
-	protected Settings settings { get; set; } = null!;
+	protected internal Settings settings { get; set; } = null!;
 	[Inject]
-	protected TranscriptionHistory transcriptionHistory { get; set; } = null!;
+	protected internal TranscriptionHistory transcriptionHistory { get; set; } = null!;
 	[Inject]
-	protected Services.Whisper whisper { get; set; } = null!;
+	protected internal Services.Whisper whisper { get; set; } = null!;
 	[Inject]
-	protected EtaCalc etaCalc { get; set; } = null!;
+	protected internal EtaCalc etaCalc { get; set; } = null!;
 	[Inject]
-	protected Log log { get; set; } = null!;
+	protected internal Log log { get; set; } = null!;
 	[Inject]
-	protected TrayMenu trayMenu { get; set; } = null!;
+	protected internal TrayMenu trayMenu { get; set; } = null!;
 	protected IAppRuntime? runtime { get; set; }
+
+	/// <summary>
+	/// Requests application exit. Disposes tray resources, closes the main window and shuts down.
+	/// </summary>
+	public void ExitApp () {
+		var runtime = this.getRuntime();
+		runtime.HandleTrayExit();
+		runtime.ForceCloseMainWindow(this.MainWindow);
+		runtime.Shutdown();
+	}
 
 	/// <summary>
 	/// Application startup entry. Performs environment initialization, loads settings,
@@ -50,16 +62,6 @@ public partial class App : System.Windows.Application, IService, ISingleton {
 			runtime.ModelPath
 		);
 		await Task.Run(() => runtime.InitializeWhisperAsync(modelPath));
-	}
-
-	/// <summary>
-	/// Requests application exit. Disposes tray resources, closes the main window and shuts down.
-	/// </summary>
-	public void ExitApp () {
-		var runtime = this.getRuntime();
-		runtime.HandleTrayExit();
-		runtime.ForceCloseMainWindow(this.MainWindow);
-		runtime.Shutdown();
 	}
 
 	protected override void OnExit (ExitEventArgs e) {
@@ -101,31 +103,8 @@ public partial class App : System.Windows.Application, IService, ISingleton {
 	}
 
 	private IAppRuntime getRuntime () {
-		return this.runtime ??= new AppRuntime(this);
+		return this.runtime ??= new Runtime(this);
 	}
 
-	private class AppRuntime: IAppRuntime {
-		private readonly App _owner;
 
-		public AppRuntime (App owner) {
-			this._owner = owner;
-		}
-
-		public string ModelPath => this._owner.settings.Data.ModelPath;
-		public int HistorySize => this._owner.settings.Data.HistorySize;
-
-		public void LoadSettings () => this._owner.settings.Load();
-		public void SetHistorySize (int historySize) => this._owner.transcriptionHistory.MaxSize = historySize;
-		public MainWindow? ResolveMainWindow () => Program.DI.Provider.Resolve<MainWindow>();
-		public void ShowMainWindow (MainWindow? window) => window?.Show();
-		public Task InitializeWhisperAsync (string modelPath) => this._owner.whisper.InitializeAsync(modelPath);
-		public void HandleTrayExit () => this._owner.trayMenu?.HandleAppExit();
-		public void ForceCloseMainWindow (MainWindow? window) => window?.ForceClose();
-		public void Shutdown () => this._owner.Shutdown();
-		public void DisposeEta () => this._owner.etaCalc.Dispose();
-		public void CloseLog () => this._owner.log.CloseAndFlush();
-		public void RegisterAppDomainUnhandledExceptionHandler (UnhandledExceptionEventHandler handler) =>
-			AppDomain.CurrentDomain.UnhandledException += handler;
-		public void LogError (string message, Exception exception) => this._owner.log.Error(message, exception);
-	}
 }

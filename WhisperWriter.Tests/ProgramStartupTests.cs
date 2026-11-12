@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows;
 using WhisperWriter.DI;
+using WhisperWriter.Programs;
 using WhisperWriter.Tests.TestSupport;
 using Xunit;
 
@@ -42,13 +43,14 @@ public class ProgramStartupTests {
 		Assert.Throws<ArgumentNullException>(() => Program.StartApplication([], null!));
 	}
 
-	private sealed class RecordingProgramRuntime : IProgramRuntime {
-		private readonly App _app;
-
-		public RecordingProgramRuntime (App app) => this._app = app;
+	private class RecordingProgramRuntime : IProgramRuntime {
 		public List<string> Effects { get; } = [];
 		public WhisperWriter.DI.Container? Container { get; private set; }
 		public WhisperWriter.DI.Container? ResolvedContainer { get; private set; }
+
+		private readonly App _app;
+
+		public RecordingProgramRuntime (App app) => this._app = app;
 
 		public WhisperWriter.DI.Container CreateContainer () {
 			this.Effects.Add("container-create");

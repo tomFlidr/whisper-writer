@@ -1,6 +1,7 @@
 using System.IO;
-using System.Runtime.InteropServices;
+using WhisperWriter.Contracts;
 using WhisperWriter.DI;
+using WhisperWriter.Models;
 using WhisperWriter.Services.Whispers;
 using WhisperWriter.Utils.Enums;
 using WhisperWriter.Utils.Interfaces;
@@ -12,60 +13,35 @@ namespace WhisperWriter.Services;
 /// Implements ITranscription; prefers CUDA, falls back to CPU automatically.
 /// </summary>
 public class Whisper : ITranscription, IService, ISingleton {
-	// Minimum acceptable file size for any GGML model (tiny.en ≈ 78 MB).
-	// A file smaller than this is certainly truncated or corrupted.
-	public const long MinModelFileSizeBytes = 70 * 1024 * 1024; // 70 MB
-
 	public event Action<TranscriptionState, string>? StateChanged;
 
-	public string? ActiveProvider => this.runtime.ActiveLibrary;
+	public ActiveBackendInfo? ActiveBackend => this.activeBackend;
 
 	[Inject]
 	protected Settings settings { get; set; } = null!;
 	[Inject]
 	protected Log log { get; set; } = null!;
 
-	private readonly IWhisperRuntime runtime;
-	protected IWhisperFactory? factory;
+	// Minimum acceptable file size for any GGML model (tiny.en ≈ 78 MB).
+	// A file smaller than this is certainly truncated or corrupted.
+	public const long MinModelFileSizeBytes = 70 * 1024 * 1024; // 70 MB
+
+	protected IRuntimeFactory? factory;
 	protected bool initialized;
+	protected ActiveBackendInfo? activeBackend;
+	private readonly IRuntime _runtime;
 
-	public Whisper() : this(new WhisperNetRuntime()) { }
+	public Whisper () : this(new NetRuntime()) { }
 
-	protected Whisper(IWhisperRuntime runtime) {
-		this.runtime = runtime;
-	}
-
-	/// <summary>
-	/// Probes whether CUDA runtime DLLs required by ggml-cuda-whisper.dll are loadable.
-	/// Tries CUDA major versions 13, 12, 11 in order.
-	/// Returns the detected major version number, or null if no CUDA runtime was found.
-	/// </summary>
-	/// <summary>
-	/// Probes the presence of CUDA runtime DLLs by attempting to load cudart/cublas
-	/// for known major versions. Returns the major version number when found.
-	/// </summary>
-	public static int? DetectCudaVersion() {
-		foreach (var version in new[] { 13, 12, 11 }) {
-			var cudart = $"cudart64_{version}.dll";
-			var cublas = $"cublas64_{version}.dll";
-			var hCudart = NativeMethods.LoadLibraryEx(cudart, IntPtr.Zero, NativeMethods.LOAD_LIBRARY_AS_DATAFILE);
-			if (hCudart == IntPtr.Zero)
-				continue;
-			NativeMethods.FreeLibrary(hCudart);
-			var hCublas = NativeMethods.LoadLibraryEx(cublas, IntPtr.Zero, NativeMethods.LOAD_LIBRARY_AS_DATAFILE);
-			if (hCublas == IntPtr.Zero)
-				continue;
-			NativeMethods.FreeLibrary(hCublas);
-			return version;
-		}
-		return null;
+	protected Whisper (IRuntime runtime) {
+		this._runtime = runtime;
 	}
 
 	/// <summary>Returns the number of CPU threads used for Whisper inference.</summary>
 	/// <summary>
 	/// Number of CPU threads to use for inference. The heuristic leaves two cores free.
 	/// </summary>
-	public static int GetInferenceThreadCount() => Math.Max(1, Environment.ProcessorCount - 2);
+	public static int GetInferenceThreadCount () => Math.Max(1, Environment.ProcessorCount - 2);
 
 	/// <summary>
 	/// Initialises the Whisper model from disk. Call once at startup.
@@ -75,16 +51,9 @@ public class Whisper : ITranscription, IService, ISingleton {
 	/// Loads or downloads the GGML model and initializes the WhisperFactory.
 	/// Emits StateChanged events for UI feedback and records failures to the log.
 	/// </summary>
-	public async Task InitializeAsync(string modelPath) {
-		this.StateChanged?.Invoke(TranscriptionState.Loading, "GPU Detection…");
-
-		var cudaVersion = this.runtime.DetectCudaVersion();
-		this.log.Info(cudaVersion.HasValue
-			? $"CUDA probe: cudart64_{cudaVersion}.dll + cublas64_{cudaVersion}.dll found — GPU will be used (CUDA {cudaVersion})"
-			: "CUDA probe: no CUDA runtime found (tried versions 13, 12, 11) — falling back to CPU");
-		this.StateChanged?.Invoke(TranscriptionState.Loading, cudaVersion.HasValue
-			? $"Loading model… (CUDA {cudaVersion} detected)"
-			: "Loading model… (CPU)");
+	public async Task InitializeAsync (string modelPath) {
+		this.activeBackend = null;
+		this.StateChanged?.Invoke(TranscriptionState.Loading, "Loading model…");
 
 		try {
 			// Delete and re-download if the file exists but is clearly truncated.
@@ -98,15 +67,17 @@ public class Whisper : ITranscription, IService, ISingleton {
 				var dir = Path.GetDirectoryName(modelPath)!;
 				Directory.CreateDirectory(dir);
 				this.StateChanged?.Invoke(TranscriptionState.Loading, "Downloading model…");
-				await this.runtime.DownloadModelAsync(modelPath);
+				await this._runtime.DownloadModelAsync(modelPath);
 			}
 
-			this.factory = this.runtime.CreateFactory(modelPath);
+			this.factory = this._runtime.CreateFactory(modelPath);
+			this.activeBackend = ActiveBackendInfo.FromWhisperNet(this._runtime.ActiveLibrary);
 			this.initialized = true;
 			this.StateChanged?.Invoke(TranscriptionState.Idle, "Ready");
 		} catch (Exception ex) {
 			this.initialized = false;
 			this.factory = null;
+			this.activeBackend = null;
 			this.log.Error("Failed to load Whisper model", ex);
 			this.StateChanged?.Invoke(TranscriptionState.Error, $"Data load failed: {ex.Message}");
 		}
@@ -153,27 +124,31 @@ public class Whisper : ITranscription, IService, ISingleton {
 			this.StateChanged?.Invoke(TranscriptionState.Done, result);
 			return result;
 
-		} catch (Exception ex) when (this.runtime.IsModelLoadException(ex)) {
-			// The factory accepted the file (only reads header) but the model is
-			// corrupted or truncated. Delete it so InitializeAsync re-downloads it
-			// on next startup, then surface a clear error to the user.
-			this.log.Error("Whisper model corrupted – deleting file for re-download", ex);
-			this.initialized = false;
-			this.factory.Dispose();
-			this.factory = null;
-			if (modelPath != null && File.Exists(modelPath)) {
-				try { File.Delete(modelPath); } catch (Exception delEx) {
-					this.log.Warning($"Could not delete corrupted model file '{modelPath}'", delEx);
-				}
-			}
-			var userMsg = "Data file is corrupted and has been deleted. Restart the app to re-download it.";
-			this.StateChanged?.Invoke(TranscriptionState.Error, userMsg);
-			throw new InvalidOperationException(userMsg, ex);
+		} catch (Exception exception) when (this._runtime.IsModelLoadException(exception)) {
+			throw this.createModelLoadException(modelPath, exception);
 		}
 	}
 
-	public async ValueTask DisposeAsync() {
+	public async ValueTask DisposeAsync () {
 		this.factory?.Dispose();
+		this.activeBackend = null;
 		await ValueTask.CompletedTask;
+	}
+
+	private InvalidOperationException createModelLoadException (string? modelPath, Exception exception) {
+		// Delete a file that passed the header check but failed during processor creation.
+		this.log.Error("Whisper model corrupted – deleting file for re-download", exception);
+		this.initialized = false;
+		this.factory!.Dispose();
+		this.factory = null;
+		this.activeBackend = null;
+		if (modelPath != null && File.Exists(modelPath)) {
+			try { File.Delete(modelPath); } catch (Exception deleteException) {
+				this.log.Warning($"Could not delete corrupted model file '{modelPath}'", deleteException);
+			}
+		}
+		var userMessage = "Data file is corrupted and has been deleted. Restart the app to re-download it.";
+		this.StateChanged?.Invoke(TranscriptionState.Error, userMessage);
+		return new InvalidOperationException(userMessage, exception);
 	}
 }

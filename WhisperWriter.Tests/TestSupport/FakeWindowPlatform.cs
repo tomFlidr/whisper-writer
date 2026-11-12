@@ -2,9 +2,8 @@ using System.Windows;
 
 namespace WhisperWriter.Tests.TestSupport;
 
-internal class FakeWindowPlatform : WhisperWriter.Views.IWindowPlatform {
+internal class FakeWindowPlatform : WhisperWriter.Views.Adapters.IPlatform {
 	public DateTime UtcNow { get; set; } = new(2026, 11, 4, 12, 0, 0, DateTimeKind.Utc);
-	public int? CudaVersion { get; set; }
 	public bool IsStartupRegistered { get; set; }
 	public bool LeftButtonPressed { get; set; }
 	public Func<string, bool> ExistingFile { get; set; } = _ => false;
@@ -15,7 +14,6 @@ internal class FakeWindowPlatform : WhisperWriter.Views.IWindowPlatform {
 	public List<(Window Window, string ResourceKey, bool Controllable)> StoryboardBegins { get; } = [];
 	public List<(Window Window, string ResourceKey)> StoryboardStops { get; } = [];
 
-	public int? DetectCudaVersion () => this.CudaVersion;
 	public bool FileExists (string path) => this.ExistingFile(path);
 	public bool IsRegisteredAtStartup () => this.IsStartupRegistered;
 	public void SetStartupRegistration (bool enabled) => this.StartupRegistrationChanges.Add(enabled);

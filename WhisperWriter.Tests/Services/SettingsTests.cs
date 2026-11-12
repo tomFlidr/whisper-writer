@@ -8,8 +8,40 @@ namespace WhisperWriter.Tests.Services;
 public class SettingsTests {
 	private static readonly Log _log = new();
 
+	private static string createSettingsPath () {
+		return Path.Combine(
+			AppContext.BaseDirectory,
+			"phase0-settings-tests",
+			$"{Guid.NewGuid():N}.json"
+		);
+	}
+
+	private static void withSettingsFile (string? contents, Action<string> action) {
+		string path = SettingsTests.createSettingsPath();
+		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+		try {
+			if (contents != null)
+				File.WriteAllText(path, contents);
+			action(path);
+		} finally {
+			if (File.Exists(path))
+				File.Delete(path);
+		}
+	}
+
+	private static void withSettingsDirectory (Action<string> action) {
+		string path = SettingsTests.createSettingsPath();
+		Directory.CreateDirectory(path);
+		try {
+			action(path);
+		} finally {
+			if (Directory.Exists(path))
+				Directory.Delete(path);
+		}
+	}
+
 	[Fact]
-	public void Load_MissingFileCreatesDefaultSettings() {
+	public void Load_MissingFileCreatesDefaultSettings () {
 		SettingsTests.withSettingsFile(null, path => {
 			var settings = new TestSettings(path);
 			settings.Load();
@@ -21,7 +53,7 @@ public class SettingsTests {
 	}
 
 	[Fact]
-	public void SaveAndLoad_RoundTripConfiguredSettings() {
+	public void SaveAndLoad_RoundTripConfiguredSettings () {
 		SettingsTests.withSettingsFile(null, path => {
 			var settings = new TestSettings(path);
 			settings.Data.ModelPath = "llms/test-model.bin";
@@ -66,7 +98,7 @@ public class SettingsTests {
 	}
 
 	[Fact]
-	public void Load_InvalidJsonResetsToDefaults() {
+	public void Load_InvalidJsonResetsToDefaults () {
 		SettingsTests.withSettingsFile("{ invalid json", path => {
 			var settings = new TestSettings(path);
 
@@ -79,7 +111,7 @@ public class SettingsTests {
 	}
 
 	[Fact]
-	public void Save_WhenPathIsDirectoryDoesNotThrow() {
+	public void Save_WhenPathIsDirectoryDoesNotThrow () {
 		SettingsTests.withSettingsDirectory(path => {
 			var settings = new TestSettings(path);
 
@@ -89,40 +121,8 @@ public class SettingsTests {
 		});
 	}
 
-	private static void withSettingsFile(string? contents, Action<string> action) {
-		string path = SettingsTests.createSettingsPath();
-		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-		try {
-			if (contents != null)
-				File.WriteAllText(path, contents);
-			action(path);
-		} finally {
-			if (File.Exists(path))
-				File.Delete(path);
-		}
-	}
-
-	private static void withSettingsDirectory(Action<string> action) {
-		string path = SettingsTests.createSettingsPath();
-		Directory.CreateDirectory(path);
-		try {
-			action(path);
-		} finally {
-			if (Directory.Exists(path))
-				Directory.Delete(path);
-		}
-	}
-
-	private static string createSettingsPath() {
-		return Path.Combine(
-			AppContext.BaseDirectory,
-			"phase0-settings-tests",
-			$"{Guid.NewGuid():N}.json"
-		);
-	}
-
 	private class TestSettings : Settings {
-		public TestSettings(string path) : base(path) {
+		public TestSettings (string path) : base(path) {
 			this.log = SettingsTests._log;
 		}
 	}

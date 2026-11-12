@@ -1,41 +1,27 @@
 using Autofac;
 using System.Reflection;
 using WhisperWriter.Utils.Interfaces;
-using WhisperWriter.Views;
+using WhisperWriter.Views.Screens;
 
 namespace WhisperWriter.DI;
 
 public class Container {
+
+	public IContainer Provider { get; private set; }
 
 	/// <summary>
 	/// Singleton DI container instance.
 	/// </summary>
 	private static Container _instance = null!;
 
-	public IContainer Provider { get; private set; }
-
-	/// <summary>
-	/// Singleton DI container instance getter.
-	/// </summary>
-	/// <returns></returns>
-	/// <summary>
-	/// Returns the singleton DI container instance, building it on first call.
-	/// </summary>
-	public static Container GetInstance () {
-		if (Container._instance == null) {
-			Container._instance = new Container();
-		}
-		return Container._instance;
-	}
-
 	public Container () {
-		// Registrace v kontejneru
+		// Register dependencies
 		var builder = new ContainerBuilder();
 
 		var allServices = Assembly.GetExecutingAssembly()
 				.GetTypes()
 				.Where(t => t.IsClass && !t.IsAbstract && typeof(IService).IsAssignableFrom(t));
-		
+
 		builder.RegisterTypes(allServices.Where(t => typeof(ITransient).IsAssignableFrom(t) && t != typeof(MainWindow)).ToArray())
 			.PropertiesAutowired(PropertyWiringOptions.AllowCircularDependencies)
 			.InjectProtectedProperties()
@@ -57,5 +43,19 @@ public class Container {
 			.SingleInstance();
 
 		this.Provider = builder.Build();
+	}
+
+	/// <summary>
+	/// Singleton DI container instance getter.
+	/// </summary>
+	/// <returns></returns>
+	/// <summary>
+	/// Returns the singleton DI container instance, building it on first call.
+	/// </summary>
+	public static Container GetInstance () {
+		if (Container._instance == null) {
+			Container._instance = new Container();
+		}
+		return Container._instance;
 	}
 }

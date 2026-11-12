@@ -1,13 +1,14 @@
 using Autofac;
 using WhisperWriter.DI;
 using WhisperWriter.Services;
+using WhisperWriter.Services.SpeechPipeline;
 using Xunit;
 
 namespace WhisperWriter.Tests.DI;
 
 public class ContainerTests {
 	[Fact]
-	public void GetInstance_ReturnsTheSameContainerEachTime() {
+	public void GetInstance_ReturnsTheSameContainerEachTime () {
 		Container first = Container.GetInstance();
 		Container second = Container.GetInstance();
 
@@ -15,7 +16,7 @@ public class ContainerTests {
 	}
 
 	[Fact]
-	public void Constructor_RegistersSettingsAsASingletonWithProtectedInjection() {
+	public void Constructor_RegistersSettingsAsASingletonWithProtectedInjection () {
 		var container = new Container();
 		try {
 			Settings first = container.Provider.Resolve<Settings>();

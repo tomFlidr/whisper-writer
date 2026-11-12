@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Drawing;
 using WhisperWriter.DI;
+using WhisperWriter.Services.MainWindows.Positions;
 using WhisperWriter.Utils.Interfaces;
 
 namespace WhisperWriter.Services.MainWindows;
@@ -10,17 +11,17 @@ namespace WhisperWriter.Services.MainWindows;
 /// Encapsulates all screen-placement, clamping, and persistence logic
 /// so that MainWindow stays focused on UI behaviour.
 /// </summary>
-public class Position: IService, ITransient {
+public class Position : IService, ITransient {
 
 	protected Settings settings { get; set; } = null!;
 
 	protected Window window = null!;
-	protected readonly IPositionEnvironment environment;
-	
-	public Position (Settings settingsService) : this(settingsService, new PositionEnvironment()) {
+	protected readonly IEnvironment environment;
+
+	public Position (Settings settingsService) : this(settingsService, new EnvironmentAdapter()) {
 	}
 
-	protected Position (Settings settingsService, IPositionEnvironment environment) {
+	protected Position (Settings settingsService, IEnvironment environment) {
 		this.settings = settingsService;
 		this.environment = environment;
 	}
@@ -44,7 +45,7 @@ public class Position: IService, ITransient {
 	/// If a stored position exists it will be applied; otherwise a default position is used.
 	/// The provided callback is invoked after the position has been applied.
 	/// </summary>
-	public bool InitialPosition(Action onPositionApplied) {
+	public bool InitialPosition (Action onPositionApplied) {
 		var s = this.settings.Data;
 		if (s.WindowLeft >= 0 && s.WindowBottom >= 0) {
 			this.window.Loaded += (_, _) => { this.ApplyStoredPosition(); onPositionApplied(); };
@@ -60,7 +61,7 @@ public class Position: IService, ITransient {
 	/// primary screen working area coordinates into WPF device-independent pixels.
 	/// The window is clamped to the chosen screen afterwards.
 	/// </summary>
-	public void ApplyStoredPosition() {
+	public void ApplyStoredPosition () {
 		var s = this.settings.Data;
 		var primary = this.environment.GetPrimaryWorkingArea();
 		if (primary == null) { this.PlaceAtDefaultPosition(); return; }
@@ -81,7 +82,7 @@ public class Position: IService, ITransient {
 	/// Places the window at the default bottom-centre location of the primary screen
 	/// using a 20 px offset above the taskbar to keep the widget visually separated.
 	/// </summary>
-	public void PlaceAtDefaultPosition() {
+	public void PlaceAtDefaultPosition () {
 		var primary = this.environment.GetPrimaryWorkingArea();
 		if (primary == null) {
 			this.window.Left = (this.environment.PrimaryScreenWidth - this.window.ActualWidth) / 2;
@@ -107,7 +108,7 @@ public class Position: IService, ITransient {
 	/// to the working area of the monitor the window overlaps most. Falls back to
 	/// the primary screen if the window is entirely off-screen.
 	/// </summary>
-	public void ClampWindowToScreen() {
+	public void ClampWindowToScreen () {
 		if (this.window.ActualWidth == 0 || this.window.ActualHeight == 0)
 			return;
 
@@ -162,7 +163,7 @@ public class Position: IService, ITransient {
 	/// Persists the current window centre position as WindowLeft/WindowBottom relative
 	/// to the primary screen's working area in device-independent pixels.
 	/// </summary>
-	public void SaveWindowPosition() {
+	public void SaveWindowPosition () {
 		var primary = this.environment.GetPrimaryWorkingArea();
 		var s = this.settings.Data;
 		if (primary != null) {

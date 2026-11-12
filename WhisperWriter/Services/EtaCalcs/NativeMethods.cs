@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace WhisperWriter.Services.EtaCalcs;
+
 public static class NativeMethods {
 	[DllImport("kernel32.dll")]
 	[return: MarshalAs(UnmanagedType.Bool)]

@@ -8,6 +8,10 @@ using Xunit;
 namespace WhisperWriter.Tests;
 
 public class AppLifecycleTests {
+	private static void invoke (App app, string methodName, params object?[] arguments) =>
+		typeof(App).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)!
+			.Invoke(app, arguments);
+
 	[Fact]
 	public async Task Startup_LoadsSettingsShowsTheWindowAndInitializesWhisperInOrder () {
 		var app = WpfTestHost.Application;
@@ -173,8 +177,4 @@ public class AppLifecycleTests {
 			}
 		});
 	}
-
-	private static void invoke (App app, string methodName, params object?[] arguments) =>
-		typeof(App).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)!
-			.Invoke(app, arguments);
 }

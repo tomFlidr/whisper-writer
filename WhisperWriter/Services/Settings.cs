@@ -6,20 +6,20 @@ using WhisperWriter.Utils.Interfaces;
 
 namespace WhisperWriter.Services;
 
-public class Settings: IService, ISingleton {
+public class Settings : IService, ISingleton {
+	/// <summary>
+	/// In-memory representation of the application settings loaded from disk.
+	/// </summary>
+	public AppSettings Data { get; private set; } = new();
+
 	[Inject]
 	protected Log log { get; set; } = null!;
-
-	private readonly string _settingsPath;
 
 	private static readonly JsonSerializerOptions _jsonOptions = new() {
 		WriteIndented = true,
 	};
 
-	/// <summary>
-	/// In-memory representation of the application settings loaded from disk.
-	/// </summary>
-	public AppSettings Data { get; private set; } = new();
+	private readonly string _settingsPath;
 
 	public Settings () : this(Path.Combine(AppContext.BaseDirectory, "settings.json")) {
 	}

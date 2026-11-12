@@ -1,4 +1,5 @@
 using WhisperWriter.Services;
+using WhisperWriter.Services.TrayMenus;
 using Xunit;
 
 namespace WhisperWriter.Tests.Services;
@@ -22,14 +23,14 @@ public class TrayMenuTests {
 		var platform = new TestTrayMenu.FakePlatform();
 		var aboutWindow = new TestTrayMenu.FakeWindow();
 		var historyWindow = new TestTrayMenu.FakeWindow();
-		platform.RegisterWindow(TestTrayMenu.WindowKind.About, aboutWindow);
-		platform.RegisterWindow(TestTrayMenu.WindowKind.History, historyWindow);
+		platform.RegisterWindow(WindowKind.About, aboutWindow);
+		platform.RegisterWindow(WindowKind.History, historyWindow);
 		var trayMenu = new TestTrayMenu(platform);
 
 		platform.RequestAbout();
 		platform.RequestHistory();
 
-		Assert.Equal(new[] { TestTrayMenu.WindowKind.About, TestTrayMenu.WindowKind.History }, platform.ResolvedWindows);
+		Assert.Equal(new[] { WindowKind.About, WindowKind.History }, platform.ResolvedWindows);
 		Assert.Equal(1, aboutWindow.ShowCount);
 		Assert.Equal(1, aboutWindow.CloseCount);
 		Assert.Equal(1, historyWindow.ShowCount);
@@ -40,12 +41,12 @@ public class TrayMenuTests {
 	public void SettingsRequest_WhenAccepted_SavesUpdatesHistoryAndReloadsHotkey () {
 		var platform = new TestTrayMenu.FakePlatform();
 		var settingsWindow = new TestTrayMenu.FakeWindow { DialogResult = true };
-		platform.RegisterWindow(TestTrayMenu.WindowKind.Settings, settingsWindow);
+		platform.RegisterWindow(WindowKind.Settings, settingsWindow);
 		var trayMenu = new TestTrayMenu(platform);
 
 		platform.RequestSettings();
 
-		Assert.Equal(new[] { TestTrayMenu.WindowKind.Settings }, platform.ResolvedWindows);
+		Assert.Equal(new[] { WindowKind.Settings }, platform.ResolvedWindows);
 		Assert.Equal(1, settingsWindow.ShowDialogCount);
 		Assert.Equal(new[] { "settings-save", "history-size:17", "hotkey-reload" }, platform.Effects);
 	}
@@ -54,7 +55,7 @@ public class TrayMenuTests {
 	public void SettingsRequest_WhenCancelled_DoesNotApplySettingsEffects () {
 		var platform = new TestTrayMenu.FakePlatform();
 		var settingsWindow = new TestTrayMenu.FakeWindow { DialogResult = false };
-		platform.RegisterWindow(TestTrayMenu.WindowKind.Settings, settingsWindow);
+		platform.RegisterWindow(WindowKind.Settings, settingsWindow);
 		var trayMenu = new TestTrayMenu(platform);
 
 		platform.RequestSettings();
@@ -77,68 +78,27 @@ public class TrayMenuTests {
 		Assert.Equal(1, platform.DisposeCount);
 	}
 
-	private class TestTrayMenu: TrayMenu {
-		public enum WindowKind {
-			About,
-			History,
-			Settings,
-		}
-
+	private class TestTrayMenu : TrayMenu {
 		public TestTrayMenu (FakePlatform platform) : base(platform) {
 		}
 
-		public class FakePlatform: ITrayMenuPlatform {
-			private readonly Dictionary<TrayWindowKind, FakeWindow> _windows = new();
+		public class FakePlatform : IPlatform {
+			public List<WindowKind> ResolvedWindows { get; } = new();
+			public List<string> Effects { get; } = new();
+			public Action? OnExit { get; set; }
+			public int DisposeCount { get; private set; }
+
+			int IPlatform.HistorySize => 17;
+
+			private readonly Dictionary<WindowKind, FakeWindow> _windows = new();
 			private Action? _about;
 			private Action? _history;
 			private Action? _settings;
 			private Action? _exit;
 			private Action? _doubleClick;
 
-			public List<WindowKind> ResolvedWindows { get; } = new();
-			public List<string> Effects { get; } = new();
-			public Action? OnExit { get; set; }
-			public int DisposeCount { get; private set; }
-
-			IDisposable ITrayMenuPlatform.CreateTrayIcon (Action about, Action history, Action settings, Action exit, Action doubleClick) {
-				this._about = about;
-				this._history = history;
-				this._settings = settings;
-				this._exit = exit;
-				this._doubleClick = doubleClick;
-				return new FakeTrayIcon(this);
-			}
-
-			ITrayMenuWindow ITrayMenuPlatform.ResolveWindow (TrayWindowKind kind) {
-				this.ResolvedWindows.Add((WindowKind)(int)kind);
-				return this._windows[kind];
-			}
-
-			int ITrayMenuPlatform.HistorySize => 17;
-
-			void ITrayMenuPlatform.SaveSettings () {
-				this.Effects.Add("settings-save");
-			}
-
-			void ITrayMenuPlatform.SetHistorySize (int historySize) {
-				this.Effects.Add($"history-size:{historySize}");
-			}
-
-			void ITrayMenuPlatform.ReloadHotkey () {
-				this.Effects.Add("hotkey-reload");
-			}
-
-			void ITrayMenuPlatform.ExitApp () {
-				this.Effects.Add("exit");
-				this.OnExit?.Invoke();
-			}
-
-			void ITrayMenuPlatform.ShowMainWindow () {
-				this.Effects.Add("main-window");
-			}
-
 			public void RegisterWindow (WindowKind kind, FakeWindow window) {
-				this._windows[(TrayWindowKind)(int)kind] = window;
+				this._windows[kind] = window;
 			}
 
 			public void RequestAbout () => this._about?.Invoke();
@@ -147,7 +107,42 @@ public class TrayMenuTests {
 			public void RequestExit () => this._exit?.Invoke();
 			public void RequestDoubleClick () => this._doubleClick?.Invoke();
 
-			private class FakeTrayIcon: IDisposable {
+			IDisposable IPlatform.CreateTrayIcon (Action about, Action history, Action settings, Action exit, Action doubleClick) {
+				this._about = about;
+				this._history = history;
+				this._settings = settings;
+				this._exit = exit;
+				this._doubleClick = doubleClick;
+				return new FakeTrayIcon(this);
+			}
+
+			IWindow IPlatform.ResolveWindow (WindowKind kind) {
+				this.ResolvedWindows.Add(kind);
+				return this._windows[kind];
+			}
+
+			void IPlatform.SaveSettings () {
+				this.Effects.Add("settings-save");
+			}
+
+			void IPlatform.SetHistorySize (int historySize) {
+				this.Effects.Add($"history-size:{historySize}");
+			}
+
+			void IPlatform.ReloadHotkey () {
+				this.Effects.Add("hotkey-reload");
+			}
+
+			void IPlatform.ExitApp () {
+				this.Effects.Add("exit");
+				this.OnExit?.Invoke();
+			}
+
+			void IPlatform.ShowMainWindow () {
+				this.Effects.Add("main-window");
+			}
+
+			private class FakeTrayIcon : IDisposable {
 				private readonly FakePlatform _platform;
 
 				public FakeTrayIcon (FakePlatform platform) {
@@ -160,7 +155,7 @@ public class TrayMenuTests {
 			}
 		}
 
-		public class FakeWindow: ITrayMenuWindow {
+		public class FakeWindow : IWindow {
 			public event EventHandler? Closed;
 			public bool? DialogResult { get; set; }
 			public int CloseCount { get; private set; }

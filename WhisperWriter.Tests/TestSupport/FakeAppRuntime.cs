@@ -1,8 +1,9 @@
-using WhisperWriter.Views;
+using WhisperWriter.Apps;
+using WhisperWriter.Views.Screens;
 
 namespace WhisperWriter.Tests.TestSupport;
 
-internal class FakeAppRuntime : WhisperWriter.IAppRuntime {
+internal class FakeAppRuntime : IAppRuntime {
 	public string ModelPath { get; set; } = "llms/test-model.bin";
 	public int HistorySize { get; set; } = 17;
 	public MainWindow? Window { get; set; }

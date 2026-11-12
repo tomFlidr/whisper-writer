@@ -1,12 +1,11 @@
 using WhisperWriter.Models;
 using WhisperWriter.Services;
-using WhisperWriter.Services.TextInjectors;
 using WhisperWriter.Utils.Enums;
-using WhisperWriter.Views;
+using WhisperWriter.Views.Screens.MainWindows;
 
 namespace WhisperWriter.Tests.TestSupport;
 
-internal class FakeMainWindowRuntime : IMainWindowRuntime {
+internal class FakeMainWindowRuntime : IRuntime {
 	public event Action<TranscriptionState, string>? StateChanged;
 	public event Action? PushToTalkStarted;
 	public event Action? PushToTalkStopped;
@@ -15,7 +14,7 @@ internal class FakeMainWindowRuntime : IMainWindowRuntime {
 	public event Action<TranscriptionJobResult>? JobCompleted;
 
 	public AppSettings Settings { get; set; } = new();
-	public string? ActiveProvider { get; set; } = "Cpu";
+	public ActiveBackendInfo? ActiveBackend { get; set; } = new("cpu", "whisper", "whisper.net", ["cpu"]);
 	public byte[]? Recording { get; set; }
 	public bool CanReserveRecording { get; set; } = true;
 	public TranscriptionQueueStatus QueueStatus { get; set; } = new(0, 0, 0, 0, 128L * 1024 * 1024, 2, Array.Empty<TimeSpan?>(), 0);
@@ -33,6 +32,8 @@ internal class FakeMainWindowRuntime : IMainWindowRuntime {
 	public List<(string Message, Exception? Exception)> Errors { get; } = [];
 	public List<(string Text, IReadOnlyList<int> HotkeyCodes)> Injections { get; } = [];
 	public List<(string ModelKey, double AudioSeconds, double ProcessingSeconds)> RecordedEstimates { get; } = [];
+	public List<ActiveBackendInfo?> EstimatedBackendInfos { get; } = [];
+	public List<ActiveBackendInfo?> RecordedBackendInfos { get; } = [];
 	public List<string> TranscriptionArguments { get; } = [];
 	public Queue<FocusTarget> FocusTargets { get; } = new();
 	public List<FocusTarget> CapturedFocusTargets { get; } = [];
@@ -136,15 +137,21 @@ internal class FakeMainWindowRuntime : IMainWindowRuntime {
 		this.OnLogError?.Invoke(message, exception);
 	}
 
-	public double? EstimateProcessingSeconds (string modelKey, double audioSeconds) {
+	public double? EstimateProcessingSeconds (
+		string modelKey, double audioSeconds, ActiveBackendInfo? activeBackend
+	) {
 		this.Calls.Add("eta-estimate");
 		this.TranscriptionArguments.Add($"eta:{modelKey}:{audioSeconds}");
+		this.EstimatedBackendInfos.Add(activeBackend);
 		return this.EstimatedProcessingSeconds;
 	}
 
-	public void Record (string modelKey, double audioSeconds, double processingSeconds) {
+	public void Record (
+		string modelKey, double audioSeconds, double processingSeconds, ActiveBackendInfo? activeBackend
+	) {
 		this.Calls.Add("eta-record");
 		this.RecordedEstimates.Add((modelKey, audioSeconds, processingSeconds));
+		this.RecordedBackendInfos.Add(activeBackend);
 	}
 
 	public Task RunBackground (Action action) {

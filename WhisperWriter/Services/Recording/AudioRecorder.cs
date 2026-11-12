@@ -1,0 +1,131 @@
+using NAudio.Wave;
+using System.IO;
+using WhisperWriter.Services.Recording.AudioRecorders;
+using WhisperWriter.Utils.Interfaces;
+
+namespace WhisperWriter.Services.Recording;
+
+/// <summary>
+/// Records from the default microphone into an in-memory WAV buffer.
+/// Call StartRecording() / StopRecording() around the push-to-talk period.
+/// GetWavBytes() returns the complete 16 kHz mono WAV suitable for Whisper.
+/// </summary>
+/// <summary>
+/// Simple in-memory audio recorder using NAudio WaveInEvent.
+/// Records 16 kHz mono 16-bit PCM suitable for the Whisper model and
+/// exposes an amplitude event for realtime VU metering.
+/// </summary>
+public class AudioRecorder : IDisposable, IService, ISingleton {
+	// Fires periodically with the current amplitude (0–1) for the VU meter
+	public event Action<float>? AmplitudeChanged;
+
+	private static readonly int _sampleRate = 16000;
+	private static readonly int _channels = 1;
+	private static readonly int _bitsPerSample = 16;
+
+	private IAudioCapture? _waveIn;
+	private readonly Func<WaveFormat, int, IAudioCapture> _captureFactory;
+	private MemoryStream? _buffer;
+	private WaveFileWriter? _writer;
+	private bool _recording;
+	private readonly object _lock = new();
+
+	public AudioRecorder () : this((format, bufferMilliseconds) =>
+		new NAudioCapture(format, bufferMilliseconds)
+	) {
+	}
+
+	public AudioRecorder (Func<WaveFormat, int, IAudioCapture> captureFactory) {
+		ArgumentNullException.ThrowIfNull(captureFactory);
+		this._captureFactory = captureFactory;
+	}
+
+	/// <summary>
+	/// Calculates RMS amplitude from 16-bit PCM samples in the provided buffer.
+	/// Returns a floating value in range 0..1 representing perceived loudness.
+	/// </summary>
+	private static float _calculateRms (byte[] buffer, int length) {
+		if (length < 2)
+			return 0f;
+		double sum = 0;
+		int samples = length / 2;
+		for (int i = 0; i < length - 1; i += 2) {
+			short sample = (short)(buffer[i] | (buffer[i + 1] << 8));
+			double norm = sample / 32768.0;
+			sum += norm * norm;
+		}
+		return (float)Math.Sqrt(sum / samples);
+	}
+
+	/// <summary>
+	/// Starts a new in-memory WAV recording. Subsequent audio is written into a MemoryStream
+	/// until StopRecording() is called which returns the WAV bytes.
+	/// </summary>
+	public void StartRecording () {
+		lock (this._lock) {
+			if (this._recording)
+				return;
+
+			this._buffer = new MemoryStream();
+			var format = new WaveFormat(
+				AudioRecorder._sampleRate,
+				AudioRecorder._bitsPerSample,
+				AudioRecorder._channels
+			);
+			this._writer = new WaveFileWriter(this._buffer, format);
+
+			this._waveIn = this._captureFactory(format, 50);
+			this._waveIn.DataAvailable += this._handleDataAvailable;
+			this._waveIn.StartRecording();
+			this._recording = true;
+		}
+	}
+
+	/// <summary>
+	/// Stops the recording and returns the full WAV file bytes, or null if not recording.
+	/// </summary>
+	public byte[]? StopRecording () {
+		lock (this._lock) {
+			if (!this._recording)
+				return null;
+			this._recording = false;
+
+			this._waveIn!.StopRecording();
+			this._waveIn.DataAvailable -= this._handleDataAvailable;
+			this._waveIn.Dispose();
+			this._waveIn = null;
+
+			this._writer!.Flush();
+			this._writer.Dispose();
+			this._writer = null;
+
+			var bytes = this._buffer!.ToArray();
+			this._buffer.Dispose();
+			this._buffer = null;
+			return bytes;
+		}
+	}
+
+	/// <summary>
+	/// Releases resources used by the recorder. Stops any active recording.
+	/// </summary>
+	public void Dispose () {
+		this.StopRecording();
+	}
+
+	/// <summary>
+	/// WaveIn DataAvailable handler which appends incoming audio into the WAV writer
+	/// and raises an RMS-based amplitude event for the UI VU meter.
+	/// </summary>
+	private void _handleDataAvailable (byte[] buffer, int bytesRecorded) {
+		lock (this._lock) {
+			if (!this._recording || this._writer == null)
+				return;
+			this._writer.Write(buffer, 0, bytesRecorded);
+
+			// Calculate RMS amplitude for VU meter
+			float rms = AudioRecorder._calculateRms(buffer, bytesRecorded);
+			this.AmplitudeChanged?.Invoke(rms);
+		}
+	}
+}

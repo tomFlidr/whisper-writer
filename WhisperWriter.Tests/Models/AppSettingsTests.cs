@@ -5,7 +5,7 @@ namespace WhisperWriter.Tests.Models;
 
 public class AppSettingsTests {
 	[Fact]
-	public void Defaults_MatchTheInitialApplicationConfiguration() {
+	public void Defaults_MatchTheInitialApplicationConfiguration () {
 		var settings = new AppSettings();
 
 		Assert.Equal("llms/ggml-large-v2.bin", settings.ModelPath);
@@ -19,4 +19,12 @@ public class AppSettingsTests {
 		Assert.Equal(-1, settings.WindowLeft);
 		Assert.Equal(-1, settings.WindowBottom);
 	}
+
+	[Fact]
+	public void Defaults_ParakeetOrtBackendIsAutomatic () =>
+		Assert.Equal("Auto", new AppSettings().OrtBackend);
+
+	[Fact]
+	public void Defaults_OrtCudaRuntimePathIsEmpty () =>
+		Assert.Equal(string.Empty, new AppSettings().OrtCudaRuntimePath);
 }

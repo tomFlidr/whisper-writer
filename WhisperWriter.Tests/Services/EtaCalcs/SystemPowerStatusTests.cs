@@ -6,7 +6,7 @@ namespace WhisperWriter.Tests.Services.EtaCalcs;
 
 public class SystemPowerStatusTests {
 	[Fact]
-	public void StructLayout_MatchesTheWin32SystemPowerStatusContract() {
+	public void StructLayout_MatchesTheWin32SystemPowerStatusContract () {
 		Assert.Equal(12, Marshal.SizeOf<SystemPowerStatus>());
 		Assert.Equal(0, Marshal.OffsetOf<SystemPowerStatus>(nameof(SystemPowerStatus.ACLineStatus)).ToInt32());
 		Assert.Equal(3, Marshal.OffsetOf<SystemPowerStatus>(nameof(SystemPowerStatus.SystemStatusFlag)).ToInt32());
