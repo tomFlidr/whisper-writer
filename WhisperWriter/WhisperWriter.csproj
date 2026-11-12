@@ -86,8 +86,23 @@
 			<CudaDll Include="$(CudaBinDir)\cublasLt64_$(CudaVersion).dll" />
 			<CudaDll Include="$(CudaBinDir)\cudart64_$(CudaVersion).dll" />
 		</ItemGroup>
-		<Copy SourceFiles="@(CudaDll)" DestinationFolder="$(CudaTargetDir)" SkipUnchangedFiles="true" ContinueOnError="true" />
+		<Copy SourceFiles="@(CudaDll)" DestinationFolder="$(OutputPath)runtimes\cuda\win-x64" SkipUnchangedFiles="true" ContinueOnError="true" />
 	</Target>
+	<Target Name="CopyCudaRuntimeDllsToPublish" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' != 'win-x86'">
+		<PropertyGroup>
+			<CudaBinDir>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\x64</CudaBinDir>
+			<CudaVersion>$([System.Text.RegularExpressions.Regex]::Match($(CudaBinDir), 'v(\d+)\.').Groups[1].Value)</CudaVersion>
+		</PropertyGroup>
+		<ItemGroup>
+			<CudaDll Include="$(CudaBinDir)\cublas64_$(CudaVersion).dll" />
+			<CudaDll Include="$(CudaBinDir)\cublasLt64_$(CudaVersion).dll" />
+			<CudaDll Include="$(CudaBinDir)\cudart64_$(CudaVersion).dll" />
+		</ItemGroup>
+		<Copy SourceFiles="@(CudaDll)" DestinationFolder="$(PublishDir)runtimes\cuda\win-x64" SkipUnchangedFiles="true" ContinueOnError="true" />
+	</Target>
+	<ItemGroup>
+		<ProjectReference Include="..\WhisperWriter.OrtRuntime.Contracts\WhisperWriter.OrtRuntime.Contracts.csproj" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<!-- Whisper inference via whisper.cpp bindings -->
