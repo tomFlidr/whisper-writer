@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net8.0-windows7.0</TargetFramework>
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<EnableDynamicLoading>true</EnableDynamicLoading>
+		<IsPackable>false</IsPackable>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\WhisperWriter.OrtRuntime.Contracts\WhisperWriter.OrtRuntime.Contracts.csproj">
+			<Private>false</Private>
+		</ProjectReference>
+		<Compile Include="..\WhisperWriter.OrtRuntime.Shared\OnnxRuntimeSessionAdapter.cs" Link="OnnxRuntimeSessionAdapter.cs" />
+		<PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4" />
+	</ItemGroup>
+</Project>
