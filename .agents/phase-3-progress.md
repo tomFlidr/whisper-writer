@@ -5,9 +5,9 @@ The required 3.4 CUDA/cuDNN provisioning, 3.5 Parakeet V3 engine, and 3.6 transa
 now ordered in the Roadmap and specified, but not implemented. The fresh x86 CPU launch and full-corpus
 Vulkan/CUDA comparison have now passed locally. Hosted Actions, representative AMD validation, and the
 Parakeet transcription pipeline remain open.
-**Last updated:** 2026-11-12
+**Last updated:** 2026-11-13
 **Project:** `D:/tec/cs/whisper-writer-wpf`
-**Current observed HEAD:** `6ca61f5d4458` (`main`, unchanged; observed 2026-11-11)
+**Current observed HEAD:** `main` at local tag `v1.4.0` (9 commits ahead of `origin/main`; not pushed).
 
 ## Resume and handoff rule
 
@@ -28,6 +28,9 @@ status and current source because this file can become stale between sessions.
   now all resolve to 1.9.0.
 - The project pins Whisper.net core/runtime/CUDA 1.9.0. The approved `Whisper.net.Runtime.Vulkan` 1.9.0
   package is now referenced alongside them; `dotnet restore WhisperWriter.sln` succeeded.
+- On 2026-11-13, the approved change set was split into nine local commits and tagged `v1.4.0`. The local
+  tag is not pushed yet: the `gh` CLI is unauthenticated and Git push credentials are unavailable. The
+  v1.4.0 workflow publishes the app ZIPs and DirectML ZIP; CUDA remains a CI-only artifact.
 - Pre-change baseline rerun with .NET SDK 10.0.303: Debug and Release each passed **217/217 tests**; app
   builds in both configurations completed with **0 warnings and 0 errors**.
 - Phase 3.0 implementation is locally verified: startup status is neutral, the app no longer probes CUDA DLLs for
