@@ -2,9 +2,12 @@
 #
 # Triggered when a version tag is pushed:  git tag v1.2.3 && git push origin v1.2.3
 #
-# Produces two ZIP artefacts attached to the GitHub Release:
-#   WhisperWriter-v1.2.3-win-x64.zip  – 64-bit, CUDA-capable
-#   WhisperWriter-v1.2.3-win-x86.zip  – 32-bit, CPU only (no CUDA)
+# Produces two application ZIPs and the optional DirectML provider pack:
+#   WhisperWriter-v1.2.3-win-x64.zip                 – x64 app with the Parakeet CPU pack
+#   WhisperWriter-v1.2.3-win-x86.zip                 – x86 Whisper app, CPU only
+#   WhisperWriter-ORT-directml-1.24.4-win-x64.zip    – optional Parakeet DirectML pack
+# The CUDA provider pack is built for CI verification but is not attached to the release
+# until CUDA/cuDNN runtime provisioning is implemented.
 #
 # Requirements:
 #   - No secrets needed for a public repository.
@@ -35,11 +38,7 @@ jobs:
       matrix:
         include:
           - rid: win-x64
-            arch: x64
-            cuda: true
           - rid: win-x86
-            arch: x86
-            cuda: false
 
     steps:
       # ── 1. Checkout ──────────────────────────────────────────────────────────
@@ -69,24 +68,17 @@ jobs:
           [System.IO.File]::WriteAllText($csproj, $content, [System.Text.Encoding]::UTF8)
           Write-Host "Signing disabled."
 
-      # ── 4. Patch .csproj – disable CUDA copy target for x86 ─────────────────
-      # Whisper.net.Runtime.Cuda has no x86 package; skip the copy target to
-      # avoid a build warning / error on the x86 matrix leg.
-      - name: Disable CUDA copy target (x86 only)
-        if: matrix.cuda == false
-        shell: pwsh
-        run: |
-          $csproj = "WhisperWriter/WhisperWriter.csproj"
-          $content = Get-Content $csproj -Raw -Encoding UTF8
-          $content = $content -replace '(?s)<Target Name="CopyCudaRuntimeDlls".*?</Target>', ''
-          [System.IO.File]::WriteAllText($csproj, $content, [System.Text.Encoding]::UTF8)
-          Write-Host "CUDA copy target removed for x86."
-
-      # ── 5. Restore ───────────────────────────────────────────────────────────
+      # ── 4. Restore ───────────────────────────────────────────────────────────
       - name: Restore NuGet packages
-        run: dotnet restore WhisperWriter/WhisperWriter.csproj -r ${{ matrix.rid }}
+        run: dotnet restore WhisperWriter/WhisperWriter.csproj -r ${{ matrix.rid }} -p:RuntimeIdentifier=${{ matrix.rid }}
 
-      # ── 6. Publish ───────────────────────────────────────────────────────────
+      - name: Restore CPU ONNX provider pack (win-x64)
+        if: matrix.rid == 'win-x64'
+        run: >
+          dotnet restore WhisperWriter.OrtRuntime.Cpu/WhisperWriter.OrtRuntime.Cpu.csproj
+          -r win-x64 -p:RuntimeIdentifier=win-x64
+
+      # ── 5. Publish ───────────────────────────────────────────────────────────
       # PublishSingleFile=true is already set in the .csproj.
       # We override RuntimeIdentifier on the command line.
       - name: Publish (${{ matrix.rid }})
@@ -94,11 +86,39 @@ jobs:
           dotnet publish WhisperWriter/WhisperWriter.csproj
           -c Release
           -r ${{ matrix.rid }}
+          -p:RuntimeIdentifier=${{ matrix.rid }}
           --no-restore
           --self-contained false
           -o publish/${{ matrix.rid }}
 
-      # ── 7. Create llms\ placeholder ────────────────────────────────────────
+      - name: Publish CPU ONNX provider pack (win-x64)
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $pack = "publish/win-x64/runtimes/onnx/cpu"
+          dotnet publish WhisperWriter.OrtRuntime.Cpu/WhisperWriter.OrtRuntime.Cpu.csproj `
+            -c Release -r win-x64 -p:RuntimeIdentifier=win-x64 `
+            --no-restore --self-contained false -o $pack
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          Get-ChildItem $pack -Recurse -File |
+            Where-Object { $_.Extension -in @('.pdb', '.lib') } |
+            Remove-Item -Force
+          $nuget = Join-Path $env:USERPROFILE ".nuget/packages"
+          $licenses = Join-Path $pack "licenses"
+          New-Item -ItemType Directory -Path $licenses -Force | Out-Null
+          Copy-Item (Join-Path $nuget "microsoft.ml.onnxruntime/1.31.1/LICENSE") `
+            (Join-Path $licenses "Microsoft.ML.OnnxRuntime.LICENSE")
+          Copy-Item (Join-Path $nuget "microsoft.ml.onnxruntime/1.31.1/ThirdPartyNotices.txt") `
+            (Join-Path $licenses "Microsoft.ML.OnnxRuntime.ThirdPartyNotices.txt")
+          Copy-Item (Join-Path $nuget "microsoft.ml.onnxruntime.managed/1.31.1/LICENSE.txt") `
+            (Join-Path $licenses "Microsoft.ML.OnnxRuntime.Managed.LICENSE.txt")
+          Copy-Item (Join-Path $nuget "system.numerics.tensors/9.0.0/LICENSE.TXT") `
+            (Join-Path $licenses "System.Numerics.Tensors.LICENSE.txt")
+          Set-Content (Join-Path $pack "README.txt") `
+            "CPU ONNX Runtime provider pack for WhisperWriter Parakeet (x64)."
+
+      # ── 6. Create llms\ placeholder ────────────────────────────────────────
       # download-models.ps1 and download-models.bat are already copied by the
       # .csproj Content items (CopyToOutputDirectory=PreserveNewest).
       # We only need to ensure the llms\ folder exists with a README.
@@ -117,16 +137,33 @@ jobs:
           "@
           Write-Host "llms\ placeholder created."
 
-      # ── 8. Strip debug symbols and unneeded files ─────────────────────────────
-      - name: Clean publish output
+      # ── 7. Strip debug symbols and unneeded files ─────────────────────────────
+      - name: Clean publish output and verify ONNX pack layout
         shell: pwsh
         run: |
           $dst = "publish/${{ matrix.rid }}"
           # Remove PDB files (debug symbols – not needed in release)
           Get-ChildItem $dst -Recurse -Filter "*.pdb" | Remove-Item -Force
-          Write-Host "Cleaned."
+          $rootOrtFiles = Get-ChildItem $dst -File |
+            Where-Object { $_.Name -match '^(onnxruntime|Microsoft\.ML\.OnnxRuntime).*\.dll$' }
+          if ($rootOrtFiles) {
+            throw "ONNX Runtime DLLs leaked into the app root; provider cores must stay isolated in their pack folders."
+          }
+          if ("${{ matrix.rid }}" -eq "win-x64") {
+            $cpuPack = Join-Path $dst "runtimes/onnx/cpu"
+            foreach ($file in @("WhisperWriter.OrtRuntime.Cpu.dll", "WhisperWriter.OrtRuntime.Cpu.deps.json", "onnxruntime.dll")) {
+              if (-not (Test-Path (Join-Path $cpuPack $file))) {
+                throw "Required CPU ONNX provider file is missing: $file"
+              }
+            }
+          } else {
+            if (Test-Path (Join-Path $dst "runtimes/onnx")) {
+              throw "The x86 artifact must not contain an ONNX Runtime provider pack."
+            }
+          }
+          Write-Host "Cleaned and verified provider-pack layout."
 
-      # ── 9. Pack ZIP ───────────────────────────────────────────────────────────
+      # ── 8. Pack ZIP ───────────────────────────────────────────────────────────
       - name: Create ZIP
         shell: pwsh
         run: |
@@ -136,7 +173,7 @@ jobs:
           Write-Host "Created: $zipName  ($('{0:N1}' -f ((Get-Item $zipName).Length / 1MB)) MB)"
           echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
 
-      # ── 10. Upload artefact (for the release job below) ──────────────────────
+      # ── 9. Upload artefact (for the release job below) ──────────────────────
       - name: Upload artefact
         uses: actions/upload-artifact@v4
         with:
@@ -144,24 +181,163 @@ jobs:
           path: ${{ env.ZIP_NAME }}
           retention-days: 1
 
+  # Build optional ORT GPU packs separately so the CUDA payload is not forced on all users.
+  ort-provider-packs:
+    name: Build ORT ${{ matrix.id }} provider pack
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        include:
+          - id: directml
+            version: "1.24.4"
+            project: WhisperWriter.OrtRuntime.DirectML/WhisperWriter.OrtRuntime.DirectML.csproj
+          - id: cuda
+            version: "1.31.1"
+            project: WhisperWriter.OrtRuntime.Cuda/WhisperWriter.OrtRuntime.Cuda.csproj
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.x"
+
+      - name: Restore provider package
+        run: >
+          dotnet restore ${{ matrix.project }} -r win-x64
+          -p:RuntimeIdentifier=win-x64
+
+      - name: Publish provider pack
+        run: >
+          dotnet publish ${{ matrix.project }} -c Release -r win-x64
+          -p:RuntimeIdentifier=win-x64 --no-restore --self-contained false
+          -o provider-stage/runtimes/onnx/${{ matrix.id }}
+
+      - name: Clean provider pack and add licenses
+        shell: pwsh
+        run: |
+          $provider = "${{ matrix.id }}"
+          $pack = "provider-stage/runtimes/onnx/$provider"
+          $nuget = Join-Path $env:USERPROFILE ".nuget/packages"
+          Get-ChildItem $pack -Recurse -File |
+            Where-Object {
+              $_.Extension -in @('.pdb', '.lib') -or
+              $_.Name -in @('DirectML.Debug.dll', 'onnxruntime_providers_tensorrt.dll')
+            } | Remove-Item -Force
+
+          $licenses = Join-Path $pack "licenses"
+          New-Item -ItemType Directory -Path $licenses -Force | Out-Null
+          if ($provider -eq "directml") {
+            $assemblyName = "WhisperWriter.OrtRuntime.DirectML"
+            Copy-Item (Join-Path $nuget "microsoft.ml.onnxruntime.directml/1.24.4/LICENSE") `
+              (Join-Path $licenses "Microsoft.ML.OnnxRuntime.DirectML.LICENSE")
+            Copy-Item (Join-Path $nuget "microsoft.ml.onnxruntime.directml/1.24.4/ThirdPartyNotices.txt") `
+              (Join-Path $licenses "Microsoft.ML.OnnxRuntime.DirectML.ThirdPartyNotices.txt")
+            Copy-Item (Join-Path $nuget "microsoft.ai.directml/1.15.4/LICENSE.txt") `
+              (Join-Path $licenses "Microsoft.AI.DirectML.LICENSE.txt")
+            Copy-Item (Join-Path $nuget "microsoft.ai.directml/1.15.4/LICENSE-CODE.txt") `
+              (Join-Path $licenses "Microsoft.AI.DirectML.LICENSE-CODE.txt")
+            Copy-Item (Join-Path $nuget "microsoft.ai.directml/1.15.4/ThirdPartyNotices.txt") `
+              (Join-Path $licenses "Microsoft.AI.DirectML.ThirdPartyNotices.txt")
+            $readme = "DirectML ONNX Runtime provider pack for WhisperWriter Parakeet (x64). Extract this ZIP into the WhisperWriter application directory."
+          } else {
+            $assemblyName = "WhisperWriter.OrtRuntime.Cuda"
+            Copy-Item (Join-Path $nuget "microsoft.ml.onnxruntime.gpu.windows/1.31.1/LICENSE") `
+              (Join-Path $licenses "Microsoft.ML.OnnxRuntime.Gpu.Windows.LICENSE")
+            Copy-Item (Join-Path $nuget "microsoft.ml.onnxruntime.gpu.windows/1.31.1/ThirdPartyNotices.txt") `
+              (Join-Path $licenses "Microsoft.ML.OnnxRuntime.Gpu.Windows.ThirdPartyNotices.txt")
+            $readme = @(
+              "CUDA ONNX Runtime provider pack for WhisperWriter Parakeet (x64). Extract this ZIP into the WhisperWriter application directory."
+              "Requires compatible CUDA 13 and cuDNN 9 runtime DLLs; this ZIP does not include CUDA/cuDNN dependencies."
+              "The app searches runtimes/cuda/win-x64 when present and the current process PATH."
+              "Its separate Whisper.net CUDA runtime may not include every ONNX dependency, especially cuDNN."
+              "Set the CUDA/cuDNN runtime directory in Settings when needed."
+            ) -join " "
+          }
+          Copy-Item (Join-Path $nuget "microsoft.ml.onnxruntime.managed/${{ matrix.version }}/LICENSE.txt") `
+            (Join-Path $licenses "Microsoft.ML.OnnxRuntime.Managed.LICENSE.txt")
+          Copy-Item (Join-Path $nuget "system.numerics.tensors/9.0.0/LICENSE.TXT") `
+            (Join-Path $licenses "System.Numerics.Tensors.LICENSE.txt")
+          Set-Content (Join-Path $pack "README.txt") $readme -Encoding utf8
+
+          $required = @(
+            "${assemblyName}.dll",
+            "${assemblyName}.deps.json",
+            "onnxruntime.dll",
+            "onnxruntime_providers_shared.dll"
+          )
+          if ($provider -eq "directml") { $required += "DirectML.dll" }
+          if ($provider -eq "cuda") { $required += "onnxruntime_providers_cuda.dll" }
+          foreach ($file in $required) {
+            if (-not (Test-Path (Join-Path $pack $file))) {
+              throw "Required $provider provider file is missing: $file"
+            }
+          }
+
+          $forbidden = Get-ChildItem $pack -Recurse -File |
+            Where-Object {
+              $_.Extension -in @('.pdb', '.lib') -or
+              $_.Name -in @('DirectML.Debug.dll', 'onnxruntime_providers_tensorrt.dll')
+            }
+          if ($forbidden) { throw "Unexpected debug or unused provider assets remain in $pack." }
+
+      - name: Create provider ZIP
+        shell: pwsh
+        run: |
+          $zipName = "WhisperWriter-ORT-${{ matrix.id }}-${{ matrix.version }}-win-x64.zip"
+          Compress-Archive -Path "provider-stage/runtimes" -DestinationPath $zipName -Force
+          echo "ORT_ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+
+      - name: Upload provider artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ORT_ZIP_NAME }}
+          path: ${{ env.ORT_ZIP_NAME }}
+          retention-days: 1
+
   # ─────────────────────────────────────────────────────────────────────────────
-  # Create GitHub Release and attach all ZIPs
+  # Create GitHub Release and attach all app/provider ZIPs
   # ─────────────────────────────────────────────────────────────────────────────
   release:
     name: Create GitHub Release
-    needs: build
+    needs: [build, ort-provider-packs]
     runs-on: ubuntu-latest
 
     steps:
-      # ── 1. Download all ZIPs produced by the build matrix ────────────────────
-      - name: Download all artefacts
+      # ── 1. Download only the ZIPs approved for release ──────────────────────
+      - name: Download x64 application ZIP
         uses: actions/download-artifact@v4
         with:
+          name: WhisperWriter-${{ github.ref_name }}-win-x64.zip
           path: zips
-          merge-multiple: true
 
-      - name: List downloaded files
-        run: ls -lh zips/
+      - name: Download x86 application ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: WhisperWriter-${{ github.ref_name }}-win-x86.zip
+          path: zips
+
+      - name: Download DirectML provider ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: WhisperWriter-ORT-directml-1.24.4-win-x64.zip
+          path: zips
+
+      - name: Verify release ZIP set excludes CUDA provider pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "zips/WhisperWriter-${{ github.ref_name }}-win-x64.zip"
+          test -f "zips/WhisperWriter-${{ github.ref_name }}-win-x86.zip"
+          test -f "zips/WhisperWriter-ORT-directml-1.24.4-win-x64.zip"
+          if find zips -maxdepth 1 -type f -name 'WhisperWriter-ORT-cuda-*.zip' -print -quit | grep -q .; then
+            echo "CUDA provider ZIP must not be attached to this release." >&2
+            exit 1
+          fi
+          ls -lh zips/
 
       # ── 2. Create Release + upload assets ────────────────────────────────────
       - name: Create GitHub Release
