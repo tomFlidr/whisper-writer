@@ -34,10 +34,13 @@ No data leaves the computer. CUDA GPU acceleration is automatic.
 | Item | Value |
 |---|---|
 | Platform | Windows 11 or newer, .NET 8, WPF + WinForms (NotifyIcon) |
-| Version | 1.2.0.0 |
+| Version | 1.4.0.0 |
 | Project | `D:\tec\cs\whisper-writer-wpf\WhisperWriter\WhisperWriter.csproj` |
-| Inference | Whisper.net; CPU path available, CUDA runtime optional |
-| Whisper.net | 1.9.0 (+ Runtime + Runtime.Cuda) |
+| Inference | Whisper.net for current Whisper; isolated ONNX Runtime provider packs prepare future Parakeet |
+| Whisper.net | 1.9.0 (+ Runtime + Runtime.Cuda + Runtime.Vulkan; GPU runtimes are x64-only) |
+| ONNX Runtime CPU | Microsoft.ML.OnnxRuntime 1.31.1; separate x64 provider project, staged in the x64 app |
+| ONNX Runtime DirectML | Microsoft.ML.OnnxRuntime.DirectML 1.24.4; optional x64 provider ZIP |
+| ONNX Runtime CUDA | Microsoft.ML.OnnxRuntime.Gpu.Windows 1.31.1; separate x64 provider; CI-only in v1.4.0; CUDA 13/cuDNN 9 required |
 | NAudio | 2.2.1 |
 | Microsoft.Data.Sqlite | 8.0.0 |
 | System.Management | 8.0.0 |
@@ -52,8 +55,9 @@ No data leaves the computer. CUDA GPU acceleration is automatic.
 
 ## 3. Project structure
 
-The production project contains 72 C# files and 5 XAML files. The test project contains 35 C# files;
-see the coverage inventory for the baseline and current behavior-to-test mappings.
+The WPF project contains 96 C# files and 5 XAML files. The separate ORT contracts/provider sources contain
+10 C# files. The test project contains 47 C# files, including 4 shared `TestSupport` files; see the coverage
+inventory for baseline and current behavior-to-test mappings.
 
 ```
 D:\tec\cs\whisper-writer-wpf\
@@ -61,35 +65,52 @@ D:\tec\cs\whisper-writer-wpf\
 │   ├── ROADMAP.md
 │   ├── SKILLS.md
 │   ├── skills\                 ← project conventions and workflows
-│   └── specs\                  ← Phase 0 test and coverage specifications
+│   └── specs\                  ← Phase 0/3 test, coverage, and backend specifications
 ├── .github\workflows\          ← release.yml and tests.yml
 ├── AGENTS.md
 ├── .editorconfig
 ├── README.md
 ├── WhisperWriter.sln
+├── WhisperWriter.OrtRuntime.Contracts\ ← app-owned provider/plugin contract
+├── WhisperWriter.OrtRuntime.Shared\    ← shared adapter source linked into provider projects
+├── WhisperWriter.OrtRuntime.Cpu\       ← x64 CPU ONNX Runtime provider pack
+├── WhisperWriter.OrtRuntime.DirectML\  ← x64 DirectML ONNX Runtime provider pack
+├── WhisperWriter.OrtRuntime.Cuda\     ← x64 CUDA ONNX Runtime provider pack
 ├── WhisperWriter\               ← WPF application project
-│   ├── App.xaml / App.xaml.cs   ← WPF resources and application lifecycle
+│   ├── App.xaml / App.xaml.cs   ← resources, lifecycle, and background initialization
 │   ├── Program.cs               ← entry point and DI startup
 │   ├── AssemblyInfo.cs
+│   ├── Apps\                    ← IAppRuntime and its application adapter
+│   ├── Programs\                ← IProgramRuntime and its startup adapter
+│   ├── Contracts\               ← shared ITranscription contract
 │   ├── DI\                      ← Autofac setup and injection helpers
-│   ├── Models\                  ← AppSettings and TranscriptionEntry
+│   ├── Models\                  ← settings, backend/job/queue/focus/memory data
 │   ├── Services\
 │   │   ├── EtaCalcs\            ← ETA environment, power-state, and native helpers
-│   │   ├── MainWindows\         ← placement and window-style behavior
-│   │   ├── TextInjectors\       ← native input structures
-│   │   ├── Whispers\            ← whisper-native declarations
-│   │   └── service implementations and testable platform seams
+│   │   ├── Inference\           ← Capacity\ and Memory\ subfamilies
+│   │   ├── MainWindows\         ← Position/Style owners and helper subfolders
+│   │   ├── OnnxRuntime\         ← provider selection, catalog, loader, and factory
+│   │   ├── Persistence\         ← transcription history
+│   │   ├── Recording\           ← AudioRecorder and AudioRecorders\ boundary
+│   │   ├── SpeechPipeline\      ← queue and TranscriptionQueues\ support types
+│   │   ├── TextOutput\          ← text injection and TextInjectors\ helpers
+│   │   ├── TrayMenus\           ← tray platform/window contracts and adapters
+│   │   ├── Whispers\            ← Whisper.net runtime adapters
+│   │   └── core services and testable platform seams
 │   ├── Utils\                   ← virtual-key helper, enums, shared interfaces
-│   ├── Views\                   ← windows and platform adapters
+│   ├── Views\
+│   │   ├── Adapters\            ← shared window platform adapter
+│   │   └── Screens\             ← four windows and MainWindows\ runtime helpers
 │   ├── Properties\PublishProfiles\
 │   ├── llms\                    ← local model/history data location
 │   ├── setup-dev.ps1/.bat
 │   ├── download-models.ps1/.bat
 │   ├── settings.json
 │   └── WhisperWriter.csproj
-└── WhisperWriter.Tests\         ← xUnit v3 / VSTest characterization tests
-    ├── DI, Models, Services, Utils, Views
-    ├── TestSupport\             ← WPF host and deterministic fakes
+└── WhisperWriter.Tests\         ← xUnit v3 / VSTest tests (47 C# files)
+    ├── DI\, Models\, Services\, Utils\, Views\Screens\
+    ├── TestSupport\             ← four shared WPF host/runtime fakes
+    ├── TestAssembly.cs
     └── WhisperWriter.Tests.csproj
 ```
 
@@ -100,36 +121,54 @@ D:\tec\cs\whisper-writer-wpf\
 - Production source paths below are rooted at `WhisperWriter/`; the test project is the sibling
   `WhisperWriter.Tests/` directory. Commands run from the solution root unless stated otherwise.
 - `Program.cs` bootstraps Autofac through `DI/Container.cs`, resolves `App`, initializes WPF, and
-  runs it. `IProgramRuntime` and `IAppRuntime` expose deterministic startup/lifecycle boundaries.
+  runs it. `Programs/IProgramRuntime` and `Apps/IAppRuntime` expose deterministic boundaries; their
+  production `Runtime` adapters are in the same owner folders.
 - `App.xaml.cs` loads settings, configures global exception handlers, shows `MainWindow`, and starts
   Whisper initialization through a background task so synchronous native/model loading does not block
-  the Dispatcher. The widget immediately reports `GPU Detection…`, then the detected CUDA/CPU path.
+  the Dispatcher. The widget reports neutral `Loading model…` until Whisper initialization succeeds,
+  then shows only the backend reported by the loaded runtime. Its application adapter is `Apps/Runtime.cs`.
   The app disposes ETA resources and flushes logging on exit.
-- Core services live in `Services/`: `Settings`, `TranscriptionHistory`, `AudioRecorder`, `Hotkey`,
-  `Whisper`, `EtaCalc`, `TextInjector`, `TranscriptionQueue`, `InferenceCapacityManager`,
-  `WindowsInferenceMemoryMonitor`, `TrayMenu`, and `Log`. Platform seams keep native/device
-  effects testable while production defaults remain unchanged.
+- Core services live in `Services/`: `Settings`, `Hotkey`, `Whisper`, `EtaCalc`, `TrayMenu`, and `Log`.
+  Specialized services are grouped under `Persistence/`, `Recording/`, `TextOutput/`, `SpeechPipeline/`,
+  `Inference/Capacity/Manager`, `Inference/Memory/WindowsMonitor`, and `OnnxRuntime/`. Shared job, queue,
+  focus, memory, and verified backend data is under `Models/`. Platform seams keep native/device effects
+  testable while production defaults remain unchanged.
 - `TranscriptionQueue` uses configurable `AppSettings.MaxOutstandingTranscriptionJobs` and
   `MaxBufferedAudioMiB`. The audio budget is a soft admission threshold; an admitted recording is
   retained until inference completes and may exceed it. After an overshoot, new PTT attempts remain
   paused until all outstanding jobs drain; a pause caused only by the job-count limit clears when
   a slot opens.
-- `Services/MainWindows/` contains `Position` and `Style`; `Models/` contains `AppSettings` and
-  `TranscriptionEntry`; shared enums and marker interfaces are under `Utils/Enums/` and
-  `Utils/Interfaces/`.
-- `Views/` contains `MainWindow`, `SettingsWindow`, `HistoryWindow`, and `AboutWindow` plus runtime
-  and Windows-platform adapters. XAML event behavior is mapped in the Phase 0 inventory.
+- `Services/MainWindows/` contains the `Position` and `Style` owners, with collaborators in `Positions/`
+  and `Styles/`. `Models/` contains `AppSettings`, `TranscriptionEntry`, and the shared backend/job/queue/
+  focus/memory types. Shared enums and marker interfaces are under `Utils/Enums/` and `Utils/Interfaces/`.
+- `Services/OnnxRuntime/` contains `ProviderCatalog`, `PluginLoader`, and `BackendFactory`. They load one
+  selected x64 provider pack through a provider-specific `AssemblyLoadContext`, sharing only the app-owned
+  contract. The process uses one native ORT core; changing providers requires restart. Active providers
+  are derived from ORT execution profiles after `Run`, not from DLL presence.
+- `AppSettings.OrtBackend` and `OrtCudaRuntimePath` configure only the future Parakeet ONNX path.
+  `Auto` prefers an installed DirectML pack and otherwise CPU; CUDA is explicit-only. DirectML may
+  fall back to CPU only within the same core under `Auto`; explicit selections do not cross-fallback.
+- `SettingsWindow` describes the optional provider packs and CUDA/cuDNN path. Current Whisper
+  transcription remains on Whisper.net; the Parakeet audio-to-text pipeline is not implemented.
+- `Views/Screens/` contains `MainWindow`, `SettingsWindow`, `HistoryWindow`, and `AboutWindow`; the
+  MainWindow runtime contract/adapter is in `Screens/MainWindows/`. Shared window adapters are in
+  `Views/Adapters/`. XAML event behavior is mapped in the Phase 0 inventory.
 - `WhisperWriter.Tests/` uses xUnit v3 with VSTest and targets `net8.0-windows7.0`.
-  The Phase 0 baseline mapped 95 behavior-bearing contracts and 15 XAML event assignments;
-  the inventory also records Phase 2 queue, settings and UI additions.
-- Phase 0 was locally verified on November 4, 2026: 185/185 tests passed in both Debug and Release;
-  application builds completed with zero warnings and zero errors. Hosted GitHub Actions has not run.
+  The Phase 0 baseline mapped 95 behavior-bearing contracts and 15 XAML event assignments; two
+  Phase 2 numeric-input assignments bring the current XAML map to 17. The inventory records later additions.
+- Historical local milestones: Phase 0 passed 185/185 Debug and Release tests on November 4, 2026; the Phase 3
+  provider milestone passed 257/257 in both configurations on November 11, 2026. Both milestones had
+  zero-warning, zero-error builds.
+- Local verification before the final Section 10 ordering corrections (November 12, 2026): Debug and Release
+  suites each passed 257/257; full solution builds each completed with 0 warnings and 0 errors. Rerun on the
+  corrected worktree is pending. Hosted GitHub Actions has not run.
 - Irreducible physical integrations (real microphone, global focus/input, clipboard/registry writes,
   Windows shell/HWND behavior, installed CUDA/model inference) are documented in the inventory;
   surrounding application decisions are tested through fakes.
 
 For detailed behavior-to-test mappings and exact commands, use
-`.agents/specs/phase-0-coverage-inventory.md` and `.agents/specs/phase-0-automated-testing.md`.
+`.agents/specs/phase-0-coverage-inventory.md`, `.agents/specs/phase-0-automated-testing.md`,
+`.agents/specs/phase-3-gpu-and-onnx-backends.md`, and `.agents/phase-3-progress.md`.
 The following appendix is historical and must not be used as current implementation guidance.
 
 ## Appendix A. Historical file notes (superseded)

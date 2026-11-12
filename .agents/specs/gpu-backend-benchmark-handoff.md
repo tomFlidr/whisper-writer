@@ -1,6 +1,6 @@
 # Whisper GPU Backend Benchmark Handoff
 
-**Updated:** 2026-11-05
+**Updated:** 2026-11-12 (current-source references refreshed; benchmark results remain from November 5, 2026)
 **Status:** Both the 10-recording Media Foundation comparison and the 10-recording direct-PCM `iAudioBuffer` comparison are complete.
 
 ## User's current direction
@@ -16,7 +16,9 @@ The user accepts a practical reduction in transcription time even if it is below
 
 ## Verified source and integration facts
 
-- The current source defines and uses `ITranscription` (`WhisperWriter/Services/ITranscription.cs`); `Whisper` implements it and `MainWindowRuntime` consumes it. The current roadmap instead names `ITranscriptionService`. The Phase 3.1 abstraction is functionally present, with an identifier mismatch; do not add a duplicate interface.
+- The current source defines `ITranscription` in `WhisperWriter/Contracts/ITranscription.cs`; `Whisper`
+  implements it and `WhisperWriter/Views/Screens/MainWindows/Runtime.cs` consumes it. The active roadmap
+  uses the same contract; do not add a duplicate interface.
 - The application pins Whisper.net 1.9.0. Its startup adds `runtimes/cuda/win-x64` to `PATH`; reproduce this before checking the baseline backend. Verify `RuntimeOptions.LoadedLibrary` rather than inferring active CUDA from DLL presence.
 - A clean, isolated Const-me source build succeeded through the solution-level `WhisperNet` target. Building `WhisperNet.csproj` alone fails its packaging step because its nuspec expects the native DLL at the solution-root `x64/Release` path; the solution build supplies that path. Build output includes upstream warnings.
 - A .NET 8 Windows x64 single-file probe referencing the locally built `WhisperNet` 1.12.0 package published without `Whisper.dll` in a clean output and failed with `DllNotFoundException`. Manually staging the package's native `Whisper.dll` beside the probe executable in scratch restored adapter enumeration, model loading, and transcription. Production publishing therefore needs an explicit native-DLL copy or a validated extraction configuration; this is not fixed in the app.
@@ -91,7 +93,8 @@ All used the existing `ggml-medium.bin` and the upstream `jfk.wav` sample. These
 
 ## Proposed backend selection policy
 
-- The project currently uses `ITranscription`; the roadmap's Phase 4.1 uses the different name `ITranscriptionService`.
+- The project and active roadmap use `ITranscription` from
+  `WhisperWriter/Contracts/ITranscription.cs`; do not add a parallel `ITranscriptionService` contract.
 - In `Auto`, use Whisper.net's reported active runtime, not CUDA DLL presence. Keep CUDA when `RuntimeOptions.LoadedLibrary` reports CUDA; preserve its CPU fallback.
 - Do not select Const-me D3D11 solely because an adapter enumerates or model load succeeds. The Intel UHD smoke used a weak integrated GPU; its slow timing is a device-specific curiosity, not representative evidence about D3D11 or AMD GPUs. Offer D3D11 as an explicit experimental choice until representative non-NVIDIA devices prove a useful benefit, or add a carefully bounded hardware calibration before automatic selection.
 - Skip the x64-only candidate in the existing x86 release; keep CPU inference available there. Show the actual engine/device and any fallback reason.

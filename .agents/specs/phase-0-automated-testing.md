@@ -7,7 +7,7 @@
 
 Establish a repeatable automated test workflow before implementing the behavior planned in
 later roadmap phases. The active target remains Windows/WPF; cross-platform migration is
-deferred to Phase 8.
+deferred to Phase 7.
 
 ## Initial baseline (before Phase 0)
 

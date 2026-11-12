@@ -168,8 +168,11 @@ The full Debug/Release suites and builds passed after the final correction.
 - `AGENTS.md` Sections 3–4 were updated under explicit approval; Section 2 now records v1.4.0 under the
   later release authorization. Sections 1 and 5 onward remain unchanged.
 - Debug and Release each passed 257/257 tests; both solution builds completed with 0 warnings and 0 errors.
-- `git diff --check` is clean with CRLF treated as line endings. The live index is empty; 127 tracked changes
-  and 117 untracked paths remain in the worktree for the approved commit split. No commit/tag/push has occurred.
+- `git diff --check` is clean with CRLF treated as line endings. Commit `d55c247` contains the first
+  ownership/refactor group. Its detached scratch worktree passed 217/217 Debug tests and built with 0 errors;
+  the build emitted two expected signing warnings because the ignored `.pfx` is absent in a clean worktree.
+- `main` is ahead of `origin/main` by one commit; the live index is empty and 106 tracked changes plus 115
+  untracked paths remain for the approved feature/release commit groups. No tag or push has occurred.
 - The v1.4.0 workflow attaches both app ZIPs and DirectML only; CUDA remains a short-lived CI artifact.
   Hosted GitHub Actions remains unverified.
 

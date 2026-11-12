@@ -9,7 +9,7 @@
 
 A minimalist Windows desktop app for **local, privacy-first push-to-talk voice transcription**. Inspired by Wispr Flow.
 
-Hold a keyboard shortcut, speak, release — the transcribed text is instantly typed into whatever window you were using. Nothing ever leaves your computer.
+Hold a keyboard shortcut, speak, release — the transcribed text is instantly typed into whatever window you were using. Audio and transcripts stay local; model downloads are an intentional network action.
 
 ---
 
@@ -18,6 +18,8 @@ Hold a keyboard shortcut, speak, release — the transcribed text is instantly t
 - [Features](#features)
 - [Requirements](#requirements)
 - [Installation](#installation)
+- [ONNX Runtime provider packs](#onnx-runtime-provider-packs)
+- [NVIDIA CUDA setup (temporary)](#nvidia-cuda-setup-temporary)
 - [Downloading Models](#downloading-models)
 - [First Run](#first-run)
 - [How to Use](#how-to-use)
@@ -37,13 +39,15 @@ Hold a keyboard shortcut, speak, release — the transcribed text is instantly t
 - 🎙️ **Push-to-talk** recording with a **configurable hotkey** — default is `Left Alt + Left Win`
 - 🤖 **Local AI transcription** via [Whisper.net](https://github.com/sandrohanea/whisper.net) (whisper.cpp backend) — no cloud, no API key
 - 🎧 **Overlapping recordings** — record another clip while earlier jobs are transcribed or wait in a FIFO queue
-- ⚡ **CUDA GPU acceleration** — automatic if an NVIDIA GPU is present
+- ⚡ **Optional GPU acceleration** — Whisper.net tries its configured runtimes; after initialization the widget
+  reports the runtime that actually loaded. CPU fallback remains available; CUDA/Vulkan require compatible
+  x64 GPU, driver, and runtime packages.
 - 🌍 **57 languages** supported, including auto-detection
 - 🪟 **Floating pill widget** — stays on top, draggable, remembers position
 - ⏱️ **Adaptive ETA countdown** — estimated from real previous transcription timings stored locally per model and runtime environment
 - 📋 **Transcription history** — browse, select and copy past transcriptions
 - 🔕 **System tray** — runs silently in the background
-- 🔒 **100% offline** — your voice data never leaves the machine
+- 🔒 **Local, privacy-first inference** — audio and transcripts stay on-device; no cloud transcription service
 
 ---
 
@@ -55,10 +59,11 @@ Hold a keyboard shortcut, speak, release — the transcribed text is instantly t
 | Runtime | [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) |
 | RAM | 4 GB (8 GB+ recommended for large models) |
 | Disk | 78 MB – 3 GB depending on the chosen model |
-| GPU (optional) | NVIDIA GPU with CUDA support (strongly recommended for large/medium models) |
+| GPU (optional) | Supported x64 GPU/driver/runtime for CUDA or Vulkan; `win-x86` uses the CPU runtime only |
 | Microphone | Any Windows-recognized input device |
 
-> **Without a CUDA-capable GPU** the app still works, but transcription will be significantly slower on large models. Use `small` or `tiny` models for CPU-only usage.
+> **Without a supported GPU runtime** the app still works through the CPU runtime. Performance depends on
+> the model and device; use a smaller model if CPU transcription is too slow.
 
 ---
 
@@ -70,6 +75,66 @@ Hold a keyboard shortcut, speak, release — the transcribed text is instantly t
 4. **Run** `WhisperWriter.exe`.
 
 > If Windows shows a SmartScreen warning, click **More info → Run anyway**. The executable is signed with a self-signed certificate.
+
+---
+
+## ONNX Runtime provider packs
+
+The x64 application package includes the CPU ONNX Runtime pack under `runtimes/onnx/cpu`.
+The DirectML provider pack is a separate optional ZIP attached to the release. The ONNX CUDA
+provider ZIP is intentionally not attached to v1.4.0; CI builds it as a short-lived artifact for
+verification only.
+
+These are provider libraries for the planned Parakeet ONNX engine, **not a separate plugin application**.
+Whisper continues using Whisper.net and is unaffected. The Parakeet transcription pipeline is not yet
+included; until it is added, this setting does not change Whisper transcription.
+
+- `Auto` uses DirectML when its pack is present, otherwise CPU. CUDA is an explicit choice.
+- The app loads only the selected provider pack into its process. Other pack DLLs remain on disk.
+  Changing provider requires restarting the app.
+- ONNX Runtime CUDA requires compatible CUDA 13 and cuDNN 9. Installing those runtime DLLs alone is
+  insufficient: the ONNX CUDA provider pack and Parakeet transcription engine are also required. The
+  app searches the configured runtime folder, its existing `runtimes/cuda/win-x64` folder (if present),
+  and the current process `PATH`.
+- The `win-x86` application remains CPU-only for Whisper and does not include ONNX provider packs.
+
+---
+
+## NVIDIA CUDA setup (temporary)
+
+WhisperWriter has two separate CUDA paths. Follow the instructions for the engine you intend to use;
+the Whisper.net and ONNX Runtime requirements are not interchangeable.
+
+### CUDA for the current Whisper engine (Whisper.net)
+
+1. Use the `win-x64` application ZIP. The `win-x86` package is CPU-only.
+2. Install a supported NVIDIA driver for your GPU.
+3. Install the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) for Windows. The pinned
+   `Whisper.net.Runtime.Cuda` 1.9.0 runtime documents CUDA Toolkit 13.0.1 or newer; see the
+   [Whisper.net CUDA prerequisites](https://github.com/sandrohanea/whisper.net/blob/main/readme.md)
+   and NVIDIA's [Windows installation guide](https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html).
+4. Ensure the Toolkit's `bin` directory is on the Windows `PATH`, then start a new WhisperWriter
+   process. Install the required Visual C++ 2022 x64 Redistributable from the upstream prerequisites
+   above if it is missing.
+5. Verify the driver with `nvidia-smi` and the Toolkit with `nvcc --version`.
+6. Start WhisperWriter and wait for model initialization. `Ready (Cuda)` confirms CUDA actually
+   loaded. `Ready (Vulkan)` or `Ready (Cpu)` means another runtime loaded instead; check the app log
+   and verify the driver, Toolkit, and `PATH`.
+
+Whisper.net selects its runtime automatically; there is no Whisper CUDA selector in Settings. The
+`Parakeet provider` setting below does not affect Whisper. Whisper.net's documented CUDA prerequisites
+list the CUDA Toolkit; the cuDNN requirement belongs to the separate ONNX Runtime path.
+
+### CUDA for the future Parakeet ONNX engine
+
+This is a different provider and does not accelerate current Whisper transcription. The v1.4.0 release
+does not include its ONNX CUDA provider pack, and Parakeet audio-to-text is not implemented yet.
+Installing CUDA/cuDNN alone therefore **cannot enable Parakeet inference in v1.4.0**.
+
+When a Parakeet release includes the provider pack, the manual runtime setup will require compatible
+CUDA 13.x and cuDNN 9.x. Use the [ONNX Runtime CUDA requirements](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html)
+and the [NVIDIA cuDNN Windows installation guide](https://docs.nvidia.com/cudnn/installation/backend/windows/).
+The app's **ONNX CUDA/cuDNN runtime directory** setting is only for this future Parakeet path.
 
 ---
 
@@ -123,9 +188,10 @@ On the very first launch:
 1. The app checks for `llms\ggml-large-v2.bin` by default.
 2. If the model file is **not found**, it automatically downloads `ggml-medium` (~1.5 GB) from the official Hugging Face repository. This may take a few minutes depending on your connection.
 3. The app also creates a local SQLite database `llms\eta-time-stats.db` for ETA timing statistics.
-4. The floating pill widget appears at the bottom-center of your screen immediately showing
-   **"GPU Detection…"**. It then reports whether CUDA or CPU was detected while the model loads (or downloads).
-5. Once it shows **"Ready"**, you can start transcribing.
+4. The floating pill widget appears at the bottom-center of your screen with **"Loading model…"** while
+   Whisper checks or downloads the model. It does not guess GPU support from CUDA DLL presence. After the
+   model initializes, the ready status reports the runtime actually loaded when it is recognized.
+5. Once it shows **"Ready"** (optionally with the loaded provider), you can start transcribing.
 
 ---
 
@@ -161,6 +227,8 @@ Open Settings via the **tray icon → Settings**.
 | Setting | Description |
 |---|---|
 | **Model** | Which Whisper model to use. Affects accuracy, speed and VRAM usage. See [Whisper Models](#whisper-models). |
+| **Parakeet provider** | `Auto` / CPU / DirectML / CUDA for Parakeet only; no effect on Whisper. |
+| **ONNX CUDA/cuDNN path** | Runtime folder for the future Parakeet ONNX CUDA provider; it does not change Whisper inference. |
 | **Language** | Transcription language. `auto` attempts to detect the language automatically. Explicitly selecting a language is faster and more reliable. |
 | **Prompt** | Optional hint text for Whisper. Use it to teach the model uncommon words, names or formatting. Example: `Whisper, GPT-4, OpenAI, CUDA`. |
 | **Push-to-talk hotkey** | Configurable directly in Settings. Click **Change…**, hold the desired key combination, then release it to save. Default is `Left Alt + Left Win`. |
@@ -271,7 +339,9 @@ WhisperWriter stores ETA timing data in a local SQLite database:
 - File: `llms\eta-time-stats.db`
 - The database is used only to improve the ETA countdown.
 - It stores timing samples per **model** and per detected **runtime environment**.
-- The environment fingerprint includes CPU, all detected GPUs (stored as a sorted array), RAM, OS version, whether Whisper is running on CPU or GPU, CUDA version, Whisper thread count, AC/battery power, and power-saver state.
+- The environment fingerprint keeps CPU/GPU inventory separate from the verified active engine/runtime/provider
+  descriptor. CUDA major version is included only when the loaded runtime identifies it; thread count, AC/battery
+  power, and power-saver state are stored independently.
 - For a new ETA estimate, WhisperWriter prefers past transcriptions with a **similar audio length** (roughly ±30%, then ±50%, then fallback to all samples for the same model/environment).
 - ETA is shown only after at least **one previous matching sample** exists, so it starts appearing from the **second matching transcription** onward.
 
@@ -279,10 +349,12 @@ WhisperWriter stores ETA timing data in a local SQLite database:
 
 ## Privacy
 
-- **No internet connection required** after the model is downloaded (first run only).
-- **No telemetry, no analytics, no tracking** of any kind.
+- **No cloud transcription:** recorded audio and transcript text are processed locally and are not sent to
+  a cloud transcription service.
+- **ONNX Runtime telemetry is disabled** by setting `ORT_DISABLE_TELEMETRY=1` in the app process before
+  loading an ORT provider.
+- Internet is used only for model downloads and optional provider-pack downloads; inference itself is local.
 - Audio is recorded **only while the hotkey is held** and is discarded immediately after transcription.
-- Audio data **never leaves your computer** — transcription runs entirely locally using whisper.cpp.
 
 ---
 
@@ -330,8 +402,9 @@ cd whisper-writer
 # One-time setup (NuGet restore, CUDA DLL copy, model download prompt)
 .\WhisperWriter\setup-dev.bat
 
-# Build
-dotnet build WhisperWriter/WhisperWriter.csproj -c Debug
+# Restore and build the app plus the isolated ORT provider projects
+dotnet restore WhisperWriter.sln
+dotnet build WhisperWriter.sln -c Debug
 
 # Run
 .\WhisperWriter\bin\Debug\net8.0-windows7.0\WhisperWriter.exe
@@ -339,9 +412,18 @@ dotnet build WhisperWriter/WhisperWriter.csproj -c Debug
 
 > Before building, make sure `WhisperWriter.exe` is not running — the output file will be locked by the running process.
 
-### CUDA DLL version detection
+### CUDA runtime packaging (x64)
 
-The MSBuild target `CopyCudaRuntimeDlls` in `WhisperWriter/WhisperWriter.csproj` automatically derives the CUDA major version from the `CudaBinDir` path (e.g. `…\CUDA\v13.2\bin\x64` → version `13`). The correct DLL names are assembled at build time — no manual version editing is needed. `WhisperWriter/setup-dev.ps1` updates `CudaBinDir` in the project file to match whatever CUDA version is installed on the machine. Build output is under `WhisperWriter/bin/<Configuration>/net8.0-windows7.0/`.
+`CopyCudaRuntimeDllsToBuild` and `CopyCudaRuntimeDllsToPublish` copy the configured CUDA runtime DLLs
+under `runtimes/cuda/win-x64`. They derive the CUDA major version from `CudaBinDir`; they are loader
+packaging steps, not GPU-support detection. `WhisperWriter/setup-dev.ps1` can update `CudaBinDir` to the
+locally installed toolkit. The `win-x86` release excludes CUDA and Vulkan packages and remains CPU-only.
+
+ONNX Runtime packages are in separate `WhisperWriter.OrtRuntime.*` provider projects, not the main WPF
+project. Build `WhisperWriter.sln` to compile them. The release workflow stages the CPU provider pack
+inside the x64 app ZIP and publishes the DirectML pack as a separate optional ZIP. The CUDA provider
+pack is built as a short-lived CI artifact but is not attached to the v1.4.0 release. It omits CUDA/cuDNN
+runtime DLLs and Parakeet transcription is not implemented; see the temporary CUDA guide above.
 
 ### Key dependencies
 
@@ -350,6 +432,10 @@ The MSBuild target `CopyCudaRuntimeDlls` in `WhisperWriter/WhisperWriter.csproj`
 | Whisper.net | 1.9.0 | Whisper model inference |
 | Whisper.net.Runtime | 1.9.0 | Native whisper.cpp runtime |
 | Whisper.net.Runtime.Cuda | 1.9.0 | CUDA GPU acceleration |
+| Whisper.net.Runtime.Vulkan | 1.9.0 | Vulkan GPU runtime (x64) |
+| Microsoft.ML.OnnxRuntime (CPU provider project) | 1.31.1 | Parakeet CPU runtime pack |
+| Microsoft.ML.OnnxRuntime.DirectML | 1.24.4 | Optional Parakeet DirectML provider pack |
+| Microsoft.ML.OnnxRuntime.Gpu.Windows | 1.31.1 | Optional Parakeet CUDA provider pack |
 | NAudio | 2.2.1 | Microphone capture |
 | Microsoft.Data.Sqlite | 8.0.0 | Local ETA timing statistics database |
 | System.Management | 8.0.0 | Windows hardware discovery for ETA environment fingerprinting |
@@ -370,15 +456,20 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
-GitHub Actions will automatically:
-1. Build the project for **Windows x64** (with CUDA support) and **Windows x86** (CPU only).
-2. Pack each build into a ZIP archive.
-3. Create a **GitHub Release** with auto-generated release notes and attach both ZIPs.
+For the approved v1.4.0 release, GitHub Actions will automatically:
+1. Build the app for **Windows x64** and **Windows x86**. The x64 ZIP includes the Parakeet CPU ORT pack;
+   x86 remains CPU-only for Whisper and contains no ONNX provider pack.
+2. Build the optional DirectML ZIP for release. The CUDA provider pack is built for CI verification but
+   is not attached to v1.4.0; CUDA/cuDNN runtime provisioning is still pending.
+3. Create a **GitHub Release** with auto-generated release notes and attach the two app ZIPs and the
+   DirectML provider ZIP.
 
-| Archive | Runtime | GPU |
-|---|---|---|
-| `WhisperWriter-v1.x.x-win-x64.zip` | Windows 64-bit | CUDA (NVIDIA) + CPU fallback |
-| `WhisperWriter-v1.x.x-win-x86.zip` | Windows 32-bit | CPU only |
+| Archive | Contents |
+|---|---|
+| `WhisperWriter-v1.x.x-win-x64.zip` | x64 app with Parakeet CPU pack; optional Whisper GPU runtimes |
+| `WhisperWriter-v1.x.x-win-x86.zip` | 32-bit app, CPU-only Whisper; no ONNX provider pack |
+| `WhisperWriter-ORT-directml-1.24.4-win-x64.zip` | Optional DirectML pack; extract into the x64 app folder |
+| ONNX CUDA provider pack | Not attached to v1.4.0; see the temporary CUDA guide and Phase 3.4 status |
 
 > **Pre-releases**: if the tag name contains a hyphen (e.g. `v1.0.0-beta`), the GitHub Release is automatically marked as a pre-release.
 

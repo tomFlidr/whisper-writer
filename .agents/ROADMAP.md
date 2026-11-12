@@ -23,16 +23,32 @@ Hosted GitHub Actions zatím neběželo; výsledek zůstává neověřený.
 
 ## Fáze 3 – Další GPU backendy a ONNX Runtime
 
-> Další backendy pro Whisper.net a ONNX Runtime; tato fáze musí proběhnout před
-> implementací Parakeet (Fáze 7). Nezávisí na Fázích 5 a 6.
+> Fáze 3 obsahuje provider základ, provisioning CUDA/cuDNN, Parakeet V3 engine (3.5) a transakční
+> přepínání engine (3.6). Nezávisí na pozdějších Fázích 4–7.
 > U větších runtime balíčků nejprve prozkoumat distribuci; preferovat stažení s potvrzením
 > uživatele při instalaci nebo samostatný instalační skript.
 > Technické podklady a ověřovací podmínky: `.agents/specs/phase-3-gpu-and-onnx-backends.md`;
 > společná architektura: `.agents/specs/gpu-backend-capability-analysis.md`.
+> Průběžný stav a bod obnovení: `.agents/phase-3-progress.md`; načíst při zahájení/pokračování práce
+> na Fázi 3 a před shrnutím nebo předáním kontextu.
 >
 > **Výběr:** `Auto` použije ověřené pořadí backendů zvoleného engine. Výslovně zvolená knihovna/provider
 > je autoritativní; aplikace ji nesmí potichu nahradit jiným enginem. `Auto` může vybírat jen kompatibilní
 > kombinace modelu, knihovny a provideru.
+>
+> **Fáze 3.0 je dokončena** a přesunuta do sekce **Dokončeno**. Provider pakety 3.2/3.3 byly schváleny
+> a implementovány jako oddělené x64 projekty: CPU ORT 1.31.1, DirectML 1.24.4 a CUDA 1.31.1. WPF host
+> sdílí pouze vlastní kontrakt a v jednom procesu používá jen jeden nativní ORT core; přepnutí vyžaduje restart.
+> Produkční loader přes syntetické vstupy spustil všechny tři Parakeet v3 int8 grafy na CPU, DirectML i CUDA;
+> profily zaznamenaly CPU plus vybraný GPU provider. Nejde o audio-to-text, benchmark ani kvalitu přepisu.
+> X64 app ZIP obsahuje CPU pack; DirectML je volitelný ZIP v releasu. ONNX CUDA provider pack workflow
+> sestaví jen jako krátkodobý CI artefakt, ale v1.4.0 jej nepřipojí k veřejnému releasu. Důvodem je jeho
+> velikost a nedokončené doručení CUDA/cuDNN runtime. README dočasně odděluje současné Whisper.net CUDA
+> od budoucího ONNX CUDA pro Parakeet; instalace CUDA sama Parakeet inference v1.4.0 nezapne.
+> Hosted GitHub Actions zatím neběželo. Podrobnosti jsou ve specifikaci Fáze 3.
+> **Fáze 3 není dokončena:** 3.4 musí vyřešit doručení CUDA/cuDNN bez ručního hledání DLL; 3.5
+> implementuje Parakeet V3 a 3.6 přidá transakční interaktivní přepnutí engine. Všechny tři položky jsou
+> povinné pro uzavření fáze.
 
 ---
 
@@ -49,42 +65,52 @@ Byl vyžádán i Vulkan `GpuDevice=1`; `vulkaninfo` na hostu uvádí Intel UHD j
 však nevrátil název fyzického zařízení, takže toto mapování není přímo potvrzené. Žádná AMD karta
 nebyla testována. Podrobnosti a omezení jsou v `.agents/specs/phase-3-gpu-and-onnx-backends.md`.
 
-**Co se změní:**
-- Před produkční integrací ověřit čistý publish, podporovaný runtime/ovladač a požadavky Vulkan
-  balíčku na Windows 11 x64; zachovat CPU-only cestu pro `win-x86`.
-- Přidat `Whisper.net.Runtime.Vulkan` ve stejné verzi jako ostatní Whisper.net balíčky, případně
-  nejprve schválit a společně aktualizovat všechny runtime reference.
-- Použít automatický výběr Whisper.net; po inicializaci načíst skutečný backend přes
-  `RuntimeOptions.LoadedLibrary`. Samotná přítomnost `vulkan-1.dll` ani CUDA DLL není důkazem,
-  že daný backend skutečně inicializoval model.
-- Upravit aktuální `Whisper`/`IWhisperRuntime` a status v `MainWindow`: současná aplikace odvozuje
-  `GPU`/`CPU` pouze z CUDA DLL probe, takže by mohla Vulkan chybně označit jako CPU.
-- Ověřit fallback na CPU, načtení a přepis modelu i čistý single-file publish na skutečných
-  Windows x64 GPU; zvlášť otestovat reprezentativní AMD/Intel hardware před tvrzením o jeho podpoře.
+**Co se změnilo / zbývá:**
+- `Whisper.net.Runtime.Vulkan` 1.9.0 je přidaný v souladu s `Whisper.net`, CPU a CUDA runtime 1.9.0.
+- Release restore předává `RuntimeIdentifier`, aby se x64-only CUDA/Vulkan balíčky správně vyloučily
+  z `win-x86`; CUDA kopírovací target se také řídí RID.
+- Lokální čistý publish je ověřen: `win-x64` obsahuje pět Vulkan DLL a tři CUDA runtime DLL; `win-x86`
+  obsahuje x86 CPU runtime a žádný CUDA/Vulkan adresář. Hosted Release workflow zatím neběželo.
+- Dne 11. 11. 2026 proběhlo lokální srovnání na všech 10 českých WAV souborech (349,780 s audia):
+  CUDA request total **198,134 s**, Vulkan **125,208 s**; Vulkan byl rychlejší ve všech 10 párech.
+  Vážená WER byla shodná **73/650 (11,23 %)**; CER bylo CUDA **121/4093 (2,956 %)** a Vulkan
+  **122/4093 (2,981 %)**. Celkový rozdíl request času činil **72,926 s (36,81 %)** ve prospěch Vulkan.
+  Transcript text nebyl uložen; metriky jsou pouze ve scratch JSON uvedeném ve specifikaci.
+- Čerstvý `win-x86` publish byl 11. 11. spuštěn s modelem `ggml-small.bin`; widget dosáhl `Ready (Cpu)`.
+  x86 je tím ověřen jako launch/CPU initialization, ne jako audio-to-text transkripce.
+- Automatický výběr Whisper.net po inicializaci hlásí skutečný runtime přes `RuntimeOptions.LoadedLibrary`.
+  Samotná přítomnost `vulkan-1.dll` ani CUDA DLL není důkazem úspěšného backendu.
+- Na aktuálním hostu jsou Intel UHD a NVIDIA Quadro T2000; žádný AMD GPU. Před tvrzením o širší AMD/Intel
+  kompatibilitě je stále nutný reprezentativní AMD test. Název fyzického Vulkan zařízení runtime stabilně
+  neposkytl; srovnání používá požadovaný Vulkan device index 0.
+- Používat `ActiveBackendInfo` vytvořené po úspěšné inicializaci; během načítání zůstat u neutrálního
+  stavu. Samotný nález DLL není důkazem aktivního runtime.
 
 ---
 
 ### 3.2 DirectML backend pro ONNX Runtime (příprava pro Parakeet)
 
 **Proč:** DirectML je samostatný execution provider ONNX Runtime pro plánovaný Parakeet engine
-(Fáze 7), nikoli Whisper.net backend. Jeho použitelnost závisí na podporovaném Windows/GPU/ovladači
+(Fáze 3.5), nikoli Whisper.net backend. Jeho použitelnost závisí na podporovaném Windows/GPU/ovladači
 a pokrytí operátorů modelem; nelze předpokládat akceleraci na každém Windows 11 počítači.
 Před výběrem DirectML porovnat také aktuální doporučení Microsoftu pro WinML.
 
-**Co se změní:**
-- Přidat `Microsoft.ML.OnnxRuntime.DirectML` jen po ověření dostupnosti a kompatibility jeho zvolené
-  verze s hlavním `Microsoft.ML.OnnxRuntime` balíčkem a podporovanými modely/zařízeními (`win-x64`).
-- Do `AppSettings` přidat vlastnost `OrtBackend` s hodnotami `Auto`, `Cpu`, `DirectMl`.
-  (`CUDA` přijde v 3.3.) Výchozí hodnota: `Auto`.
-- `Auto` zkusí nakonfigurovat DirectML a při nedostupnosti použije CPU; log/status musí potvrdit
-  skutečný execution provider, nikoli jen přítomnost DLL.
-- Pokud uživatel výslovně zvolí `DirectMl` a provider nejde inicializovat, zobrazit chybu/nedostupnost;
-  nesmí se potichu přejít na jiný provider nebo engine. Automatický fallback patří pouze do `Auto`.
-- DirectML vyžaduje speciální nastavení session (`parallel_execution = false`, `memory_pattern = false`) –
-  tato nastavení budou zdokumentována komentáři přímo v kódu `ParakeetService`.
-- Ověřit, jak pokrytí ONNX operátorů DirectML ovlivňuje skutečný model a paralelní požadavky;
-  plné využití GPU ani souběh na jedné session se nesmí předpokládat.
-- Do `SettingsWindow` / `SettingsPanel` přidat volbu backendu pro ORT.
+**Stav implementace:**
+- `Microsoft.ML.OnnxRuntime.DirectML` 1.24.4 je pouze v samostatném x64 projektu
+  `WhisperWriter.OrtRuntime.DirectML`; není přidán do hlavního WPF outputu.
+- `AppSettings.OrtBackend` podporuje `Auto`, `Cpu`, `DirectMl` a `Cuda`. Výchozí `Auto` vybere
+  DirectML, pokud je jeho provider pack nainstalovaný; jinak CPU. Selhání DirectML při `Auto` může
+  přejít na CPU EP uvnitř stejného ORT core. Výslovné `DirectMl` nesmí tiše přejít na jiný provider.
+- DirectML session používá `ExecutionMode.ORT_SEQUENTIAL`, `EnableMemoryPattern=false` a serializuje
+  `Run` volání nad stejnou session.
+- Aktivní provider se odvozuje až po inference z ORT profilu. Profil všech tří ověřených grafů
+  ukázal `DmlExecutionProvider` spolu s `CPUExecutionProvider`; DLL inventář se za aktivní stav nepovažuje.
+- UI ukládá volbu ORT provideru, ale ovlivní jen Parakeet engine; Whisper zůstává na Whisper.net.
+- Čistý provider pack se publikuje jako volitelný x64 ZIP v samostatné cestě
+  `runtimes/onnx/directml`. Obsahuje také license/third-party notices. Release workflow lokálně
+  navržen, hosted GitHub Actions zatím neběželo.
+- Produkční ALC/loader smoke provedl všechny tři grafy se syntetickými vstupy. Nejde o audio-to-text
+  validaci; přesnost, latency, paměť a session-pool chování zůstávají neověřené.
 
 ---
 
@@ -93,24 +119,173 @@ Před výběrem DirectML porovnat také aktuální doporučení Microsoftu pro W
 **Proč:** CUDA je další ONNX Runtime provider pro kompatibilní NVIDIA zařízení. Jeho rychlostní
 výhoda proti DirectML je hypotéza, kterou je nutné změřit na Parakeet modelu a cílovém hardware.
 
+**Stav implementace:**
+- `Microsoft.ML.OnnxRuntime.Gpu.Windows` 1.31.1 je pouze v samostatném x64 projektu
+  `WhisperWriter.OrtRuntime.Cuda`; hlavní WPF output neobsahuje CUDA ORT core.
+- CUDA je explicitní volba; při chybě se nepřechází na jiný ORT core/provider. Aktivní CUDA se hlásí
+  pouze z ORT profilu po inference; CPU uzly se uvádějí také.
+- CUDA ORT vyžaduje kompatibilní CUDA 13 a cuDNN 9. CI-only provider pack pro v1.4.0 tyto runtime DLL
+  nezahrnuje; pokud je pack ručně sestaven, host přidá do process PATH nastavenou složku, existující
+  `runtimes/cuda/win-x64` (pokud je přítomná) a provider pack. Whisper.net CUDA runtime je oddělený a
+  nemusí obsahovat všechny závislosti ORT, zejména cuDNN.
+- CUDA provider pack se v1.4.0 nepřipojí k veřejnému releasu; x86 zůstává bez ORT packu.
+- Produkční ALC/loader smoke provedl všechny tři ověřené grafy se syntetickými vstupy. Encoder profil
+  zaznamenal 742 memcpy uzlů, decoder/joint 21. Výkon, kvalita a úplná transkripční pipeline zůstávají
+  neověřené; rychlostní výhodu CUDA nelze předpokládat.
+
+---
+
+### 3.4 Zajistit CUDA/cuDNN runtime pro ONNX CUDA bez ruční instalace
+
+**Proč:** CI-only ONNX CUDA provider pack obsahuje ORT provider, ale ne potřebné CUDA 13/cuDNN 9 runtime
+DLL. Vyžadovat po uživateli, aby je samostatně našel, nainstaloval nebo zadával jejich cestu, není hotové
+řešení. Tato položka blokuje dokončení Fáze 3.
+
+**Co se musí vyřešit:**
+- Zvolit právně a technicky podporovatelnou distribuci: přibalit redistribuovatelné DLL po kontrole
+  licencí, nebo implementovat aplikací řízené stažení z autoritativního zdroje s výslovným souhlasem.
+- Verze připnout a ověřovat integritu. Běžné použití nesmí záviset na CUDA Toolkit vývojáře, Pythonu,
+  PyTorch/ComfyUI, globálním PATH ani ručním kopírování jednotlivých DLL.
+- `OrtCudaRuntimePath` může zůstat jako pokročilý override, ne jako povinný krok běžné instalace.
+- Ověřit čistý Windows x64 instalační/publish scénář bez předinstalovaných vývojářských runtime DLL a
+  skutečný ORT session/inference běh na kompatibilní NVIDIA kartě.
+- Zachovat CPU/DirectML funkčnost a x86 bez ONNX providerů; dodat všechny license/third-party notices.
+
+**Stav:** Povinná, zatím neimplementovaná. Pokud redistribuci blokují licence, musí být před volbou
+alternativy předložen konkrétní právní/technický důvod a podporované možnosti; ruční cesta k DLL fázi neuzavírá.
+
+---
+
+### 3.5 Parakeet V3 engine
+
+> Největší nová feature – nový transkripční engine, nová stahovaná data, nová servisní třída, změny settings.
+> Závisí na provider packách 3.2/3.3 a runtime provisioningu 3.4; používá aktuální kontrakt `ITranscription`.
+> U větších modelů nejprve prozkoumat distribuci; preferovat samostatné stažení s potvrzením
+> uživatele nebo instalační skript.
+
+---
+
+#### 3.5.1 Rozšíření `WhisperWriter/download-models.ps1` o stažení Parakeet V3
+
+**Proč:** Parakeet model je distribuován jako `.tar.gz` archiv (nikoli jako jediný `.bin` soubor jako
+Whisper GGML modely). Po rozbalení vznikne **adresář** s ONNX soubory. Stávající skript umí pouze stáhnout
+a přejmenovat soubor – je třeba přidat rozbalování archivu.
+
 **Co se změní:**
-- Přidat `Microsoft.ML.OnnxRuntime.Gpu` jako CUDA provider pouze pro `win-x64` po ověření, že je
-  správným balíčkem pro zvolenou verzi ONNX Runtime; všechny ORT reference verzovat kompatibilně.
-- Rozšířit `OrtBackend` enum o hodnotu `Cuda`.
-- Při inicializaci ověřit skutečné vytvoření CUDA execution provideru; samotná existence
-  `onnxruntime_providers_cuda.dll` není potvrzením, že session používá CUDA.
-- Při výslovné volbě `CUDA` nepřejít potichu na jiný provider/engine; fallback je řízený pouze
-  nastavením `Auto` a skutečně načtený provider musí být viditelný.
-- Zjistit přesné CUDA/cuDNN a nativní DLL požadavky vybraného ORT balíčku. Nepředpokládat,
-  že současný `CopyCudaRuntimeDlls` target pro Whisper pokryje závislosti ONNX Runtime.
-- Porovnat CUDA, DirectML/WinML a CPU na stejném modelu; zaznamenat rychlost, kvalitu,
-  paměť, balení a fallback místo předpokladu, že CUDA bude vždy rychlejší.
+- Do tabulky modelů v `WhisperWriter/download-models.ps1` se přidá:
+  ```
+  Parakeet TDT 0.6B V3 (parakeet-tdt-0.6b-v3-int8)
+    Velikost: 456 MB | VRAM: ~1.5 GB
+    Jazyky: 25 evropských jazyků + ruština a ukrajinština (vč. češtiny)
+    URL: https://blob.handy.computer/parakeet-v3-int8.tar.gz
+    SHA256: 43d37191602727524a7d8c6da0eef11c4ba24320f5b4730f1a2497befc2efa77
+  ```
+- Soubor se stáhne jako `.tar.gz.tmp`, po ověření SHA256 se přejmenuje na `.tar.gz`.
+- Rozbalení `.tar.gz` v PowerShell:
+  - Primární cesta: `tar.exe` (nativně dostupný ve Windows 10 build 17063+).
+    Volání: `& tar -xzf "llms\parakeet-v3-int8.tar.gz" -C "llms\"`.
+  - Fallback pro starší Windows: inline C# přes `Add-Type` s `System.IO.Compression.GZipStream`
+    a `System.IO.Compression.TarFile` (dostupné v .NET 7+, ale PS 5.1 běží na .NET Framework –
+    proto se zde použije `tar.exe` jako jediná spolehlivá cesta na Windows 10+).
+- Po rozbalení se `.tar.gz` soubor smaže (šetří místo).
+- Výsledek: adresář `llms\parakeet-tdt-0.6b-v3-int8\` s ONNX soubory.
+- Předběžné ověření ve Fázi 3 (11. 11. 2026): archiv má 478 517 071 bajtů a jeho SHA256 odpovídá
+  hodnotě výše. Obsahuje také macOS `._` metadata soubory; extrakce je má bezpečně vynechat.
+
+---
+
+#### 3.5.2 Detekce modelů v `SettingsWindow` podle typu modelu
+
+**Proč:** Whisper používá jednotlivé `.bin` soubory, zatímco Parakeet V3 je adresář s více ONNX soubory.
+Výběr modelu musí zůstat kompatibilní s vybraným enginem.
+
+**Co se změní:**
+- Do `AppSettings` se přidá `EngineType` se stabilními hodnotami `Whisper` a `Parakeet`; výchozí je `Whisper`.
+- `SettingsWindow` bude skenovat `llms/`: `.bin` soubory označí jako Whisper modely a adresáře Parakeet
+  uzná jen při přítomnosti `nemo128.onnx`, `encoder-model.int8.onnx`, `decoder_joint-model.int8.onnx`,
+  `vocab.txt` a `config.json`.
+- Modely budou v UI označené podle engine a seznam se omezí na modely kompatibilní s výběrem.
+- Výběr modelu nesmí tiše změnit engine. Změna engine a preflight kandidátního modelu patří do Fáze 3.6.
+
+---
+
+#### 3.5.3 Implementovat `ParakeetService` přes ONNX Runtime provider factory
+
+**Proč:** Jde o samotný Parakeet V3 transkripční engine. C# service orchestruje ONNX sessions přes existující
+provider factory; nevolá Rust ani samostatný externí proces.
+
+**Model a jeho formát:**
+Soubory v adresáři `parakeet-tdt-0.6b-v3-int8/`:
+- `nemo128.onnx` (139 764 B) – audio preprocessor (log-mel spektrogram), vstupy `waveforms [float32]`,
+  `waveforms_lens [int64]`; výstupy `features`, `features_lens`.
+- `encoder-model.int8.onnx` (652 183 999 B) – enkodér, vstupy `audio_signal [float32]`, `length [int64]`;
+  výstupy `outputs`, `encoded_lengths`.
+- `decoder_joint-model.int8.onnx` (18 202 004 B) – TDT dekodér + joint network; vstupy
+  `encoder_outputs`, `targets`, `target_length`, `input_states_1/2`; výstupy `outputs`, `prednet_lengths`,
+  `output_states_1/2`. Volá se iterativně v greedy decoding smyčce.
+- `config.json` – `nemo-conformer-tdt`, `features_size: 128`, `subsampling_factor: 8`.
+- `vocab.txt` – slovník tokenů, jeden token na řádek, řádek s `<blk>` definuje blank index.
+
+**Pipeline:**
+1. Prepend 250 ms ticha (nulové PCM vzorky) před skutečný audio signál.
+2. Preprocessor session: `waveforms` → `features` (log-mel), `features_lens`.
+3. Encoder session: `audio_signal=features`, `length=features_lens` → `outputs`, `encoded_lengths`.
+4. TDT greedy decoder smyčka: předává `outputs` jako `encoder_outputs`, `targets`, `target_length`
+   a `input_states_1/2`; zpracuje `outputs`, `prednet_lengths`, `output_states_1/2` podle Rust source
+   `transcribe-rs/src/onnx/parakeet/mod.rs`.
+5. Vocabulary lookup: token IDs → text přes `vocab.txt` slovník.
+
+**Co se změní:**
+- Vznikne `Services/ParakeetService.cs` implementující aktuální rozhraní `ITranscription`.
+- Sessiony se vytvářejí přes `Services/OnnxRuntime/BackendFactory` a app-owned contracts; WPF projekt nepřidává
+  přímou ORT binding reference a nesdílí ORT typy přes plugin boundary.
+- Provider se řídí uloženým `OrtBackend`; `ActiveBackendInfo` se odvozuje z execution profilu po `Run`
+  a předává se spolu s jobem do ETA.
+- `StateChanged` event používá stejný `TranscriptionState` enum jako `Whisper`.
+
+---
+
+#### 3.5.4 Výběr a inicializace engine při startu
+
+**Proč:** Po implementaci Parakeet musí aplikace na startu vytvořit transkripční service odpovídající
+uloženému `EngineType` a nesmí při chybě tiše přepnout na jiný engine.
+
+**Co se změní:**
+- Vznikne engine factory, která podle `AppSettings.EngineType` vytvoří `Whisper` nebo `ParakeetService`.
+- `App.OnStartup` inicializuje vybranou implementaci `ITranscription` s kompatibilním modelem a providerem.
+- `MainWindow` a transkripční joby používají rozhraní `ITranscription` a zachovají identitu aktivního backendu.
+- Výběr při startu neřeší živé přepnutí v Settings. Transakční změna engine za běhu je oddělená Fáze 3.6.
+
+---
+
+### 3.6 Přidat transakční interaktivní výběr engine v Nastavení
+
+**Proč:** Volba engine není totéž co volba execution provideru. Uživatel potřebuje před uložením ověřit,
+že vybraný engine lze skutečně inicializovat, a změna nesmí poškodit ani přerušit přijaté transkripce.
+
+**Požadované chování:**
+- Po změně engine pozastavit přijímání nových PTT úloh a zobrazit, že probíhá přepnutí; všechny aktivní
+  i zařazené transkripce musí bezpečně doběhnout. Již přijaté audio se nesmí zahodit.
+- Až po vyprázdnění úloh zkusit inicializovat kandidátní engine s vybraným modelem/providerem a zobrazit
+  skutečný výsledek a ověřenou identitu runtime/provideru.
+- Tlačítko **Save** povolit až po úspěšném preflightu. Při chybě zůstanou uložené nastavení i aktivní
+  engine beze změny; chyba musí být srozumitelná a Save zůstane zakázané.
+- Při úspěchu se změna uloží až po potvrzení **Save**. Cancel/zavření vrátí původní výběr a obnoví
+  přijímání úloh. Po transakci zachovat pořadí a výsledky již přijatých úloh.
+- Preflight nesmí nevratně připnout živý proces k neuloženému ORT native core. Ověřit bezpečnou hranici
+  (izolovaný helper proces nebo řízený restart); nespoléhat na unload `AssemblyLoadContext`.
+- Pokud aktivace vyžaduje restart, říct to před uložením a nepředstírat aktivní engine před jeho skutečnou
+  inicializací. Nenabízet engine bez reálného initializeru; Parakeet z Fáze 3.5 lze nabídnout až po úspěšné inicializaci jeho skutečné service.
+
+**Stav:** Povinná, zatím neimplementovaná. Specifikace a acceptance testy jsou v technické specifikaci Fáze 3.
+**Závislost:** Fáze 3.5 dodá skutečné Whisper a Parakeet initializery. Fáze 3.6 ověří jejich bezpečné
+přepínání po dokončení všech přijatých transkripcí.
 
 ---
 
 ## Fáze 4 – dodělat hrubý refactoring
 
-Původní refaktorovací položky jsou v sekci **Dokončeno**. Přechod na Avalonia je odložen do Fáze 8.
+Původní refaktorovací položky jsou v sekci **Dokončeno**. Přechod na Avalonia je odložen do Fáze 7.
 
 ## Fáze 5 – Sjednocení sekundárních oken do jednoho tabbed okna
 
@@ -188,7 +363,7 @@ Přidání 300 ms ticha (nulové PCM bajty) před skutečnou nahrávku tento art
 - V `MainWindow.OnPttStopped`, po zavolání `_recorder.StopRecording()`, se k výsledným WAV bytům prepend
   300 ms ticha: `300 ms × 16 000 Hz × 2 bytes = 9 600 bytů` nulových hodnot vložených za WAV hlavičku před PCM data.
 - Alternativně lze upravit `AudioRecorder.StopRecording()` tak, aby ticho přidávala sama jako volitelný parametr.
-- Pro Parakeet platí jiné výchozí ticho (250 ms), řeší se v Fázi 7 samostatně v `ParakeetService`.
+- Pro Parakeet platí jiné výchozí ticho (250 ms), řeší se v Fázi 3.5 samostatně v `ParakeetService`.
 
 ---
 
@@ -228,101 +403,9 @@ Konkrétní režim, cílový jazyk a ovládání se určí po průzkumu a v samo
 
 ---
 
-## Fáze 7 – Parakeet V3 engine
+## Fáze 7 – Průzkum a případný přechod na Avalonia
 
-> Největší nová feature – nový transkripční engine, nová stahovaná data, nová servisní třída, změny settings.
-> Závisí na Fázi 3 (ORT backendy), Fázi 4 (ITranscriptionService) a Fázi 5 (SettingsPanel detekce modelů).
-> U větších modelů nejprve prozkoumat distribuci; preferovat samostatné stažení s potvrzením
-> uživatele nebo instalační skript.
-
----
-
-### 7.1 Rozšíření `WhisperWriter/download-models.ps1` o stažení Parakeet V3
-
-**Proč:** Parakeet model je distribuován jako `.tar.gz` archiv (nikoli jako jediný `.bin` soubor jako
-Whisper GGML modely). Po rozbalení vznikne **adresář** s ONNX soubory. Stávající skript umí pouze stáhnout
-a přejmenovat soubor – je třeba přidat rozbalování archivu.
-
-**Co se změní:**
-- Do tabulky modelů v `WhisperWriter/download-models.ps1` se přidá:
-  ```
-  Parakeet TDT 0.6B V3 (parakeet-tdt-0.6b-v3-int8)
-    Velikost: 456 MB | VRAM: ~1.5 GB
-    Jazyky: 25 evropských jazyků + ruština a ukrajinština (vč. češtiny)
-    URL: https://blob.handy.computer/parakeet-v3-int8.tar.gz
-    SHA256: 43d37191602727524a7d8c6da0eef11c4ba24320f5b4730f1a2497befc2efa77
-  ```
-- Soubor se stáhne jako `.tar.gz.tmp`, po ověření SHA256 se přejmenuje na `.tar.gz`.
-- Rozbalení `.tar.gz` v PowerShell:
-  - Primární cesta: `tar.exe` (nativně dostupný ve Windows 10 build 17063+).
-    Volání: `& tar -xzf "llms\parakeet-v3-int8.tar.gz" -C "llms\"`.
-  - Fallback pro starší Windows: inline C# přes `Add-Type` s `System.IO.Compression.GZipStream`
-    a `System.IO.Compression.TarFile` (dostupné v .NET 7+, ale PS 5.1 běží na .NET Framework –
-    proto se zde použije `tar.exe` jako jediná spolehlivá cesta na Windows 10+).
-- Po rozbalení se `.tar.gz` soubor smaže (šetří místo).
-- Výsledek: adresář `llms\parakeet-tdt-0.6b-v3-int8\` s ONNX soubory.
-
----
-
-### 7.2 Detekce modelů v `SettingsPanel` dle typu souboru/adresáře
-
-**Proč:** Stávající `SettingsWindow.BuildModelItems()` kontroluje pouze pevně zadaný seznam 12 `.bin` souborů.
-Po přidání Parakeet je třeba detekovat modely dynamicky a rozlišovat Whisper (`.bin`) od Parakeet (adresář).
-
-**Co se změní:**
-- Do `AppSettings` se přidá vlastnost `EngineType` s hodnotami `Whisper` a `Parakeet`. Výchozí: `Whisper`.
-- `BuildModelItems()` v `SettingsPanel` bude skenovat adresář `llms/`:
-  - Soubory s příponou `.bin` → Whisper model.
-  - Adresáře, jejichž jméno začíná `parakeet-` a obsahují soubor `encoder-model*.onnx` → Parakeet model.
-- Každá položka v ComboBoxu bude vizuálně označena typem: `[Whisper]` nebo `[Parakeet]`.
-- Při výběru modelu z ComboBoxu se `EngineType` automaticky nastaví dle detekovaného typu.
-
----
-
-### 7.3 Implementovat `ParakeetService` (C# + Microsoft.ML.OnnxRuntime)
-
-**Proč:** Jde o samotný nový transkripční engine – přímá C# implementace inference pipeline
-nad ONNX Runtime, bez závislosti na Rustu nebo externím procesu.
-
-**Model a jeho formát:**
-Soubory v adresáři `parakeet-tdt-0.6b-v3-int8/`:
-- `nemo128.onnx` – audio preprocessor (log-mel spektrogram), vstupy: `waveforms [float32]`, `waveforms_lens [int64]`, výstupy: `features`, `features_lens`.
-- `encoder-model-int8.onnx` – enkodér, vstupy: `features`, `length`, výstupy: `encoded`, `encoded_len`.
-- `decoder_joint-model-int8.onnx` – TDT dekodér + joint network, iterativně volaný v greedy decoding smyčce.
-- `vocab.txt` – slovník tokenů, jeden token na řádek, řádek s `<blk>` definuje blank index.
-
-**Pipeline:**
-1. Prepend 250 ms ticha (nulové PCM vzorky) před skutečný audio signál.
-2. Preprocessor session: `waveforms` → `features` (log-mel), `features_lens`.
-3. Encoder session: `features` → `encoded`, `encoded_len`.
-4. TDT greedy decoder smyčka: iterativní volání `decoder_joint` session, mapuje výstupy na token IDs
-   (implementovat dle Rust source `transcribe-rs/src/onnx/parakeet/mod.rs`).
-5. Vocabulary lookup: token IDs → text přes `vocab.txt` slovník.
-
-**Co se změní:**
-- Vznikne `Services/ParakeetService.cs` implementující `ITranscriptionService` (z bodu 4.1).
-- NuGet: `Microsoft.ML.OnnxRuntime` (přidáno v Fázi 3.2 DirectML nebo 3.3 CUDA).
-- `StateChanged` event bude sdílet stejný `TranscriptionState` enum jako `WhisperService`.
-
----
-
-### 7.4 Přepínání mezi Whisper a Parakeet engine za běhu
-
-**Proč:** `App` musí při startu nebo po změně nastavení vytvořit správnou implementaci `ITranscriptionService`
-dle `AppSettings.EngineType`. Při změně v Settings musí starý engine zlikvidovat a nový inicializovat.
-
-**Co se změní:**
-- `App` bude mít field `ITranscriptionService _transcriptionService` místo `WhisperService WhisperService`.
-- Factory logika v `App.OnStartup` nebo v samostatné metodě `App.CreateTranscriptionService()`:
-  dle `EngineType` vytvoří buď `WhisperService` nebo `ParakeetService`.
-- Po uložení Settings (pokud se změnil model nebo engine): dispose stará service, vytvoř a inicializuj novou.
-- `MainWindow` a ostatní kód pracují výhradně přes `ITranscriptionService` a nepotřebují vědět, který engine běží.
-
----
-
-## Fáze 8 – Průzkum a případný přechod na Avalonia
-
-**Proč:** Do dokončení Fází 0–7 se projekt soustředí na Windows. Teprve potom se vyhodnotí,
+**Proč:** Do dokončení Fází 0–6 se projekt soustředí na Windows. Teprve potom se vyhodnotí,
 které části aplikace lze přenést.
 
 **Co se změní:**
@@ -408,6 +491,21 @@ Ověřit sestavitelnost a licenci a porovnat rychlost i přesnost na českých n
 - Ověřeno lokálně: Debug i Release **217/217 testů**, oba aplikační buildy **0 warningů, 0 chyb**.
   Read-only DXGI smoke test proběhl; živý mikrofon/PTT v produkční aplikaci nebyl otestován.
 - Podrobný návrh, rozhodnutí, akceptační testy a omezení: `.agents/specs/phase-2-parallel-transcription.md`.
+
+### ✅ Fáze 3.0 – Ověřená identita backendu a ETA fingerprint
+
+**Dokončeno:** 11. listopadu 2026.
+
+- DLL probe už nerozhoduje o podpoře, stavu UI ani ETA backendu. Widget zobrazuje `Loading model…` až do
+  inicializace a potom používá pouze runtime identity vytvořenou z `RuntimeOptions.LoadedLibrary`.
+- `ActiveBackendInfo` nese stabilní engine/runtime/provider IDs, device class `cpu`/`gpu`, seznam providerů
+  a volitelnou autoritativní CUDA major version. Neznámý runtime se neklasifikuje ani nezapisuje do ETA.
+- Stejný neměnný descriptor se ukládá do každého `TranscriptionJob`, používá se pro ETA estimate i record a
+  vstupuje do fingerprintu adaptivní inference capacity.
+- SQLite JSON přesunul `backend` a `cudaVersion` do vnořeného objektu. Staré řádky zůstávají zachovány,
+  ale jejich provider-ambiguous fingerprints se znovu nepoužijí.
+- Ověřeno lokálně: **235/235 Debug testů**, **235/235 Release testů**, oba aplikační buildy s
+  **0 warningy a 0 chybami**. Hosted GitHub Actions neběželo.
 
 > Starší dokončené položky níže uchovávají historii a mohou používat tehdejší názvy souborů/tříd.
 > Pro aktuální strom použij zdrojový kód a `.agents/specs/phase-0-coverage-inventory.md`.

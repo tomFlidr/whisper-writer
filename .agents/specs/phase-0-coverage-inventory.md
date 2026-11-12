@@ -1,9 +1,13 @@
 # Phase 0 — Coverage Inventory
 
-**Status:** Test baseline, inventory, and current `AGENTS.md` sections reconciled locally.
-Last verified November 4, 2026.
+**Status:** Phase 0 baseline verified locally; current Phase 3 behavior is recorded in the appended section.
+`AGENTS.md` Sections 2–4 were synchronized under explicit user approval; Section 1 and Sections 5 onward
+were left unchanged.
+Last verified November 12, 2026.
 **Scope:** Existing behavior in the current Windows/WPF source tree. This is a characterization
 baseline, not a line-coverage target and not authorization to begin later roadmap phases.
+Counts in the Phase 0 baseline section below describe the repository as verified on November 4, 2026;
+later source/test additions are tracked in their phase-specific sections.
 
 **Path bases:** Production source paths below are relative to `WhisperWriter/`; test source files
 are in the sibling `WhisperWriter.Tests/` project. Solution and documentation paths are relative
@@ -77,7 +81,7 @@ Covered by `AutofacExtensionsTests.InjectProtectedProperties_ResolvesMarkedPrope
 Covered by `VirtualKeyCodeHelperTests`: configured-key theory cases, left-Alt naming, unknown-key
 fallback, empty formatting, and input-order formatting.
 
-### `Services/AudioRecorder.cs` — 4 contracts
+### `Services/Recording/AudioRecorder.cs` — 4 contracts
 
 `AmplitudeChanged`, `StartRecording()`, `StopRecording()`, and `Dispose()`.
 
@@ -111,7 +115,7 @@ Covered by `SettingsTests.Load_MissingFileCreatesDefaultSettings`,
 `SaveAndLoad_RoundTripConfiguredSettings`, `Load_InvalidJsonResetsToDefaults`, and
 `Save_WhenPathIsDirectoryDoesNotThrow`, using isolated temporary paths.
 
-### `Services/TranscriptionHistory.cs` — 2 contracts
+### `Services/Persistence/TranscriptionHistory.cs` — 2 contracts
 
 `MaxSize { get; set; }` and `Add(TranscriptionEntry)`.
 
@@ -129,22 +133,23 @@ Covered by `TrayMenuTests.DisposeAndAppExit_DisposeTrayIconOnlyOnce`,
 `SettingsRequest_WhenCancelled_DoesNotApplySettingsEffects`, and
 `ExitAndDoubleClickRequests_RouteToInjectedActions`.
 
-### `Services/Whisper.cs` — 6 contracts
+### `Services/Whisper.cs` — 6 current contracts
 
-`StateChanged`, `DetectCudaVersion()`, `GetInferenceThreadCount()`, `InitializeAsync(string)`,
+`StateChanged`, `ActiveBackend`, `GetInferenceThreadCount()`, `InitializeAsync(string)`,
 `TranscribeAsync(byte[], string, string)`, and `DisposeAsync()`.
 
-Covered by `WhisperTests`: `DetectCudaVersion_ReturnsOnlySupportedMajorVersions`,
-`GetInferenceThreadCount_LeavesTwoProcessorsFreeAndAtLeastOneActive`, the initialization tests
-for missing, adequate, undersized, and corrupt model files and factory failures, transcription
-language/prompt/segment/error cases, and `DisposeAsync_DisposesTheInitializedFactory`.
+Covered by `TranscriberTests`: `GetInferenceThreadCount_LeavesTwoProcessorsFreeAndAtLeastOneActive`,
+`InitializeAsync_ReportsTheBackendFromTheLoadedWhisperLibrary`, the initialization tests for missing,
+adequate, undersized, and corrupt model files and factory failures, transcription language/prompt/segment/error
+cases, and `DisposeAsync_DisposesTheInitializedFactory`. CUDA DLL probing was removed from the runtime contract.
 
 ### `Services/EtaCalc.cs` — 19 contracts
 
-`EstimateProcessingSeconds(string,double)`, `Record(string,double,double)`, `Dispose()`,
+`EstimateProcessingSeconds(string,double,ActiveBackendInfo?)`,
+`Record(string,double,double,ActiveBackendInfo?)`, `Dispose()`,
 `initConnection()`, `ensureSchema()`, `estimateForWindow(long,long,double,double,double)`,
-`estimateWithoutWindow(long,long,double)`, `findOrCreateEnvironmentId()`,
-`buildEnvironmentJson()`, `readGpuModels()`, `readWmiString(string,string,bool)`,
+`estimateWithoutWindow(long,long,double)`, `findOrCreateEnvironmentId(ActiveBackendInfo)`,
+`buildEnvironmentJson(ActiveBackendInfo)`, `readGpuModels()`, `readWmiString(string,string,bool)`,
 `readWmiStrings(string,string,bool)`, `readWmiInt(string,string)`, `readWmiLong(string,string)`,
 `computeFingerprint(string)`, `readSystemPowerStatus()`, `findModelId(string)`,
 `findOrCreateModelId(string)`, and `execute(string)`.
@@ -159,10 +164,10 @@ Covered by `EtaCalcTests.RecordAndEstimate_UsesWindowedAndFallbackProcessingRati
 `WmiHelpers_ReturnNullOrEmptyWhenTheProviderThrows`,
 `ReadGpuModels_FiltersSortsDeduplicatesAndUsesBothFallbacks`,
 `ReadSystemPowerStatus_UsesNativeStatusOrSafeFallback`,
-`BuildEnvironmentJson_WhenCudaAndWmiAreUnavailableUsesCpuAndSafeDefaults`, and
+`BuildEnvironmentJson_UsesVerifiedCpuBackendWithSafeEnvironmentDefaults`, and
 `ComputeFingerprint_ReturnsSha256OfTheUtf8EnvironmentJson`.
 
-### `Services/MainWindows/Style.cs` — 4 contracts
+### `Services/MainWindows/Styles/Style.cs` — 4 contracts
 
 `WindowDisplayChange`, `SetWindow(Window)`, `InitializeSystemEvents(object,EventArgs)`, and
 `handleWin32SystemHook(IntPtr,int,IntPtr,IntPtr,ref bool)`.
@@ -171,7 +176,7 @@ Covered by `StyleTests.SetWindow_ReturnsTheSameStyleInstance`,
 `InitializeSystemEvents_AddsToolWindowStyleAndClearsAppWindowStyle`, and
 `NativeHook_ForwardsDisplayChangeWithoutMarkingTheMessageHandled`.
 
-### `Services/MainWindows/Position.cs` — 7 contracts
+### `Services/MainWindows/Positions/Position.cs` — 7 contracts
 
 `SetWindow(Window)`, `InitialPosition(Action)`, `ApplyStoredPosition()`,
 `PlaceAtDefaultPosition()`, `ClampWindowToScreen()`, `SaveWindowPosition()`, and
@@ -181,7 +186,7 @@ Covered by `PositionTests` for stored/default placement, missing-primary-monitor
 monitor-overlap clamping, persistence, callback ordering, DPI scaling, and
 `SetWindow_ReturnsTheSamePositionInstance`.
 
-### `Views/MainWindow.xaml.cs` — 19 contracts
+### `Views/Screens/MainWindow.xaml.cs` — 19 contracts
 
 `ReloadHotkey()`, `ForceClose()`, `OnActivated(EventArgs)`, `OnClosing(CancelEventArgs)`,
 `handleWindowDisplayChange()`, `handleWindowSizeChanged(object,SizeChangedEventArgs)`,
@@ -192,11 +197,11 @@ monitor-overlap clamping, persistence, callback ordering, DPI scaling, and
 `setRecordingState(bool)`, `setStatus(string,bool)`, `updateEtaLabel()`,
 `startEtaCountdown(double)`, and `stopEtaCountdown()`.
 
-Covered by `MainWindowTests`: activation/reload, close and disposal paths, PTT success/blank/error
+Covered by `MainWindowTest`: activation/reload, close and disposal paths, PTT success/blank/error
 paths and call order, Whisper state changes, ETA countdown, amplitude/recording UI, display/size
 handling, XAML mouse behavior, status brushes, and background-injection error logging. The
 production scheduler is independently covered by
-`MainWindowRuntimeTests.RunBackground_ExecutesWorkOffTheDispatcherThread`.
+`RuntimeTests.RunBackground_ExecutesWorkOffTheDispatcherThread`.
 
 ## XAML event-binding map
 
@@ -205,9 +210,9 @@ bindings in Settings, for 17 current assignments across the four view XAML files
 Cancel and Close bindings are separate assignments and are each exercised through their XAML
 controls.
 
-- `MainWindow.xaml`: `MouseLeftButtonDown`, `MouseEnter`, `MouseLeave` —
-  `MainWindowTests.XamlMouseBindingsDelegateDragAndHoverEventsWithoutPhysicalInput`.
-- `SettingsWindow.xaml`: title-bar `MouseLeftButtonDown`, hotkey-capture `Click`,
+- `Views/Screens/MainWindow.xaml`: `MouseLeftButtonDown`, `MouseEnter`, `MouseLeave` —
+  `MainWindowTest.XamlMouseBindingsDelegateDragAndHoverEventsWithoutPhysicalInput`.
+- `Views/Screens/SettingsWindow.xaml`: title-bar `MouseLeftButtonDown`, hotkey-capture `Click`,
   `PreviewTextInput` on history size and both queue-limit fields, two Cancel `Click` bindings,
   and Save `Click` —
   `SettingsWindowTests.TitleBarMouseDown_DelegatesOnlyPressedDragsToTheInjectedPlatform`,
@@ -216,11 +221,11 @@ controls.
   `CancelButton_DoesNotApplyEditedSettingsAndReturnsFalseThroughTheXamlBinding`,
   `CloseGlyph_CancelsThroughItsXamlClickBinding`, and
   `SaveButton_PersistsFormValuesAndRegistryChoiceThroughTheXamlBinding`.
-- `HistoryWindow.xaml`: title-bar drag, Copy `Click`, and Close `Click` —
+- `Views/Screens/HistoryWindow.xaml`: title-bar drag, Copy `Click`, and Close `Click` —
   `HistoryWindowTests.TitleBarMouseDown_UsesTheInjectedPressedDecisionAndDragBoundary`,
   `CopyButton_UsesItsBoundEntryAndWritesTheTextThroughTheXamlBinding`, and
   `CloseButton_ClosesHistoryThroughItsXamlClickBinding`.
-- `AboutWindow.xaml`: title-bar drag and the same close handler on two buttons —
+- `Views/Screens/AboutWindow.xaml`: title-bar drag and the same close handler on two buttons —
   `AboutWindowTests.TitleBarMouseDown_DelegatesDragToTheInjectedPlatform`,
   `CloseGlyph_ClosesTheAboutWindowThroughItsXamlClickBinding`, and
   `CloseButton_ClosesTheAboutWindowThroughItsXamlClickBinding`.
@@ -232,22 +237,23 @@ controls.
 These behavior contracts extend the Phase 0 baseline; they do not change its historical 95-contract
 and 185-test counts.
 
-- `Services/TranscriptionQueue.cs`: active-slot scheduling, FIFO waiting, per-target result order,
+- `Services/SpeechPipeline/TranscriptionQueue.cs`: active-slot scheduling, FIFO waiting, per-target result order,
   queue status/ETA, recording reservations, configurable outstanding-job admission, the soft audio
   budget and its one-recording overshoot behavior. Covered by `TranscriptionQueueTests`.
-- `Services/InferenceCapacityPolicy.cs`, `InferenceCapacityManager.cs`,
-  `InferenceCapacityProfileStore.cs`, and `WindowsInferenceMemoryMonitor.cs`: adaptive capacity,
+- `Services/Inference/Capacity/Policy.cs`, `Services/Inference/Capacity/Manager.cs`,
+  `Services/Inference/Capacity/ProfileStore.cs`, and `Services/Inference/Memory/WindowsMonitor.cs`: adaptive capacity,
   resource-failure retry feedback, persisted profiles, and memory-signal fallbacks. Covered by the
-  corresponding `InferenceCapacityPolicyTests`, `InferenceCapacityManagerTests`,
-  `InferenceCapacityProfileStoreTests`, and `WindowsInferenceMemoryMonitorTests`.
-- `Views/MainWindow.xaml.cs`: queue admission, per-recording settings/focus snapshot, queue status/ETA,
-  and ordered result injection. Covered by `MainWindowTests` and the queue service tests.
+  corresponding `PolicyTests`, `ManagerTests`,
+  `ProfileStoreTests`, and `WindowsMonitorTests`.
+- `Views/Screens/MainWindow.xaml.cs`: queue admission, per-recording settings/focus snapshot, queue status/ETA,
+  and ordered result injection. Covered by `MainWindowTest` and the queue service tests.
 - `App.xaml.cs` / `Services/Whisper.cs`: startup initialization is dispatched to a background task;
-  the pill shows `GPU Detection…` before the CUDA probe, then a detected CUDA/CPU loading status.
+  at the Phase 2 checkpoint the pill showed `GPU Detection…` before the CUDA probe. Phase 3.0 supersedes
+  that status with neutral model-loading text and the successfully loaded runtime identity.
   The Dispatcher responsiveness is covered by
   `AppLifecycleTests.Startup_RunsWhisperInitializationOffDispatcherAndKeepsTheUiResponsive`; status
-  ordering is covered by `WhisperTests` and `MainWindowTests`.
-- `Views/SettingsWindow.xaml` / `.xaml.cs`: configurable job count and audio-buffer budget, numeric
+  ordering is covered by `TranscriberTests` and `MainWindowTest`.
+- `Views/Screens/SettingsWindow.xaml` / `.xaml.cs`: configurable job count and audio-buffer budget, numeric
   input, persistence into `AppSettings`, and user-facing explanation. Covered by
   `SettingsWindowTests`, `SettingsTests`, and `AppSettingsTests`.
 - `TranscriptionQueue.Enqueue` takes ownership of the WAV byte array; the caller must not mutate it
@@ -255,6 +261,84 @@ and 185-test counts.
   `TranscriptionQueueTests.Enqueue_TransfersTheOwnedAudioBufferWithoutCopyingIt`.
 - Current local verification on November 10, 2026: **217/217 Debug tests** and **217/217 Release
   tests** passed; Debug and Release application builds each completed with 0 warnings/errors.
+
+## Phase 3.0 additions (November 11, 2026)
+
+- `Models/ActiveBackendInfo.cs`: maps only recognized, actually loaded Whisper.net library IDs to a stable
+  engine/runtime/provider descriptor and `cpu`/`gpu` device class. Unknown library IDs remain unclassified.
+  `ActiveBackendInfoTests` covers CUDA, CUDA 12, Vulkan, CPU, CPU-NoAVX, and unknown-library handling.
+- `Services/Whisper.cs` / `Contracts/ITranscription`: removed the CUDA DLL probe API. The active descriptor remains null
+  until factory creation succeeds; startup shows `Loading model…` and does not predict a backend. Covered by
+  `TranscriberTests.InitializeAsync_UsesNeutralLoadingStatusWhileTheModelLoads` and
+  `InitializeAsync_ReportsTheBackendFromTheLoadedWhisperLibrary`.
+- `Views/Screens/MainWindow.xaml.cs`: readiness status uses only the verified descriptor. Each
+  `TranscriptionJob` snapshots that descriptor and passes the same value to ETA lookup and result recording.
+  Covered by `MainWindowTest.QueueStatus_UsesOnlyVerifiedBackendDescriptorForReadyStatus` and
+  `PushToTalkStop_UsesTheSameBackendSnapshotForEtaLookupAndRecording`.
+- `Services/EtaCalc.cs`: ETA lookup/recording require an `ActiveBackendInfo`; unknown identity creates no profile.
+  Environment JSON now nests device, engine, runtime, deterministic active provider list, and optional
+  authoritative CUDA version under `backend`; legacy rows are preserved but not reused by the new fingerprint.
+  Covered by the Phase 3 ETA JSON, missing-identity, and legacy-row tests.
+- `Services/Inference/Capacity/Manager` fingerprints include the full active backend descriptor, including CUDA runtime
+  major version; the memory monitor accepts stable `cpu` and `cpu-no-avx` provider IDs. Covered by
+  `ManagerTests` and `WindowsMonitorTests`.
+- `Whisper.DetectCudaVersion()` and its P/Invoke helper were deleted. The process PATH setup and build-time CUDA
+  DLL copy remain native-loader packaging steps only; neither is used to claim an active backend.
+- Final local verification on November 11, 2026, after the Vulkan/RID/publish-target changes:
+  **235/235 Debug tests** and **235/235 Release tests** passed; Debug and Release application builds each
+  completed with **0 warnings and 0 errors**.
+
+## Phase 3.1 packaging additions (November 11, 2026)
+
+- `WhisperWriter.csproj` references `Whisper.net.Runtime.Vulkan` 1.9.0, aligned with the pinned Whisper.net
+  core, CPU, and CUDA packages. CUDA/Vulkan package references and the CUDA runtime copy target are omitted
+  for `win-x86`.
+- The Release workflow restores with `-p:RuntimeIdentifier=<RID>` so NuGet evaluates those package conditions
+  for the actual target. It no longer edits the project to remove the CUDA copy target.
+- The previous shared CUDA copy target ran after `Build` first and did not place the local runtime DLLs in a
+  publish folder. Separate build/publish targets now put them in the correct output path.
+- A fresh local `win-x64` publish contains 26 DLLs, including five Vulkan DLLs and the three configured
+  CUDA toolkit DLLs. A fresh `win-x86` publish contains 13 DLLs, including only the four x86 CPU runtime
+  DLLs; no CUDA/Vulkan asset is present.
+- The fresh x86 application launch was verified under 64-bit Windows/WOW64 using `ggml-small.bin`; the
+  widget reached `Ready (Cpu)`. This verifies the x86 app startup/model-load path, not a physical 32-bit
+  Windows host or an x86 audio transcription.
+- The 10-recording Vulkan/CUDA corpus comparison is complete; actual loaded runtimes and metrics-only output
+  are recorded in `.agents/specs/phase-3-gpu-and-onnx-backends.md`. The run verifies this host/corpus only;
+  no AMD GPU was tested and the Vulkan device index has no runtime-provided physical name.
+- The isolated Whisper.net 1.9.0 Vulkan smoke from the Phase 3 spec completed transcription. No AMD GPU or
+  older computer was tested; broad vendor/legacy coverage remains unverified.
+- A separate real-runtime smoke forced CUDA-to-CPU runtime order with CUDA runtime directories removed from
+  the child process PATH. Whisper.net reported `Cpu` and completed transcription (exit 0); transcript output
+  was not saved. This does not verify automatic selection while a usable Vulkan runtime remains available.
+
+## Phase 3.2/3.3 additions (November 11, 2026)
+
+- `ProviderSelectionPolicy.Select` is covered for Auto ordering, unavailable explicit providers,
+  and no cross-provider CUDA fallback by `ProviderSelectionPolicyTests`.
+- `ProviderCatalog.GetInstalledProviderIds` is tested with a temporary pack directory; it
+  requires both the provider assembly and `.deps.json` and does not report active backend support.
+- `PluginLoader.Load` is tested through a real custom `AssemblyLoadContext` using a fake plugin
+  assembly. The tests cover sharing the host-owned contract assembly and rejecting a provider-core switch
+  after disposal.
+- `NativeSearchPath.PrependDirectories` is covered for directory ordering, duplicate removal,
+  and ignoring a missing provider path. `PrivacyPolicy.DisableTelemetry` is covered for setting
+  the process-local `ORT_DISABLE_TELEMETRY` flag.
+- `SettingsWindow` provider selection, CUDA/cuDNN path load/save, and pack-installation/restart explanation
+  are covered by `SettingsWindowTests`; settings defaults/round-trip are covered by `AppSettingsTests`.
+- `ActiveBackendInfo.FromOnnxRuntime` has deterministic mapping tests. The actual plugin/session path was
+  also smoke-tested locally through `BackendFactory` against all three Parakeet graphs with
+  synthetic inputs for CPU, DirectML, and CUDA. This hardware/runtime smoke is not part of deterministic CI
+  and does not validate audio-to-text quality or performance.
+- No automated known-audio Parakeet transcription test exists because the Phase 3.5 engine is not implemented.
+- Current source inventory after the coding-standard organization refactor (November 12, 2026): 96 app C# files,
+  5 XAML files, 47 test-project C# files (including 4 shared `TestSupport` files), and 10 C# files across the
+  separate ORT provider/contract projects. The refactor leaves the 17 XAML event assignments unchanged.
+- Phase 3 provider milestone verification on November 11, 2026: **257/257 Debug tests** and **257/257 Release
+  tests** passed; full solution builds each completed with **0 warnings and 0 errors**.
+- Final verification after the organization/member-order refactor (November 12, 2026): **257/257 Debug tests** and
+  **257/257 Release tests** passed; full solution builds each completed with **0 warnings and 0 errors**. Hosted
+  GitHub Actions has not run.
 
 ## Data-only members and shared contracts
 
@@ -267,11 +351,14 @@ Simple properties/fields such as `TranscriptionHistory.Entries`, `Settings.Data`
 `Container.Provider`, `Program.DI/App`, `PowerStatusSnapshot` properties, and native input
 struct fields have no independent behavior beyond their consumer tests.
 
-Public seams are exercised through consumer tests and fakes: `IAppRuntime`, `IProgramRuntime`,
-`IMainWindowRuntime`, `IWindowPlatform`, `ITranscription`, `IAudioCapture`,
-`ITextInjectorPlatform`, `IPositionEnvironment`, `IWindowStyleNativeApi`, and the protected
-`TrayMenu` platform/window contracts. These interface members are not double-counted as separate
-production behavior.
+Public seams are exercised through consumer tests and fakes:
+`Apps/IAppRuntime`, `Programs/IProgramRuntime`, `Views/Screens/MainWindows/IRuntime`,
+`Views/Adapters/IPlatform`, `Contracts/ITranscription`,
+`Services/Recording/AudioRecorders/IAudioCapture`, `Services/TextOutput/TextInjectors/IPlatform`,
+`Services/TrayMenus/IPlatform`, `Services/TrayMenus/IWindow`,
+`Services/MainWindows/Positions/IEnvironment`, `Services/MainWindows/Styles/INativeApi`,
+`Services/IManager`, `Services/IMonitor`, and `Services/Inference/Capacity/IProfileStore`.
+These interface members are not double-counted as separate production behavior.
 
 ## Platform boundaries excluded from deterministic CI
 
@@ -281,7 +368,7 @@ device state. These remaining integrations are not claimed as direct adapter-lev
 - `NAudioCapture` opening a real microphone/device; `AudioRecorder` is tested with fake PCM input.
 - Real focus switching and `SendInput` into another application; `TextInjector` ordering,
   flags, waits, timeouts, Unicode payloads, and structure layout are tested through
-  `ITextInjectorPlatform`.
+  `Services/TextOutput/TextInjectors/IPlatform`.
 - Whisper.net model download and inference, which require a model file and network and may use
   a GPU; lifecycle, model-file decisions, arguments, results, failures, and disposal use fakes.
 - Real `NotifyIcon`/Windows shell interaction and the application message loop; tray decisions
@@ -301,8 +388,8 @@ do not require committing secrets, downloading a model, or depending on physical
 - `.github/workflows/tests.yml` is configured for pull requests and pushes to `main`, but a
   hosted GitHub Actions run has not been triggered or verified. Do not claim remote CI passed.
   The workflow can run when the user later publishes or opens a PR for these changes.
-- `AGENTS.md` Sections 1–9 now reflect the current project and test setup. Appendix A is explicitly
-  historical; use the source tree, this inventory, and updated `.agents` guidance for current truth.
+- At the Phase 0 checkpoint, `AGENTS.md` matched the project. Sections 3–4 were refreshed on November 12, 2026,
+  under explicit user approval; Sections 1–2 and 5 onward were left unchanged. Appendix A remains historical.
 - Phase 0 itself introduced no product behavior. Later product changes must use RED → GREEN → REFACTOR
   and are documented separately; this inventory preserves the Phase 0 characterization baseline.
 - At the Phase 0 checkpoint, no files had been staged or committed.

@@ -24,14 +24,14 @@ Update the version in **two places**:
 
 ### `WhisperWriter/WhisperWriter.csproj`
 ```xml
-<Version>1.2.0</Version>
-<AssemblyVersion>1.2.0.0</AssemblyVersion>
-<FileVersion>1.2.0.0</FileVersion>
+<Version>1.4.0</Version>
+<AssemblyVersion>1.4.0.0</AssemblyVersion>
+<FileVersion>1.4.0.0</FileVersion>
 ```
 
 ### `AGENTS.md` – Section 2 (Environment and stack)
 ```
-| Version | 1.2.0.0 |
+| Version | 1.4.0.0 |
 ```
 
 ---
@@ -48,7 +48,7 @@ The GitHub Actions workflow generates release notes automatically from commit me
 
 Follow `.agents/skills/commit.md`. Use commit type `chore`:
 ```
-chore: bump version to 1.2.0
+chore: bump version to 1.4.0
 ```
 
 ---
@@ -56,20 +56,27 @@ chore: bump version to 1.2.0
 ## 5. Push the tag
 
 ```powershell
-git tag v1.2.0
-git push origin v1.2.0
+git tag v1.4.0
+git push origin v1.4.0
 ```
 
-The tag triggers `.github/workflows/release.yml` which:
-1. Builds `win-x64` (with CUDA) and `win-x86` (CPU only).
-2. Strips `.pdb` files.
-3. Packs `WhisperWriter-v1.2.0-win-x64.zip` and `WhisperWriter-v1.2.0-win-x86.zip`.
-4. Creates a GitHub Release with auto-generated notes by commits since the last release.
+The tag triggers `.github/workflows/release.yml`, which is configured to:
+1. Build `win-x64` with the Parakeet CPU ORT pack and `win-x86` without ORT provider packs.
+2. Build the DirectML provider ZIP for release and build the CUDA pack as a short-lived CI artifact.
+   The CUDA ZIP is not attached to v1.4.0 because runtime provisioning is still pending.
+3. Strip `.pdb` files and package the two application ZIPs.
+4. Create a GitHub Release and attach both app ZIPs and the DirectML ZIP with auto-generated notes.
 
-> Tags containing `-` (e.g. `v1.2.0-beta`) are automatically marked as pre-release.
+The ONNX CUDA provider pack requires compatible CUDA 13/cuDNN 9 runtime DLLs and is not a user-facing
+v1.4.0 asset. `OrtCudaRuntimePath` is not a substitute for a complete provisioning solution. The hosted
+workflow still needs a successful run for v1.4.0.
+
+> Tags containing `-` (e.g. `v1.4.0-beta`) are automatically marked as pre-release.
 
 ---
 
 ## 6. Verify the release
 
 - Check GitHub Actions for build success.
+- Verify the release includes both application ZIPs and the DirectML provider ZIP.
+- Verify the CUDA provider ZIP is absent from v1.4.0 release assets.
