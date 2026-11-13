@@ -1,13 +1,13 @@
 # Phase 3 Progress — GPU Backends and ONNX Runtime
 
-**Status:** Phase 3.0 and the 3.2/3.3 provider implementations are locally verified, but Phase 3 is not complete.
-The required 3.4 CUDA/cuDNN provisioning, 3.5 Parakeet V3 engine, and 3.6 transactional engine selection are
-now ordered in the Roadmap and specified, but not implemented. The fresh x86 CPU launch and full-corpus
-Vulkan/CUDA comparison have now passed locally. Hosted Actions, representative AMD validation, and the
-Parakeet transcription pipeline remain open.
+**Status:** Phase 3.0 and the 3.2/3.3 provider implementations are locally verified, and the v1.4.0 hosted
+Release workflow and publication succeeded. Phase 3 is not complete. The required 3.4 CUDA/cuDNN provisioning,
+3.5 Parakeet V3 engine, and 3.6 transactional engine selection are ordered and specified, but not implemented.
+The fresh x86 CPU launch and full-corpus Vulkan/CUDA comparison passed locally. Representative AMD validation
+and the Parakeet transcription pipeline remain open.
 **Last updated:** 2026-11-13
 **Project:** `D:/tec/cs/whisper-writer-wpf`
-**Current observed HEAD:** `main` at local tag `v1.4.0` (9 commits ahead of `origin/main`; not pushed).
+**Current observed HEAD:** `main` is synced with `origin/main`; published tag `v1.4.0` identifies the release commit.
 
 ## Resume and handoff rule
 
@@ -28,9 +28,12 @@ status and current source because this file can become stale between sessions.
   now all resolve to 1.9.0.
 - The project pins Whisper.net core/runtime/CUDA 1.9.0. The approved `Whisper.net.Runtime.Vulkan` 1.9.0
   package is now referenced alongside them; `dotnet restore WhisperWriter.sln` succeeded.
-- On 2026-11-13, the approved change set was split into nine local commits and tagged `v1.4.0`. The local
-  tag is not pushed yet: the `gh` CLI is unauthenticated and Git push credentials are unavailable. The
-  v1.4.0 workflow publishes the app ZIPs and DirectML ZIP; CUDA remains a CI-only artifact.
+- On 2026-11-13, the approved change set was split into nine commits and pushed to `main`. Tag `v1.4.0`
+  points to release commit `46a0868`. Hosted Tests [run #4](https://github.com/tomFlidr/whisper-writer/actions/runs/43338796222)
+  passed its Windows Debug build-and-test job; hosted Release [run #9](https://github.com/tomFlidr/whisper-writer/actions/runs/43341305308)
+  completed successfully and published non-draft [WhisperWriter v1.4.0](https://github.com/tomFlidr/whisper-writer/releases/tag/v1.4.0)
+  with the x64 app ZIP, x86 app ZIP, and DirectML provider ZIP. The CUDA provider pack also built successfully
+  as a CI artifact but was intentionally not attached.
 - Pre-change baseline rerun with .NET SDK 10.0.303: Debug and Release each passed **217/217 tests**; app
   builds in both configurations completed with **0 warnings and 0 errors**.
 - Phase 3.0 implementation is locally verified: startup status is neutral, the app no longer probes CUDA DLLs for
@@ -138,7 +141,8 @@ status and current source because this file can become stale between sessions.
 - This is evidence for this host/corpus, not broad vendor support. The host has Intel UHD and NVIDIA Quadro
   T2000, no AMD GPU. Vulkan used requested device index 0, but Whisper.net did not return a stable physical
   device name; index-to-adapter mapping is not claimed as confirmed.
-- The Release workflow remains unrun in GitHub Actions; an authorized tag push is needed to trigger it.
+- Hosted Release workflow run #9 succeeded after tag `v1.4.0` was pushed; the app x64/x86 and DirectML assets
+  were published. The representative AMD test remains open.
 
 ### 3.2 — ONNX Runtime DirectML for Parakeet
 
@@ -156,8 +160,8 @@ status and current source because this file can become stale between sessions.
 - DirectML sessions use sequential execution and disable memory patterns; the adapter serializes
   `Run` calls on a session. The provider profile, not DLL inventory, supplies active-backend identity.
 - The cleaned optional DirectML pack is **36,921,995 bytes** locally, including runtime files and
-  required license/third-party notices. Release workflow staging has been authored but hosted Actions
-  has not run.
+  required license/third-party notices. Hosted Release workflow run #9 succeeded and published the
+  DirectML ZIP.
 - This remains synthetic graph execution only. There is no Parakeet audio preprocessing/decoder service,
   known-audio transcription result, accuracy comparison, or latency/memory benchmark.
 
@@ -180,7 +184,8 @@ status and current source because this file can become stale between sessions.
 - CUDA version is left unknown (`null`) in backend metadata; the provider profile confirms CUDA use but
   no authoritative runtime-version query is integrated.
 - This is not known-audio speech-to-text, accuracy, or performance validation. The full Parakeet engine
-  is now planned in Phase 3.5; hosted release packaging remains unverified.
+  is now planned in Phase 3.5. Hosted run #9 built the CUDA provider pack successfully as a CI artifact;
+  the pack was not attached to the public release by design.
 
 ## Remaining verification gates
 
@@ -197,9 +202,10 @@ status and current source because this file can become stale between sessions.
   GPU run and confirmed physical Vulkan-device mapping remain open; do not claim broad AMD compatibility.
 - ORT provider graph smoke used synthetic inputs. Known-audio Parakeet transcription, accuracy, latency, memory
   usage, and the complete Phase 3.5 decoder pipeline remain unverified.
-- The v1.4.0 Release workflow attaches the two app ZIPs and the optional DirectML ZIP. It builds and
-  checks the CUDA provider ZIP but does not attach it; hosted GitHub Actions has not run yet. Equivalent
-  local x64/x86 package-layout checks and extracted-ZIP loader smoke passed.
+- The v1.4.0 Release workflow run #9 completed successfully. GitHub API readback verified the two app ZIPs
+  and DirectML ZIP as the three uploaded release assets; the CUDA provider pack built successfully but was
+  not attached, as approved. Tests workflow run #4 also passed its Windows Debug build-and-test job.
+  Equivalent local x64/x86 package-layout checks and extracted-ZIP loader smoke passed.
 - Whisper remains the only implemented transcription engine; Parakeet audio-to-text is now planned in Phase 3.5.
 - `AGENTS.md` Sections 3–4 were refreshed for the organization refactor on November 12, 2026, under explicit
   approval. Section 2's version now reflects the approved v1.4.0 release; Sections 1 and 5 onward remain unchanged.
@@ -241,25 +247,27 @@ status and current source because this file can become stale between sessions.
   The x64 app output was staged with the CPU pack, and separate DirectML/CUDA ZIPs were generated locally
   with runtime files, notices, and the expected `runtimes/onnx/<provider>` layout. Extracting these ZIPs
   into a scratch app base and running the production factory/ALC smoke succeeded for CPU, `Auto`→DirectML,
-  and explicit CUDA. The workflow still has not run in GitHub Actions.
+  and explicit CUDA. Hosted Release run #9 succeeded and published the two app ZIPs plus DirectML; the CUDA
+  provider pack built successfully but its ZIP was excluded from the release by design.
 
 
-## Final local verification (2026-11-11)
+## Final local and hosted verification (2026-11-13)
 
 - Full solution tests passed **257/257 in Debug** and **257/257 in Release** after the final UI wording correction.
 - Full solution builds passed in Debug and Release with **0 warnings and 0 errors**.
 - The targeted Settings copy test first failed on the old text, then passed after the runtime-folder clarification.
 - Local x64/x86 package-layout checks and optional ZIP extraction/loader smoke passed; CPU, DirectML, and CUDA
   provider packs have the expected runtime layout and license/third-party notices.
-- Final repository audit passed: `git diff --check` is clean, the HEAD is unchanged at
-  `6ca61f5d4458c42834318019e49a6bb4b47da840`, and the solution lists all six expected projects. All changes
-  remain uncommitted.
+- Final repository audit passed: `git diff --check` is clean, `main` was synced with `origin/main` after the
+  nine approved commits, and the solution lists all six expected projects. The published `v1.4.0` tag points
+  to release commit `46a0868`.
 
 ## Next action
 
-The local Phase 3.1 full-corpus comparison and x86 CPU launch are complete. Closing the remaining 3.1/3.2/3.3
-gates requires a representative AMD GPU for the vendor test and explicit authorization to create/push a version tag
-for hosted Release Actions. Phase 3.4–3.6 remain separately required for full Phase 3 closure.
+The hosted v1.4.0 release is verified, so the 3.2/3.3 packaging gate is closed. The user's remaining Phase 3.1
+task is a representative AMD GPU run and confirmation of the physical Vulkan-device mapping. After that result,
+the next implementation item is Phase 3.4 CUDA/cuDNN provisioning; Phase 3.5 known-audio Parakeet transcription
+and Phase 3.6 transactional engine switching remain required for full Phase 3 closure.
 
 ## Source documents
 

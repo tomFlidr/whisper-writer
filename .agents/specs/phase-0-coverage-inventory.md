@@ -23,7 +23,8 @@ to the repository root.
   one or more asserted tests. Higher-level tests may cover multiple contracts.
 - XAML: all 15 routed-event assignments across four view XAML files map to XAML-level tests.
 - A temporary failing assertion was previously used to verify nonzero `dotnet test` failure
-  signaling; the probe was removed. No remote GitHub Actions run has been made.
+  signaling; the probe was removed. At this 2026-11-04 checkpoint, no remote GitHub Actions run had been made;
+  Tests workflow run #4 later passed on the final `main` commit.
 
 Run from the repository root on Windows:
 
@@ -337,8 +338,8 @@ and 185-test counts.
 - Phase 3 provider milestone verification on November 11, 2026: **257/257 Debug tests** and **257/257 Release
   tests** passed; full solution builds each completed with **0 warnings and 0 errors**.
 - Final verification after the organization/member-order refactor (November 12, 2026): **257/257 Debug tests** and
-  **257/257 Release tests** passed; full solution builds each completed with **0 warnings and 0 errors**. Hosted
-  GitHub Actions has not run.
+  **257/257 Release tests** passed; full solution builds each completed with **0 warnings and 0 errors**. At that
+  checkpoint hosted Actions had not run; Tests workflow run #4 later passed on commit `46a0868`.
 
 ## Data-only members and shared contracts
 
@@ -385,9 +386,9 @@ do not require committing secrets, downloading a model, or depending on physical
 
 ## Remaining verification boundary
 
-- `.github/workflows/tests.yml` is configured for pull requests and pushes to `main`, but a
-  hosted GitHub Actions run has not been triggered or verified. Do not claim remote CI passed.
-  The workflow can run when the user later publishes or opens a PR for these changes.
+- `.github/workflows/tests.yml` is configured for pull requests and pushes to `main`. The initial Phase 0
+  checkpoint predated hosted runs; subsequently, Tests workflow run #4 passed on `main` at commit `46a0868`
+  (Windows Debug build-and-test job). Release configuration remains locally verified.
 - At the Phase 0 checkpoint, `AGENTS.md` matched the project. Sections 3–4 were refreshed on November 12, 2026,
   under explicit user approval; Sections 1–2 and 5 onward were left unchanged. Appendix A remains historical.
 - Phase 0 itself introduced no product behavior. Later product changes must use RED → GREEN → REFACTOR

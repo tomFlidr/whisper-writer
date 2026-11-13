@@ -17,7 +17,7 @@ zároveň se aktualizuje `AGENTS.md`.
 ## Fáze 0 – Základ automatizovaných testů
 
 **Stav:** Lokální testy, inventář a aktuální oddíly `AGENTS.md` dokončeny 4. listopadu 2026.
-Hosted GitHub Actions zatím neběželo; výsledek zůstává neověřený.
+Následný hosted Tests workflow run #4 uspěl 13. listopadu 2026 na `main` (Windows Debug build-and-test job).
 
 ---
 
@@ -45,7 +45,8 @@ Hosted GitHub Actions zatím neběželo; výsledek zůstává neověřený.
 > sestaví jen jako krátkodobý CI artefakt, ale v1.4.0 jej nepřipojí k veřejnému releasu. Důvodem je jeho
 > velikost a nedokončené doručení CUDA/cuDNN runtime. README dočasně odděluje současné Whisper.net CUDA
 > od budoucího ONNX CUDA pro Parakeet; instalace CUDA sama Parakeet inference v1.4.0 nezapne.
-> Hosted GitHub Actions zatím neběželo. Podrobnosti jsou ve specifikaci Fáze 3.
+- Hosted Release workflow run #9 completed successfully; the public v1.4.0 release and its app x64/x86 and
+  DirectML assets were verified. The CUDA provider pack built as a CI artifact but is not attached.
 > **Fáze 3 není dokončena:** 3.4 musí vyřešit doručení CUDA/cuDNN bez ručního hledání DLL; 3.5
 > implementuje Parakeet V3 a 3.6 přidá transakční interaktivní přepnutí engine. Všechny tři položky jsou
 > povinné pro uzavření fáze.
@@ -107,8 +108,8 @@ Před výběrem DirectML porovnat také aktuální doporučení Microsoftu pro W
   ukázal `DmlExecutionProvider` spolu s `CPUExecutionProvider`; DLL inventář se za aktivní stav nepovažuje.
 - UI ukládá volbu ORT provideru, ale ovlivní jen Parakeet engine; Whisper zůstává na Whisper.net.
 - Čistý provider pack se publikuje jako volitelný x64 ZIP v samostatné cestě
-  `runtimes/onnx/directml`. Obsahuje také license/third-party notices. Release workflow lokálně
-  navržen, hosted GitHub Actions zatím neběželo.
+  `runtimes/onnx/directml`. Obsahuje také license/third-party notices. Hosted Release run #9 succeeded;
+  the DirectML ZIP is published in v1.4.0.
 - Produkční ALC/loader smoke provedl všechny tři grafy se syntetickými vstupy. Nejde o audio-to-text
   validaci; přesnost, latency, paměť a session-pool chování zůstávají neověřené.
 
@@ -427,7 +428,8 @@ které části aplikace lze přenést.
   aplikační build v obou konfiguracích: **0 warningů, 0 chyb**.
 - Non-zero návratový kód `dotnet test` při selhání assertion byl ověřen dočasným testem,
   který byl následně odstraněn.
-- Hosted GitHub Actions zatím neběželo, takže výsledek CI na hostovaném runneru zůstává neověřený.
+- Hosted Tests workflow run #4 completed successfully on `main` at commit `46a0868` on 2026-11-13.
+  The Windows Debug build-and-test job passed; Release tests remain locally verified.
 - Oddíly 1–9 v `AGENTS.md` jsou sladěné s aktuálním stromem, testy, build příkazy a nastaveními;
   Appendix A je označený jako historický kontext.
 - Fáze 0 sama skončila bez produktového chování; požadavek RED → GREEN → REFACTOR platí pro
@@ -505,7 +507,7 @@ Ověřit sestavitelnost a licenci a porovnat rychlost i přesnost na českých n
 - SQLite JSON přesunul `backend` a `cudaVersion` do vnořeného objektu. Staré řádky zůstávají zachovány,
   ale jejich provider-ambiguous fingerprints se znovu nepoužijí.
 - Ověřeno lokálně: **235/235 Debug testů**, **235/235 Release testů**, oba aplikační buildy s
-  **0 warningy a 0 chybami**. Hosted GitHub Actions neběželo.
+  **0 warningy a 0 chybami**. Následný hosted Tests run #4 a Release run #9 uspěly na commit `46a0868`.
 
 > Starší dokončené položky níže uchovávají historii a mohou používat tehdejší názvy souborů/tříd.
 > Pro aktuální strom použij zdrojový kód a `.agents/specs/phase-0-coverage-inventory.md`.

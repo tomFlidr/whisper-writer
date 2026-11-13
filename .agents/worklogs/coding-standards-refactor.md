@@ -65,8 +65,8 @@ Verified on 2026-11-12 before structural changes:
 - Debug solution build passed with 0 warnings/errors; focused ONNX Runtime tests passed 17/17.
 - A bulk patch had one no-match for `OnnxRuntimeProviderPack` in `ProviderCatalogTests.cs`; inspection confirmed that
   test did not reference that type, so no correction was needed.
-- Live Git status still shows 69 staged paths; all structural moves/edits remain unstaged or untracked. Do not stage
-  them.
+- Historical intermediate checkpoint: 69 paths were staged before the approved commit split. This was superseded
+  by the later nine-commit split; use live `git status`, not this old count.
 
 ## Completed: Whisper runtime boundary
 
@@ -168,12 +168,13 @@ The full Debug/Release suites and builds passed after the final correction.
 - `AGENTS.md` Sections 3–4 were updated under explicit approval; Section 2 now records v1.4.0 under the
   later release authorization. Sections 1 and 5 onward remain unchanged.
 - Debug and Release each passed 257/257 tests; both solution builds completed with 0 warnings and 0 errors.
-- `git diff --check` is clean with CRLF treated as line endings. The nine-commit sequence is on local `main`
-  above `origin/main`; local tag `v1.4.0` points to the final version-bump commit. The tag and commits have
-  not been pushed because GitHub CLI authentication is missing and the credential-free push dry run failed.
-- Debug and Release each passed 257/257 tests; both solution builds completed with 0 warnings and 0 errors.
-- The v1.4.0 workflow attaches both app ZIPs and DirectML only; CUDA remains a short-lived CI artifact.
-  Hosted GitHub Actions remains unverified.
+- `git diff --check` passed with CRLF treated as line endings. The nine approved commits were pushed to `main`;
+  tag `v1.4.0` was pushed to release commit `46a0868`.
+- Hosted Tests [run #4](https://github.com/tomFlidr/whisper-writer/actions/runs/43338796222) passed the Windows
+  Debug build-and-test job on `main`; Release [run #9](https://github.com/tomFlidr/whisper-writer/actions/runs/43341305308)
+  published the approved v1.4.0 assets. GitHub API readback verified the non-draft release and its three uploaded
+  assets: x64 app ZIP, x86 app ZIP, and DirectML ZIP. The CUDA provider-pack job also passed, but its ZIP was
+  intentionally not attached.
 
 ## Resume procedure
 

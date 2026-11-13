@@ -1,7 +1,7 @@
 # Phase 0 — Automated Testing Foundation
 
-**Status:** Tests, coverage inventory, and current `AGENTS.md` sections are reconciled locally
-(November 4, 2026). Hosted GitHub Actions has not run.
+**Status:** Tests, coverage inventory, and current `AGENTS.md` sections were reconciled locally
+(November 4, 2026). Hosted Tests workflow run #4 later passed on `main` at commit `46a0868` (Windows Debug build-and-test job).
 
 ## Goal
 
@@ -85,8 +85,8 @@ deferred to Phase 7.
 
 ## Explicitly deferred
 
-- Hosted GitHub Actions execution is pending the next user-approved push or pull request; remote
-  CI has not been claimed as passing.
+- Hosted GitHub Actions execution was pending at the original Phase 0 checkpoint. Subsequently, Tests workflow
+  run #4 passed on `main` at commit `46a0868` (Windows Debug build-and-test job); Release remains locally verified.
 - `AGENTS.md` Sections 1–9 now reflect the current project path, source map, test workflow, and
   settings. Appendix A is explicitly historical and is not current implementation guidance.
 - Phase 0 itself introduced no product behavior. The first subsequent behavior phase, Phase 2,

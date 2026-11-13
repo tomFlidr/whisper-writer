@@ -86,8 +86,8 @@ fallback identity, JSON serialization, and fingerprint separation. DLL-only pres
 test that claims backend support.
 
 **Phase 3.0 result:** locally verified on 2026-11-11: **235/235 Debug tests**, **235/235 Release tests**,
-and application builds with **0 warnings and 0 errors** in both configurations. Hosted GitHub Actions was
-not run.
+and application builds with **0 warnings and 0 errors** in both configurations. Hosted Tests run #4 later passed
+on final `main` commit `46a0868` (Windows Debug build-and-test job).
 
 ## User-confirmed selection semantics
 
@@ -229,7 +229,10 @@ results, methodology, source commit, and source locations remain in
 - **Open:** a representative AMD GPU test is still required before claiming AMD compatibility. The current
   host has Intel UHD and NVIDIA Quadro T2000 only; Vulkan used requested device index 0, but the runtime did
   not provide a stable physical-device name.
-- **Open:** hosted GitHub Actions has not run. Local packaging or smoke tests do not substitute for hosted CI.
+- **Completed (2026-11-13):** hosted Tests workflow run #4 succeeded on `main` at commit `46a0868` with its
+  Windows Debug build-and-test job. Hosted Release workflow run #9 also succeeded. GitHub published the two
+  app ZIPs and DirectML provider ZIP; the CUDA provider pack built successfully but was not attached by design.
+  This closes hosted CI and packaging gates, not the representative AMD hardware gate.
 - Add deterministic tests around provider selection/status/fallback using runtime fakes. Do not make hardware
   availability a requirement for the standard CI suite; reserve real GPU tests for an opt-in/manual matrix.
 - Verify the Phase 3.0 ETA JSON schema and ensure only the actually loaded engine/runtime/provider contributes
@@ -266,9 +269,9 @@ results, methodology, source commit, and source locations remain in
   `D:/llms/hermes/cache/scratch/phase3-vulkan-x64-cuda-20261111`; x86 is under
   `D:/llms/hermes/cache/scratch/phase3-vulkan-x86-cpu-20261111`.
 - The release workflow was updated to use the same RID-aware restore and no longer edits the project file
-  to remove the CUDA copy target. Hosted GitHub Actions has not run. A fresh x86 WPF launch under
-  64-bit Windows/WOW64 loaded `ggml-small.bin` and reported `Ready (Cpu)`; an x64 fresh-app launch was not
-  separately run.
+  to remove the CUDA copy target. At this November 11 checkpoint, hosted Actions had not run; Release run #9
+  later succeeded on tag `v1.4.0`. A fresh x86 WPF launch under 64-bit Windows/WOW64 loaded `ggml-small.bin`
+  and reported `Ready (Cpu)`; an x64 fresh-app launch was not separately run.
 - A follow-up isolated Whisper.net smoke constrained runtime order to CUDA then CPU and launched with a
   child `PATH` that excluded CUDA runtime directories. `RuntimeOptions.LoadedLibrary` reported `Cpu` and
   transcription exited successfully. The probe transcript was not saved. This verifies the CPU fallback in
@@ -304,8 +307,9 @@ project/package references and did not persist transcript text.
   before claiming which adapter handled the full-corpus run.
 - The fresh x86 app package launched and reached `Ready (Cpu)` with `ggml-small.bin`; x86 audio transcription
   was not tested. The package-layout gate and app launch are locally verified.
-- The Release GitHub Actions workflow has not run. It is triggered by a version-tag push; a hosted run needs
-  explicit authorization to create/push a tag. Local package validation is not a hosted CI result.
+- The Release GitHub Actions workflow ran successfully after tag `v1.4.0` was pushed. Release run #9 and
+  Tests run #4 both completed on commit `46a0868`; the non-draft release contains both app ZIPs and the
+  DirectML ZIP. The AMD device and physical Vulkan-device mapping checks remain open.
 
 ---
 
@@ -343,7 +347,8 @@ latency, memory, or full Parakeet decoder pipeline test.
 The x64 application release includes the CPU provider pack. DirectML is a separate optional ZIP attached
 under `runtimes/onnx/directml` and includes its Microsoft license and third-party notices. For v1.4.0,
 the workflow builds the CUDA provider pack for CI verification but does not attach it to the GitHub
-Release. Hosted release workflow has not run, so verify the final ZIPs before claiming a published artifact.[14]
+Release. Hosted Release workflow [run #9](https://github.com/tomFlidr/whisper-writer/actions/runs/43341305308)
+succeeded; GitHub readback confirmed the published app and DirectML ZIPs ([release v1.4.0](https://github.com/tomFlidr/whisper-writer/releases/tag/v1.4.0)).
 
 ## Phase 3.3 — ONNX Runtime CUDA
 
@@ -363,8 +368,9 @@ installation; that is not an end-user runtime bundle.[12][15]
 Through the production settings/catalog/factory/ALC path, all three Parakeet graphs ran with synthetic
 inputs. Profiles showed `CUDAExecutionProvider` plus `CPUExecutionProvider`; the encoder graph logged 742
 memcpy nodes and the decoder/joint graph 21. This confirms provider assignment, not a speed advantage.
-No audio-to-text pipeline, accuracy result, real-time factor, memory benchmark, or hosted release run has
-been produced. Do not claim CUDA is faster than DirectML without an identical-input benchmark.
+No audio-to-text pipeline, accuracy result, real-time factor, or memory benchmark has been produced. Hosted
+Release run #9 successfully verified release packaging, not audio-to-text execution. Do not claim CUDA is faster
+than DirectML without an identical-input benchmark.
 
 ### Scratch provider initialization smoke (2026-11-11)
 
@@ -408,8 +414,8 @@ been produced. Do not claim CUDA is faster than DirectML without an identical-in
   did not load both native ORT cores in the same process and did not attempt hot switching.
 - The WPF application now includes the same contract-sharing ALC loader, provider catalog, settings-based
   factory, and process-local native dependency search. Local smoke runs through that production factory
-  exercised CPU, DirectML, and CUDA packs; switching ORT cores remains restart-only. The final GitHub
-  release packaging and hosted workflow are still unverified.
+  exercised CPU, DirectML, and CUDA packs; switching ORT cores remains restart-only. Hosted Tests run #4 and
+  Release run #9 succeeded; the release contains the app and DirectML ZIPs, not the CUDA pack.
 
 ## Phase 3.4 — CUDA/cuDNN runtime provisioning (required for Phase 3 closure)
 

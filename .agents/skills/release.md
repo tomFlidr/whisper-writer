@@ -68,8 +68,11 @@ The tag triggers `.github/workflows/release.yml`, which is configured to:
 4. Create a GitHub Release and attach both app ZIPs and the DirectML ZIP with auto-generated notes.
 
 The ONNX CUDA provider pack requires compatible CUDA 13/cuDNN 9 runtime DLLs and is not a user-facing
-v1.4.0 asset. `OrtCudaRuntimePath` is not a substitute for a complete provisioning solution. The hosted
-workflow still needs a successful run for v1.4.0.
+v1.4.0 asset. `OrtCudaRuntimePath` is not a substitute for a complete provisioning solution. Hosted Release
+workflow [run #9](https://github.com/tomFlidr/whisper-writer/actions/runs/43341305308) succeeded on 2026-11-13
+and published [v1.4.0](https://github.com/tomFlidr/whisper-writer/releases/tag/v1.4.0) with the two app ZIPs and
+DirectML ZIP; the CUDA provider pack built successfully as a CI artifact but was not attached. See
+`.agents/phase-3-progress.md`.
 
 > Tags containing `-` (e.g. `v1.4.0-beta`) are automatically marked as pre-release.
 
